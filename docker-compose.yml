@@ -1,0 +1,22 @@
+services:
+  orchestrator:
+    build: ./orchestrator
+    environment:
+      - EVAL_ENDPOINT=load-balancer:50051
+    depends_on:
+      - load-balancer
+    restart: on-failure
+
+  load-balancer:
+    image: envoyproxy/envoy:v1.28-latest
+    volumes:
+      - ./envoy.yaml:/etc/envoy/envoy.yaml:ro
+    ports:
+      - "50051:50051"
+    depends_on:
+      - worker
+
+  worker:
+    build: ./worker
+    environment:
+      - WORKER_ID=${WORKER_ID:-worker}
