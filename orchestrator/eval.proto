@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package eval;
+
+service Evaluator {
+  rpc Evaluate (Individual) returns (EvaluationResult);
+}
+
+message Individual {
+  repeated double genes = 1;
+}
+
+message EvaluationResult {
+  string worker_id = 1;
+  double fitness = 2;
+}
