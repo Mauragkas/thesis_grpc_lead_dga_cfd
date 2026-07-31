@@ -3,9 +3,29 @@ services:
     build: ./orchestrator
     environment:
       - EVAL_ENDPOINT=load-balancer:50051
+      - N_WORKERS=${N_WORKERS:-1}
+      - GA_SEED=${GA_SEED:-42}
     depends_on:
-      - load-balancer
-    restart: on-failure
+      load-balancer:
+        condition: service_started
+    restart: "no"
+
+  worker:
+    build: ./worker
+    environment:
+      - WORKER_ID=${WORKER_ID:-worker}
+      - V_MIN_FUSE_MM3=20000.0
+      - OMP_NUM_THREADS=1
+      - OPENBLAS_NUM_THREADS=1
+      - MKL_NUM_THREADS=1
+      - NUMEXPR_NUM_THREADS=1
+      - VECLIB_MAXIMUM_THREADS=1
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import socket; s=socket.socket(); s.settimeout(2); s.connect(('127.0.0.1',50051)); s.close()\""]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
 
   load-balancer:
     image: envoyproxy/envoy:v1.28-latest
@@ -14,9 +34,5 @@ services:
     ports:
       - "50051:50051"
     depends_on:
-      - worker
-
-  worker:
-    build: ./worker
-    environment:
-      - WORKER_ID=${WORKER_ID:-worker}
+      worker:
+        condition: service_healthy
