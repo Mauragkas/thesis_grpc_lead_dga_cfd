@@ -73,6 +73,18 @@ where
         out
     }
 
+    async fn lookup_exact(&self, genes: &[f64], current_generation: usize) -> Option<f64> {
+        let mut records = self.records.lock().await;
+        for r in records.iter_mut() {
+            if r.genes.len() == genes.len() && r.genes.iter().zip(genes.iter()).all(|(a, b)| a == b)
+            {
+                r.last_accessed_gen = current_generation;
+                return Some(r.fitness);
+            }
+        }
+        None
+    }
+
     async fn evict_expired(&self, current_generation: usize) {
         let mut records = self.records.lock().await;
         records.retain(|r| !self.eviction.should_evict(r, current_generation));

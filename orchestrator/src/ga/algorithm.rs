@@ -25,12 +25,38 @@ impl<'a> GaRunner<'a> {
 
         for gen in 1..=self.cfg.generations {
             info!("Evaluating generation {gen}/{}...", self.cfg.generations);
-            let fitnesses = self.evaluator.evaluate_population(&population).await?;
 
-            // Persist each evaluated individual in the gene store.
-            for (genes, fit) in population.iter().zip(fitnesses.iter()) {
-                self.store.store(genes.clone(), *fit, gen).await;
+            let mut fitnesses = vec![f64::NEG_INFINITY; population.len()];
+            let mut uncached_idx: Vec<usize> = Vec::new();
+            let mut uncached: Vec<Vec<f64>> = Vec::new();
+
+            for (i, genes) in population.iter().enumerate() {
+                match self.store.lookup_exact(genes, gen).await {
+                    Some(fit) => fitnesses[i] = fit,
+                    None => {
+                        uncached_idx.push(i);
+                        uncached.push(genes.clone());
+                    }
+                }
             }
+
+            let hits = population.len() - uncached.len();
+            if hits > 0 {
+                info!(
+                    "Gen {gen}: {hits} exact cache hits, {} sent to evaluator",
+                    uncached.len()
+                );
+            }
+
+            // Only RPC the individuals we genuinely need to evaluate.
+            if !uncached.is_empty() {
+                let fresh = self.evaluator.evaluate_population(&uncached).await?;
+                for ((&i, g), f) in uncached_idx.iter().zip(uncached.iter()).zip(fresh.iter()) {
+                    fitnesses[i] = *f;
+                    self.store.store(g.clone(), *f, gen).await;
+                }
+            }
+
             // Drop records not retrieved within the TTL window.
             self.store.evict_expired(gen).await;
 
@@ -38,8 +64,8 @@ impl<'a> GaRunner<'a> {
             let avg = fitnesses.iter().sum::<f64>() / fitnesses.len() as f64;
             best_ever = best_ever.max(best);
             println!(
-                "Gen {}/{} | Best: {:.4} | Avg: {:.4} | BestEver: {:.4}",
-                gen, self.cfg.generations, best, avg, best_ever
+                "Gen {}/{} | Best: {:.4} | Avg: {:.4} | BestEver: {:.4} | Cache hits: {}",
+                gen, self.cfg.generations, best, avg, best_ever, hits
             );
 
             let survivors = select_survivors(&population, &fitnesses, self.cfg);
