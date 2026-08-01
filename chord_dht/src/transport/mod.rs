@@ -11,6 +11,8 @@ use crate::ring::NodeAddr;
 pub trait RemoteNode: Send + Sync {
     async fn find_successor(&self, addr: &str, id: u64) -> Option<NodeAddr>;
     async fn get_predecessor(&self, addr: &str) -> Option<NodeAddr>;
+    async fn get_successor(&self, addr: &str) -> Option<NodeAddr>;
+    async fn get_successor_list(&self, addr: &str) -> Vec<NodeAddr>;
     async fn notify(&self, addr: &str, self_info: &NodeAddr) -> bool;
     async fn get_local(&self, addr: &str, key: &str) -> Option<String>;
     async fn put_local(&self, addr: &str, key: &str, val: &str) -> bool;

@@ -51,6 +51,23 @@ impl RemoteNode for GrpcRemote {
         Some(from_proto(resp.into_inner()))
     }
 
+    async fn get_successor(&self, addr: &str) -> Option<NodeAddr> {
+        let mut c = connect(addr).await?;
+        let resp = c.get_successor(Empty {}).await.ok()?;
+        Some(from_proto(resp.into_inner()))
+    }
+
+    async fn get_successor_list(&self, addr: &str) -> Vec<NodeAddr> {
+        let mut c = match connect(addr).await {
+            Some(c) => c,
+            None => return Vec::new(),
+        };
+        match c.get_successor_list(Empty {}).await {
+            Ok(r) => r.into_inner().nodes.into_iter().map(from_proto).collect(),
+            Err(_) => Vec::new(),
+        }
+    }
+
     async fn get_predecessor(&self, addr: &str) -> Option<NodeAddr> {
         let mut c = connect(addr).await?;
         let resp = c.get_predecessor(Empty {}).await.ok()?;
@@ -77,11 +94,7 @@ impl RemoteNode for GrpcRemote {
             .await
             .ok()?;
         let v = resp.into_inner().value;
-        if v.is_empty() {
-            None
-        } else {
-            Some(v)
-        }
+        Some(v)
     }
 
     async fn put_local(&self, addr: &str, key: &str, val: &str) -> bool {
