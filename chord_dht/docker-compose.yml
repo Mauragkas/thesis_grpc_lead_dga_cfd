@@ -1,0 +1,47 @@
+services:
+  node1:
+    build: .
+    container_name: chord_node1
+    environment:
+      - HTTP_BIND=0.0.0.0:2001
+      - GRPC_BIND=0.0.0.0:50051
+      - SELF_URI=http://node1:50051
+    ports:
+      - "2001:2001"
+      - "50051:50051"
+    networks:
+      - chord-net
+
+  node2:
+    build: .
+    container_name: chord_node2
+    environment:
+      - HTTP_BIND=0.0.0.0:2002
+      - GRPC_BIND=0.0.0.0:50052
+      - SELF_URI=http://node2:50052
+      - JOIN_URI=http://node1:50051
+    ports:
+      - "2002:2002"
+    depends_on:
+      - node1
+    networks:
+      - chord-net
+
+  node3:
+    build: .
+    container_name: chord_node3
+    environment:
+      - HTTP_BIND=0.0.0.0:2003
+      - GRPC_BIND=0.0.0.0:50053
+      - SELF_URI=http://node3:50053
+      - JOIN_URI=http://node1:50051
+    ports:
+      - "2003:2003"
+    depends_on:
+      - node1
+    networks:
+      - chord-net
+
+networks:
+  chord-net:
+    driver: bridge
