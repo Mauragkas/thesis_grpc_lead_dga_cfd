@@ -9,8 +9,8 @@ use crate::transport::RemoteNode;
 
 use super::gen::chord_server::{Chord, ChordServer};
 use super::gen::{
-    BoolMsg, Empty, KeyMsg, NodeAddr as ProtoNode, NodeIdMsg, OptionalNodeAddr, PutRequest,
-    ValueMsg,
+    BoolMsg, Empty, KeyMsg, NodeAddr as ProtoNode, NodeAddrList, NodeIdMsg, OptionalNodeAddr,
+    PutRequest, ValueMsg,
 };
 
 /// gRPC service that adapts incoming RPCs onto a `ChordNode`.
@@ -51,6 +51,20 @@ where
         let id = req.into_inner().id;
         let succ = self.node.find_successor(id).await;
         Ok(Response::new(to_proto(succ)))
+    }
+
+    async fn get_successor(&self, _req: Request<Empty>) -> Result<Response<ProtoNode>, Status> {
+        let s = self.node.successor().await;
+        Ok(Response::new(to_proto(s)))
+    }
+
+    async fn get_successor_list(
+        &self,
+        _req: Request<Empty>,
+    ) -> Result<Response<NodeAddrList>, Status> {
+        let list = self.node.successor_list().await;
+        let nodes = list.into_iter().map(to_proto).collect();
+        Ok(Response::new(NodeAddrList { nodes }))
     }
 
     async fn get_predecessor(

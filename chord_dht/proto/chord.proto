@@ -39,6 +39,10 @@ message BoolMsg {
   bool ok = 1;
 }
 
+message NodeAddrList {
+  repeated NodeAddr nodes = 1;
+}
+
 service Chord {
   rpc FindSuccessor(NodeIdMsg) returns (NodeAddr);
   rpc GetPredecessor(Empty) returns (OptionalNodeAddr);
@@ -47,4 +51,6 @@ service Chord {
   rpc PutLocal(PutRequest) returns (BoolMsg);
   rpc DeleteLocal(KeyMsg) returns (BoolMsg);
   rpc Ping(Empty) returns (BoolMsg);
+  rpc GetSuccessor(Empty) returns (NodeAddr);
+  rpc GetSuccessorList(Empty) returns (NodeAddrList);
 }

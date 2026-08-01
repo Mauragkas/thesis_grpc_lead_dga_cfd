@@ -8,6 +8,8 @@ use crate::ring::{finger_start, hash, in_range, NodeAddr, NodeId, M};
 use crate::storage::KeyStore;
 use crate::transport::RemoteNode;
 
+pub const R: usize = 4; // successor-list length
+
 static FINGER_IDX: AtomicUsize = AtomicUsize::new(1);
 
 /// The chord algorithm. Knows nothing about `HashMap` or transport details —
@@ -19,7 +21,8 @@ where
 {
     pub self_info: NodeAddr,
     predecessor: RwLock<Option<NodeAddr>>,
-    fingers: RwLock<Vec<Option<NodeAddr>>>, // fingers[0] == successor
+    fingers: RwLock<Vec<Option<NodeAddr>>>,
+    successor_list: RwLock<Vec<NodeAddr>>, // [0] == successor
     storage: Arc<S>,
     remote: Arc<R>,
 }
@@ -33,7 +36,8 @@ where
         Self {
             self_info: self_info.clone(),
             predecessor: RwLock::new(None),
-            fingers: RwLock::new(vec![Some(self_info); M]),
+            fingers: RwLock::new(vec![Some(self_info.clone()); M]),
+            successor_list: RwLock::new(vec![self_info]),
             storage,
             remote,
         }
@@ -48,17 +52,21 @@ where
     }
 
     pub async fn successor(&self) -> NodeAddr {
-        self.fingers
-            .read()
-            .await
-            .get(0)
+        let list = self.successor_list.read().await;
+        list.first()
             .cloned()
-            .flatten()
             .unwrap_or_else(|| self.self_info.clone())
     }
 
+    pub async fn successor_list(&self) -> Vec<NodeAddr> {
+        self.successor_list.read().await.clone()
+    }
+
     async fn set_successor(&self, addr: NodeAddr) {
-        self.fingers.write().await[0] = Some(addr);
+        let mut list = self.successor_list.write().await;
+        list.insert(0, addr);
+        list.truncate(crate::chord::R);
+        self.fingers.write().await[0] = list.first().cloned();
     }
 
     pub async fn find_successor(&self, id: NodeId) -> NodeAddr {
@@ -93,23 +101,88 @@ where
         info!("join via {}", known);
         if let Some(succ) = self.remote.find_successor(known, self.self_info.id).await {
             info!("joined, successor={}", succ.id);
-            self.set_successor(succ).await;
+            // Seed successor list from succ's list.
+            let mut list = vec![succ.clone()];
+            let remote_list = self.remote.get_successor_list(&succ.address).await;
+            for n in remote_list.into_iter().take(crate::chord::R - 1) {
+                if n.id != succ.id && !list.contains(&n) {
+                    list.push(n);
+                }
+            }
+            *self.successor_list.write().await = list;
+            self.fingers.write().await[0] = Some(succ);
         }
     }
 
     pub async fn stabilize(&self) {
+        // Drop any dead successors from the front.
+        loop {
+            let succ = self.successor().await;
+            if succ.id == self.self_info.id {
+                break;
+            }
+            if self.remote.ping(&succ.address).await {
+                break;
+            }
+            warn!("successor {} unreachable, skipping", succ.id);
+            let mut list = self.successor_list.write().await;
+            if !list.is_empty() {
+                list.remove(0);
+            }
+            if list.is_empty() {
+                list.push(self.self_info.clone());
+            }
+            self.fingers.write().await[0] = list.first().cloned();
+        }
+
         let succ = self.successor().await;
+
+        // Bootstrap recovery: we think we're alone, but if a predecessor exists
+        // it means another node joined us — adopt it as our successor so the ring
+        // closes. (In a 2-node ring predecessor == successor; in larger rings
+        // subsequent stabilize rounds will refine via get_predecessor.)
         if succ.id == self.self_info.id {
+            let pred = self.predecessor.read().await.clone();
+            if let Some(p) = pred {
+                if p.id != self.self_info.id && self.remote.ping(&p.address).await {
+                    info!("alone but have predecessor {}; adopting as successor", p.id);
+                    let mut list = self.successor_list.write().await;
+                    *list = vec![p.clone()];
+                    self.fingers.write().await[0] = Some(p);
+                }
+            }
             return;
         }
+
+        // Maybe adopt succ's predecessor as our new successor.
         if let Some(x) = self.remote.get_predecessor(&succ.address).await {
-            if in_range(x.id, self.self_info.id, succ.id, false) {
-                self.set_successor(x).await;
+            if x.id != self.self_info.id
+                && self.remote.ping(&x.address).await
+                && in_range(x.id, self.self_info.id, succ.id, false)
+            {
+                let mut list = self.successor_list.write().await;
+                list.insert(0, x);
+                list.truncate(crate::chord::R);
+                self.fingers.write().await[0] = list.first().cloned();
             }
         }
+
         let cur = self.successor().await;
         if cur.id != self.self_info.id {
             let _ = self.remote.notify(&cur.address, &self.self_info).await;
+
+            // Refresh successor list: [cur] ++ (cur's list, first R-1, deduped).
+            let remote_list = self.remote.get_successor_list(&cur.address).await;
+            let mut new_list = vec![cur.clone()];
+            for n in remote_list.into_iter().take(crate::chord::R - 1) {
+                if n.id != self.self_info.id
+                    && n.id != cur.id
+                    && !new_list.iter().any(|m| m.id == n.id)
+                {
+                    new_list.push(n);
+                }
+            }
+            *self.successor_list.write().await = new_list;
         }
     }
 
