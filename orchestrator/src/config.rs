@@ -27,6 +27,13 @@ pub struct TransportConfig {
     pub tcp_keepalive: Option<Duration>,
 }
 
+/// Gene-store tunables. SRP: holds config only.
+#[derive(Debug, Clone)]
+pub struct GeneStoreConfig {
+    /// How many generations a non-retrieved record may live before eviction.
+    pub max_age_generations: usize,
+}
+
 impl Default for GaConfig {
     fn default() -> Self {
         Self {
@@ -57,8 +64,16 @@ impl Default for TransportConfig {
     }
 }
 
+impl Default for GeneStoreConfig {
+    fn default() -> Self {
+        Self {
+            max_age_generations: 5,
+        }
+    }
+}
+
 /// Reads overrides from environment. SRP: parsing env, nothing else.
-pub fn config_from_env() -> (GaConfig, TransportConfig) {
+pub fn config_from_env() -> (GaConfig, TransportConfig, GeneStoreConfig) {
     let mut ga = GaConfig::default();
     if let Ok(endpoint) = std::env::var("EVAL_ENDPOINT") {
         ga.eval_endpoint = endpoint;
@@ -66,7 +81,16 @@ pub fn config_from_env() -> (GaConfig, TransportConfig) {
     if let Some(seed) = std::env::var("GA_SEED").ok().and_then(|s| s.parse().ok()) {
         ga.seed = seed;
     }
-    (ga, TransportConfig::default())
+
+    let mut store = GeneStoreConfig::default();
+    if let Some(max_age) = std::env::var("GENE_STORE_MAX_AGE")
+        .ok()
+        .and_then(|s| s.parse().ok())
+    {
+        store.max_age_generations = max_age;
+    }
+
+    (ga, TransportConfig::default(), store)
 }
 
 /// Clips a gene into the normalized [0,1] range. Pure helper.
