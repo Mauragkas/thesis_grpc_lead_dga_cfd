@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+package eval;
+
+service Evaluator {
+  rpc Evaluate (Individual) returns (EvaluationResult);
+  rpc EvaluateBatch (BatchRequest) returns (BatchResponse);
+}
+
+message Individual {
+  repeated double genes = 1;
+}
+
+message EvaluationResult {
+  string worker_id = 1;
+  double fitness = 2;
+}
+
+message BatchRequest {
+  repeated Individual individuals = 1;
+}
+
+message BatchResponse {
+  repeated EvaluationResult results = 1;
+}

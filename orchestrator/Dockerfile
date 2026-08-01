@@ -7,9 +7,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     protobuf-compiler \
  && rm -rf /var/lib/apt/lists/*
 
-COPY Cargo.toml Cargo.lock* build.rs ./
-COPY eval.proto .
-COPY src ./src
+ COPY Cargo.toml Cargo.lock* build.rs ./
+ COPY proto ./proto
+ COPY src ./src
 
 RUN cargo build --release
 
