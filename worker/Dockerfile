@@ -6,5 +6,5 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN pip install --no-cache-dir grpcio grpcio-tools numpy scipy matplotlib aerosandbox
 COPY eval.proto .
 RUN python -m grpc_tools.protoc -I. --python_out=. --grpc_python_out=. eval.proto
-COPY main.py .
+COPY *.py .
 CMD ["python", "main.py"]
