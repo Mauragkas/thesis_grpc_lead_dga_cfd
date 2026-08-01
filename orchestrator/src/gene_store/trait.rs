@@ -21,6 +21,12 @@ pub trait GeneStore: Send + Sync {
         current_generation: usize,
     ) -> Vec<GeneRecord>;
 
+    /// Exact-match lookup. Returns the stored fitness if a record with
+    /// bit-identical genes exists, refreshing its `last_accessed_gen`.
+    /// Used to short-circuit re-evaluation of individuals seen before
+    /// (e.g. elite survivors carried over unchanged).
+    async fn lookup_exact(&self, genes: &[f64], current_generation: usize) -> Option<f64>;
+
     /// Drop records whose retention policy says they have expired.
     async fn evict_expired(&self, current_generation: usize);
 }
