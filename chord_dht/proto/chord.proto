@@ -1,0 +1,50 @@
+syntax = "proto3";
+
+package chord;
+
+message NodeAddr {
+  uint64 id = 1;
+  string address = 2;
+}
+
+message NodeIdMsg {
+  uint64 id = 1;
+}
+
+message Empty {}
+
+message OptionalNodeAddr {
+  optional NodeAddr node = 1;
+}
+
+message KeyMsg {
+  string key = 1;
+}
+
+message ValueMsg {
+  string value = 1;
+}
+
+message KeyValue {
+  string key = 1;
+  string value = 2;
+}
+
+message PutRequest {
+  string key = 1;
+  string value = 2;
+}
+
+message BoolMsg {
+  bool ok = 1;
+}
+
+service Chord {
+  rpc FindSuccessor(NodeIdMsg) returns (NodeAddr);
+  rpc GetPredecessor(Empty) returns (OptionalNodeAddr);
+  rpc Notify(NodeAddr) returns (BoolMsg);
+  rpc GetLocal(KeyMsg) returns (ValueMsg);
+  rpc PutLocal(PutRequest) returns (BoolMsg);
+  rpc DeleteLocal(KeyMsg) returns (BoolMsg);
+  rpc Ping(Empty) returns (BoolMsg);
+}
