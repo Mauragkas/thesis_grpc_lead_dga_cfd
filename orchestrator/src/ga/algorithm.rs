@@ -1,6 +1,7 @@
 use crate::config::GaConfig;
 use crate::evaluator::Evaluator;
 use crate::ga::operators::{next_generation, random_population, select_survivors};
+use crate::gene_store::GeneStore;
 use log::info;
 use rand::rngs::StdRng;
 use rand_distr::Normal;
@@ -8,10 +9,11 @@ use std::time::Instant;
 use tonic::Status;
 
 /// SRP: orchestrates the generational loop. Depends on the `Evaluator`
-/// abstraction (DIP), never on gRPC types directly.
+/// and `GeneStore` abstractions (DIP), never on concrete impls directly.
 pub struct GaRunner<'a> {
     pub cfg: &'a GaConfig,
     pub evaluator: &'a dyn Evaluator,
+    pub store: &'a dyn GeneStore,
 }
 
 impl<'a> GaRunner<'a> {
@@ -24,6 +26,13 @@ impl<'a> GaRunner<'a> {
         for gen in 1..=self.cfg.generations {
             info!("Evaluating generation {gen}/{}...", self.cfg.generations);
             let fitnesses = self.evaluator.evaluate_population(&population).await?;
+
+            // Persist each evaluated individual in the gene store.
+            for (genes, fit) in population.iter().zip(fitnesses.iter()) {
+                self.store.store(genes.clone(), *fit, gen).await;
+            }
+            // Drop records not retrieved within the TTL window.
+            self.store.evict_expired(gen).await;
 
             let best = fitnesses.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
             let avg = fitnesses.iter().sum::<f64>() / fitnesses.len() as f64;
