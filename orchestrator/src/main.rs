@@ -1,16 +1,11 @@
-mod config;
-mod evaluator;
-mod ga;
-mod gene_store;
-mod proto;
-mod transport;
-
-use crate::config::config_from_env;
-use crate::evaluator::{Evaluator, GrpcEvaluator};
-use crate::ga::algorithm::GaRunner;
-use crate::gene_store::{EuclideanDistance, GeneStore, GenerationEvictor, InMemoryGeneStore};
-use crate::transport::channel::{build_endpoint, wait_for_channel};
 use log::info;
+use orchestrator::config::config_from_env;
+use orchestrator::evaluator::{Evaluator, GrpcEvaluator};
+use orchestrator::ga::algorithm::GaRunner;
+use orchestrator::gene_store::{
+    EuclideanDistance, GeneStore, GenerationEvictor, InMemoryGeneStore,
+};
+use orchestrator::transport::channel::{build_endpoint, wait_for_channel};
 use rand::rngs::StdRng;
 use rand::SeedableRng;
 use tonic::transport::Endpoint;
@@ -27,10 +22,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     info!("Waiting for evaluator endpoint to be ready...");
     let channel = wait_for_channel(endpoint, transport_cfg.channel_ready_deadline).await?;
 
-    let client = crate::proto::eval::evaluator_client::EvaluatorClient::new(channel);
+    let client = orchestrator::proto::eval::evaluator_client::EvaluatorClient::new(channel);
     let evaluator = GrpcEvaluator::new(client, transport_cfg.clone(), ga_cfg.batch_size);
 
-    // DIP: wire a concrete store behind the `GeneStore` trait.
     let evictor = GenerationEvictor {
         max_age: store_cfg.max_age_generations,
     };

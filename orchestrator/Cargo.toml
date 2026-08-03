@@ -3,6 +3,10 @@ name = "orchestrator"
 version = "0.1.0"
 edition = "2021"
 
+[lib]
+name = "orchestrator"
+path = "src/lib.rs"
+
 [[bin]]
 name = "orchestrator"
 path = "src/main.rs"
@@ -16,6 +20,10 @@ rand_distr = "0.4"
 log = "0.4"
 env_logger = "0.10"
 async-trait = "0.1"
+
+[dev-dependencies]
+serial_test = "3"
+tokio-stream = { version = "0.1", features = ["net"] }
 
 [build-dependencies]
 tonic-build = "0.11"
