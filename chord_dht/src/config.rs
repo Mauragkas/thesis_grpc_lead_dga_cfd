@@ -3,6 +3,7 @@ pub struct Config {
     pub grpc_bind: String,
     pub self_uri: String,
     pub join_uri: Option<String>,
+    pub virtual_node_count: usize,
 }
 
 impl Config {
@@ -13,6 +14,10 @@ impl Config {
             self_uri: std::env::var("SELF_URI")
                 .unwrap_or_else(|_| "http://127.0.0.1:50051".to_string()),
             join_uri: std::env::var("JOIN_URI").ok(),
+            virtual_node_count: std::env::var("VIRTUAL_NODE_COUNT")
+                .ok()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(10),
         }
     }
 }

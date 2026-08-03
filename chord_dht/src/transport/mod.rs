@@ -4,18 +4,49 @@ use async_trait::async_trait;
 
 use crate::ring::NodeAddr;
 
-/// Segregated interface for talking to *other* nodes. Keeps transport details
-/// out of the core `ChordNode` so the ring logic is testable with a fake
-/// transport (DIP + ISP).
+#[derive(Clone, Debug, Default)]
+pub struct RangeResult {
+    pub entries: Vec<(String, String)>,
+    pub complete: bool,
+    pub next_address: String,
+}
+
 #[async_trait]
 pub trait RemoteNode: Send + Sync {
-    async fn find_successor(&self, addr: &str, id: u64) -> Option<NodeAddr>;
-    async fn get_predecessor(&self, addr: &str) -> Option<NodeAddr>;
-    async fn get_successor(&self, addr: &str) -> Option<NodeAddr>;
-    async fn get_successor_list(&self, addr: &str) -> Vec<NodeAddr>;
-    async fn notify(&self, addr: &str, self_info: &NodeAddr) -> bool;
+    async fn find_successor(&self, addr: &str, vid: u64, id: u64) -> Option<NodeAddr>;
+    async fn get_predecessor(&self, addr: &str, vid: u64) -> Option<NodeAddr>;
+    async fn get_successor(&self, addr: &str, vid: u64) -> Option<NodeAddr>;
+    async fn get_successor_list(&self, addr: &str, vid: u64) -> Vec<NodeAddr>;
+    async fn notify(&self, addr: &str, vid: u64, self_info: &NodeAddr) -> bool;
     async fn get_local(&self, addr: &str, key: &str) -> Option<String>;
     async fn put_local(&self, addr: &str, key: &str, val: &str) -> bool;
     async fn delete_local(&self, addr: &str, key: &str) -> bool;
     async fn ping(&self, addr: &str) -> bool;
+
+    async fn range_query(
+        &self,
+        addr: &str,
+        start_key: &str,
+        count: u64,
+        caller: &str,
+    ) -> Option<RangeResult>;
+    async fn range_forward(
+        &self,
+        addr: &str,
+        from_key: &str,
+        count: u64,
+        caller: &str,
+        origin_vid: u64,
+        payload: Vec<(String, String)>,
+    ) -> Option<RangeResult>;
+
+    async fn push_model(&self, addr: &str, version: u64, data: &[u8]) -> bool;
+    async fn request_model(&self, addr: &str, coordinator: &str) -> Option<(u64, Vec<u8>)>;
+    async fn heartbeat(
+        &self,
+        addr: &str,
+        sender: &str,
+        update_ready: bool,
+        model_version: u64,
+    ) -> Option<bool>;
 }

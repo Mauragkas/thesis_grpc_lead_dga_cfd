@@ -1,11 +1,11 @@
 use std::sync::Arc;
 use std::time::Duration;
+
 use tracing::info;
 
 use chord_node::api;
 use chord_node::chord::ChordNode;
 use chord_node::config::Config;
-use chord_node::ring::{hash, NodeAddr};
 use chord_node::storage::{InMemoryStore, KeyStore};
 use chord_node::transport::grpc::{client::GrpcRemote, server};
 use chord_node::transport::RemoteNode;
@@ -15,31 +15,40 @@ async fn main() {
     tracing_subscriber::fmt::init();
 
     let cfg = Config::from_env();
-    let self_info = NodeAddr {
-        id: hash(&cfg.self_uri),
-        address: cfg.self_uri.clone(),
-    };
-
     info!(
-        "starting node id={} http={} grpc={} self_uri={} join={:?}",
-        self_info.id, cfg.http_bind, cfg.grpc_bind, cfg.self_uri, cfg.join_uri
+        self_uri = %cfg.self_uri,
+        http = %cfg.http_bind,
+        grpc = %cfg.grpc_bind,
+        vnodes = cfg.virtual_node_count,
+        join = ?cfg.join_uri,
+        "starting LEAD node"
     );
 
-    // Composition root: wire concrete implementations into abstractions (DIP).
     let storage = Arc::new(InMemoryStore::new());
     let remote = Arc::new(GrpcRemote::new());
-    let chord = Arc::new(ChordNode::new(self_info.clone(), storage, remote));
+    let chord = Arc::new(ChordNode::new(
+        cfg.self_uri.clone(),
+        cfg.virtual_node_count.max(1),
+        storage,
+        remote,
+    ));
 
-    // Join an existing ring (with retries, since node1 may not be up yet).
     if let Some(ju) = cfg.join_uri.clone() {
         let c = chord.clone();
         tokio::spawn(async move {
-            for _ in 0..60 {
-                let s = c.successor().await;
-                if s.id != c.self_info.id {
+            for _ in 0..120 {
+                c.join(&ju).await;
+                let mut pending = 0;
+                for v in &c.vnodes {
+                    if v.successor().await.id == v.vid {
+                        pending += 1;
+                    }
+                }
+                if pending == 0 {
+                    info!("join complete: all vnodes have a real successor");
                     break;
                 }
-                c.join(&ju).await;
+                info!("join: {pending} vnode(s) still alone, retrying");
                 tokio::time::sleep(Duration::from_secs(1)).await;
             }
         });
@@ -47,7 +56,6 @@ async fn main() {
 
     spawn_maintenance(chord.clone());
 
-    // gRPC server (node-to-node communication).
     {
         let c = chord.clone();
         let addr = cfg.grpc_bind.clone();
@@ -59,7 +67,6 @@ async fn main() {
         });
     }
 
-    // HTTP API (client-facing).
     let listener = tokio::net::TcpListener::bind(&cfg.http_bind).await.unwrap();
     info!("http listening on {}", cfg.http_bind);
     axum::serve(listener, api::router(chord)).await.unwrap();
@@ -74,8 +81,8 @@ where
         let c = c.clone();
         tokio::spawn(async move {
             loop {
-                c.stabilize().await;
-                tokio::time::sleep(Duration::from_millis(500)).await;
+                c.stabilize_all().await;
+                tokio::time::sleep(Duration::from_secs(2)).await;
             }
         });
     }
@@ -83,15 +90,33 @@ where
         let c = c.clone();
         tokio::spawn(async move {
             loop {
-                c.fix_fingers().await;
-                tokio::time::sleep(Duration::from_millis(200)).await;
+                c.fix_fingers_all().await;
+                tokio::time::sleep(Duration::from_secs(5)).await;
+            }
+        });
+    }
+    {
+        let c = c.clone();
+        tokio::spawn(async move {
+            loop {
+                c.check_predecessor_all().await;
+                tokio::time::sleep(Duration::from_secs(10)).await;
+            }
+        });
+    }
+    {
+        let c = c.clone();
+        tokio::spawn(async move {
+            loop {
+                c.heartbeat_round().await;
+                tokio::time::sleep(Duration::from_secs(15)).await;
             }
         });
     }
     tokio::spawn(async move {
         loop {
-            c.check_predecessor().await;
-            tokio::time::sleep(Duration::from_secs(5)).await;
+            c.maybe_retrain().await;
+            tokio::time::sleep(Duration::from_secs(10)).await;
         }
     });
 }
