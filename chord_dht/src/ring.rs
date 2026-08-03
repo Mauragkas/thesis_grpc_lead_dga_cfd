@@ -10,7 +10,9 @@ pub struct NodeAddr {
     pub address: String,
 }
 
-pub fn hash(val: &str) -> NodeId {
+/// PeerHASH: uniform cryptographic hash used ONLY for node/virtual-node
+/// identity (VIDs). Never used for data-key placement (Step 2 invariant).
+pub fn peer_hash(val: &str) -> NodeId {
     let mut hasher = Sha1::new();
     hasher.update(val.as_bytes());
     let result = hasher.finalize();
@@ -24,7 +26,6 @@ pub fn finger_start(id: NodeId, i: usize) -> NodeId {
 /// Is `val` in `(start, end]` (inclusive_end=true) or `(start, end)` (false)?
 pub fn in_range(val: NodeId, start: NodeId, end: NodeId, inclusive_end: bool) -> bool {
     if start == end {
-        // (x, x] wraps the whole ring; (x, x) is empty.
         return inclusive_end;
     }
     if start < end {

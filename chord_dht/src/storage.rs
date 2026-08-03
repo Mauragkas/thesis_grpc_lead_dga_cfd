@@ -1,36 +1,30 @@
-use std::collections::HashMap;
+use std::collections::BTreeMap;
+use std::ops::Bound;
 
 use async_trait::async_trait;
 use tokio::sync::RwLock;
 
-use crate::ring::{hash, in_range, NodeId};
-
-/// Interface segregation: only the operations the ring + handlers need.
-/// Dependency inversion: `ChordNode` depends on this, not on `HashMap`.
+/// Ordered storage interface (Step 3). Backed by BTreeMap so contiguous range
+/// scans are O(k) and key order approximates LearnedHASH order.
 #[async_trait]
 pub trait KeyStore: Send + Sync {
     async fn get(&self, key: &str) -> Option<String>;
     async fn put(&self, key: String, val: String);
     async fn remove(&self, key: &str) -> Option<String>;
-    async fn keys_in_range(
-        &self,
-        start: NodeId,
-        end: NodeId,
-        inclusive_end: bool,
-    ) -> Vec<(String, String)>;
-    async fn snapshot(&self) -> HashMap<String, String>;
+    async fn range_scan(&self, start_key: &str, count: usize) -> Vec<(String, String)>;
+    async fn range_scan_after(&self, after_key: &str, count: usize) -> Vec<(String, String)>;
+    async fn snapshot(&self) -> Vec<(String, String)>;
+    async fn len(&self) -> usize;
 }
 
-/// Open-closed: a different backend (disk, DB) can be added without touching
-/// `ChordNode` or the handlers.
 pub struct InMemoryStore {
-    data: RwLock<HashMap<String, String>>,
+    data: RwLock<BTreeMap<String, String>>,
 }
 
 impl InMemoryStore {
     pub fn new() -> Self {
         Self {
-            data: RwLock::new(HashMap::new()),
+            data: RwLock::new(BTreeMap::new()),
         }
     }
 }
@@ -55,22 +49,36 @@ impl KeyStore for InMemoryStore {
         self.data.write().await.remove(key)
     }
 
-    async fn keys_in_range(
-        &self,
-        start: NodeId,
-        end: NodeId,
-        inclusive_end: bool,
-    ) -> Vec<(String, String)> {
+    async fn range_scan(&self, start_key: &str, count: usize) -> Vec<(String, String)> {
         self.data
             .read()
             .await
-            .iter()
-            .filter(|(k, _)| in_range(hash(k), start, end, inclusive_end))
+            .range(start_key.to_string()..)
+            .take(count)
             .map(|(k, v)| (k.clone(), v.clone()))
             .collect()
     }
 
-    async fn snapshot(&self) -> HashMap<String, String> {
-        self.data.read().await.clone()
+    async fn range_scan_after(&self, after_key: &str, count: usize) -> Vec<(String, String)> {
+        self.data
+            .read()
+            .await
+            .range((Bound::Excluded(after_key.to_string()), Bound::Unbounded))
+            .take(count)
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect()
+    }
+
+    async fn snapshot(&self) -> Vec<(String, String)> {
+        self.data
+            .read()
+            .await
+            .iter()
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect()
+    }
+
+    async fn len(&self) -> usize {
+        self.data.read().await.len()
     }
 }

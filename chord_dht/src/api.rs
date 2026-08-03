@@ -1,12 +1,11 @@
-use std::collections::HashMap;
-use std::sync::Arc;
-
 use axum::{
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::StatusCode,
     routing::{get, post},
     Json, Router,
 };
+use serde::Deserialize;
+use std::sync::Arc;
 
 use crate::chord::ChordNode;
 use crate::ring::NodeAddr;
@@ -22,6 +21,7 @@ where
 {
     Router::new()
         .route("/successor", get(get_successor::<S, R>))
+        .route("/health", get(|| async { "ok" }))
         .route("/find_successor/:id", get(find_successor::<S, R>))
         .route("/predecessor", get(get_predecessor::<S, R>))
         .route("/notify", post(notify::<S, R>))
@@ -38,7 +38,14 @@ where
                 .delete(del_kv::<S, R>),
         )
         .route("/keys", get(get_all_keys::<S, R>))
+        .route("/range", get(range_query::<S, R>))
         .with_state(state)
+}
+
+#[derive(Deserialize)]
+struct RangeQ {
+    key: String,
+    count: u64,
 }
 
 async fn get_successor<S, R>(State(node): State<AppState<S, R>>) -> Json<NodeAddr>
@@ -46,7 +53,11 @@ where
     S: KeyStore,
     R: RemoteNode,
 {
-    Json(node.successor().await)
+    let vids = node.vids().await;
+    Json(NodeAddr {
+        id: vids[0],
+        address: node.self_uri.clone(),
+    })
 }
 
 async fn find_successor<S, R>(
@@ -57,7 +68,8 @@ where
     S: KeyStore,
     R: RemoteNode,
 {
-    Json(node.find_successor(id).await)
+    let vids = node.vids().await;
+    Json(node.find_successor(vids[0], id).await)
 }
 
 async fn get_predecessor<S, R>(State(node): State<AppState<S, R>>) -> Json<Option<NodeAddr>>
@@ -65,7 +77,8 @@ where
     S: KeyStore,
     R: RemoteNode,
 {
-    Json(node.predecessor().await)
+    let vids = node.vids().await;
+    Json(node.predecessor(vids[0]).await)
 }
 
 async fn notify<S, R>(State(node): State<AppState<S, R>>, Json(other): Json<NodeAddr>) -> StatusCode
@@ -73,7 +86,8 @@ where
     S: KeyStore,
     R: RemoteNode,
 {
-    node.notify(other).await;
+    let vids = node.vids().await;
+    node.notify(vids[0], other).await;
     StatusCode::OK
 }
 
@@ -100,7 +114,8 @@ where
     S: KeyStore,
     R: RemoteNode,
 {
-    node.storage().put(key, body).await;
+    node.storage().put(key.clone(), body).await;
+    node.record_insertion(&key).await;
     StatusCode::CREATED
 }
 
@@ -128,8 +143,11 @@ where
     R: RemoteNode,
 {
     let target = node.lookup_target(&key).await;
-    if target.id == node.self_info.id {
-        get_local_kv(State(node), Path(key)).await
+    if target.address == node.self_uri {
+        match node.storage().get(&key).await {
+            Some(v) => (StatusCode::OK, v),
+            None => (StatusCode::NOT_FOUND, "Key not found".into()),
+        }
     } else {
         match node.remote().get_local(&target.address, &key).await {
             Some(v) => (StatusCode::OK, v),
@@ -148,12 +166,16 @@ where
     R: RemoteNode,
 {
     let target = node.lookup_target(&key).await;
-    if target.id == node.self_info.id {
-        put_local_kv(State(node), Path(key), body).await
-    } else if node.remote().put_local(&target.address, &key, &body).await {
+    if target.address == node.self_uri {
+        node.storage().put(key.clone(), body).await;
+        node.record_insertion(&key).await;
         StatusCode::CREATED
     } else {
-        StatusCode::INTERNAL_SERVER_ERROR
+        if node.remote().put_local(&target.address, &key, &body).await {
+            StatusCode::CREATED
+        } else {
+            StatusCode::INTERNAL_SERVER_ERROR
+        }
     }
 }
 
@@ -163,19 +185,37 @@ where
     R: RemoteNode,
 {
     let target = node.lookup_target(&key).await;
-    if target.id == node.self_info.id {
-        del_local_kv(State(node), Path(key)).await
-    } else if node.remote().delete_local(&target.address, &key).await {
-        StatusCode::OK
+    if target.address == node.self_uri {
+        if node.storage().remove(&key).await.is_some() {
+            StatusCode::OK
+        } else {
+            StatusCode::NOT_FOUND
+        }
     } else {
-        StatusCode::INTERNAL_SERVER_ERROR
+        if node.remote().delete_local(&target.address, &key).await {
+            StatusCode::OK
+        } else {
+            StatusCode::INTERNAL_SERVER_ERROR
+        }
     }
 }
 
-async fn get_all_keys<S, R>(State(node): State<AppState<S, R>>) -> Json<HashMap<String, String>>
+async fn get_all_keys<S, R>(State(node): State<AppState<S, R>>) -> Json<Vec<(String, String)>>
 where
     S: KeyStore,
     R: RemoteNode,
 {
     Json(node.storage().snapshot().await)
+}
+
+async fn range_query<S, R>(
+    State(node): State<AppState<S, R>>,
+    Query(q): Query<RangeQ>,
+) -> Json<Vec<(String, String)>>
+where
+    S: KeyStore,
+    R: RemoteNode,
+{
+    let result = node.range_query(&q.key, q.count, &node.self_uri).await;
+    Json(result.entries)
 }

@@ -5,17 +5,15 @@ use tonic::{Request, Response, Status};
 use crate::chord::ChordNode;
 use crate::ring::NodeAddr;
 use crate::storage::KeyStore;
-use crate::transport::RemoteNode;
+use crate::transport::{RangeResult, RemoteNode};
 
 use super::gen::chord_server::{Chord, ChordServer};
 use super::gen::{
-    BoolMsg, Empty, KeyMsg, NodeAddr as ProtoNode, NodeAddrList, NodeIdMsg, OptionalNodeAddr,
-    PutRequest, ValueMsg,
+    BoolMsg, Empty, FindSuccRequest, GetPredRequest, HeartbeatMsg, KeyMsg, ModelParams,
+    ModelRequest, NodeAddr as ProtoNode, NodeAddrList, NotifyRequest, OptionalNodeAddr, PutRequest,
+    RangeEntry, RangeForwardRequest, RangeRequest, RangeResponse, ValueMsg, VidMsg,
 };
 
-/// gRPC service that adapts incoming RPCs onto a `ChordNode`.
-/// SRP: this layer only translates between wire types and the ring API;
-/// the ring algorithm lives entirely in `ChordNode`.
 pub struct ChordGrpcService<S, R>
 where
     S: KeyStore,
@@ -41,47 +39,69 @@ fn to_proto(n: NodeAddr) -> ProtoNode {
     }
 }
 
+fn range_resp(r: RangeResult) -> RangeResponse {
+    let entries: Vec<RangeEntry> = r
+        .entries
+        .into_iter()
+        .map(|(k, v)| RangeEntry { key: k, value: v })
+        .collect();
+    RangeResponse {
+        entries,
+        complete: r.complete,
+        next_address: r.next_address,
+    }
+}
+
 #[tonic::async_trait]
 impl<S, R> Chord for ChordGrpcService<S, R>
 where
     S: KeyStore + 'static,
     R: RemoteNode + 'static,
 {
-    async fn find_successor(&self, req: Request<NodeIdMsg>) -> Result<Response<ProtoNode>, Status> {
-        let id = req.into_inner().id;
-        let succ = self.node.find_successor(id).await;
+    async fn find_successor(
+        &self,
+        req: Request<FindSuccRequest>,
+    ) -> Result<Response<ProtoNode>, Status> {
+        let inner = req.into_inner();
+        let succ = self.node.find_successor(inner.vid, inner.id).await;
         Ok(Response::new(to_proto(succ)))
     }
 
-    async fn get_successor(&self, _req: Request<Empty>) -> Result<Response<ProtoNode>, Status> {
-        let s = self.node.successor().await;
+    async fn get_successor(&self, req: Request<VidMsg>) -> Result<Response<ProtoNode>, Status> {
+        let vid = req.into_inner().vid;
+        let s = self.node.successor(vid).await;
         Ok(Response::new(to_proto(s)))
     }
 
     async fn get_successor_list(
         &self,
-        _req: Request<Empty>,
+        req: Request<VidMsg>,
     ) -> Result<Response<NodeAddrList>, Status> {
-        let list = self.node.successor_list().await;
+        let vid = req.into_inner().vid;
+        let list = self.node.successor_list(vid).await;
         let nodes = list.into_iter().map(to_proto).collect();
         Ok(Response::new(NodeAddrList { nodes }))
     }
 
     async fn get_predecessor(
         &self,
-        _req: Request<Empty>,
+        req: Request<GetPredRequest>,
     ) -> Result<Response<OptionalNodeAddr>, Status> {
-        let pred = self.node.predecessor().await.map(to_proto);
+        let vid = req.into_inner().vid;
+        let pred = self.node.predecessor(vid).await.map(to_proto);
         Ok(Response::new(OptionalNodeAddr { node: pred }))
     }
 
-    async fn notify(&self, req: Request<ProtoNode>) -> Result<Response<BoolMsg>, Status> {
-        let p = req.into_inner();
-        let other = NodeAddr {
-            id: p.id,
-            address: p.address,
+    async fn notify(&self, req: Request<NotifyRequest>) -> Result<Response<BoolMsg>, Status> {
+        let inner = req.into_inner();
+        let other = match inner.other {
+            Some(p) => NodeAddr {
+                id: p.id,
+                address: p.address,
+            },
+            None => return Err(Status::invalid_argument("missing other")),
         };
-        self.node.notify(other).await;
+        self.node.notify(inner.vid, other).await;
         Ok(Response::new(BoolMsg { ok: true }))
     }
 
@@ -95,7 +115,8 @@ where
 
     async fn put_local(&self, req: Request<PutRequest>) -> Result<Response<BoolMsg>, Status> {
         let r = req.into_inner();
-        self.node.storage().put(r.key, r.value).await;
+        self.node.storage().put(r.key.clone(), r.value).await;
+        self.node.record_insertion(&r.key).await;
         Ok(Response::new(BoolMsg { ok: true }))
     }
 
@@ -108,9 +129,60 @@ where
     async fn ping(&self, _req: Request<Empty>) -> Result<Response<BoolMsg>, Status> {
         Ok(Response::new(BoolMsg { ok: true }))
     }
+
+    async fn range_query(
+        &self,
+        req: Request<RangeRequest>,
+    ) -> Result<Response<RangeResponse>, Status> {
+        let r = req.into_inner();
+        let result = self
+            .node
+            .handle_range_query(&r.start_key, r.count, &r.caller_address)
+            .await;
+        Ok(Response::new(range_resp(result)))
+    }
+
+    async fn range_forward(
+        &self,
+        req: Request<RangeForwardRequest>,
+    ) -> Result<Response<RangeResponse>, Status> {
+        let r = req.into_inner();
+        let payload: Vec<(String, String)> =
+            r.payload.into_iter().map(|e| (e.key, e.value)).collect();
+        let result = self
+            .node
+            .handle_range_forward(
+                &r.start_key,
+                r.count,
+                &r.caller_address,
+                r.origin_vid,
+                payload,
+            )
+            .await;
+        Ok(Response::new(range_resp(result)))
+    }
+
+    async fn push_model(&self, req: Request<ModelParams>) -> Result<Response<BoolMsg>, Status> {
+        let r = req.into_inner();
+        let ok = self.node.push_model(r.version, &r.data).await;
+        Ok(Response::new(BoolMsg { ok }))
+    }
+
+    async fn request_model(
+        &self,
+        _req: Request<ModelRequest>,
+    ) -> Result<Response<ModelParams>, Status> {
+        let (version, data) = self.node.request_model().await;
+        Ok(Response::new(ModelParams { version, data }))
+    }
+
+    async fn heartbeat(&self, req: Request<HeartbeatMsg>) -> Result<Response<BoolMsg>, Status> {
+        let _h = req.into_inner();
+        let ready = self.node.heartbeat().await;
+        Ok(Response::new(BoolMsg { ok: ready }))
+    }
 }
 
-/// Spawn the gRPC server for a node.
 pub async fn serve<S, R>(
     node: Arc<ChordNode<S, R>>,
     bind_addr: &str,
