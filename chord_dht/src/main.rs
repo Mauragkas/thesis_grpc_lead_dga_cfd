@@ -1,22 +1,14 @@
-mod api;
-mod chord;
-mod config;
-mod ring;
-mod storage;
-mod transport;
-
-use crate::storage::KeyStore;
 use std::sync::Arc;
 use std::time::Duration;
 use tracing::info;
 
-use crate::chord::ChordNode;
-use crate::config::Config;
-use crate::ring::{hash, NodeAddr};
-use crate::storage::InMemoryStore;
-use crate::transport::grpc::client::GrpcRemote;
-use crate::transport::grpc::server;
-use crate::transport::RemoteNode;
+use chord_node::api;
+use chord_node::chord::ChordNode;
+use chord_node::config::Config;
+use chord_node::ring::{hash, NodeAddr};
+use chord_node::storage::{InMemoryStore, KeyStore};
+use chord_node::transport::grpc::{client::GrpcRemote, server};
+use chord_node::transport::RemoteNode;
 
 #[tokio::main]
 async fn main() {

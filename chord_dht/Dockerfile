@@ -10,6 +10,6 @@ RUN cargo build --release
 FROM debian:bookworm-slim
 RUN apt-get update && apt-get install -y libssl3 ca-certificates && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
-COPY --from=builder /app/target/release/chord-node /app/chord-node
+COPY --from=builder /app/target/release/chord_node /app/chord_node
 EXPOSE 8080 50051
-CMD ["./chord-node"]
+CMD ["./chord_node"]
