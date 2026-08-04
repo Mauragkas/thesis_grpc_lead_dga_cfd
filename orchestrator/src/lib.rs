@@ -8,3 +8,4 @@ pub mod ga;
 pub mod gene_store;
 pub mod proto;
 pub mod transport;
+pub mod lead_store;

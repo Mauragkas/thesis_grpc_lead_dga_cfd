@@ -46,7 +46,7 @@ fn config_from_env_uses_defaults_when_unset() {
     std::env::remove_var("GA_SEED");
     std::env::remove_var("GENE_STORE_MAX_AGE");
 
-    let (ga, _t, store) = config_from_env();
+    let (ga, _t, store, _lead) = config_from_env();
     assert_eq!(ga.eval_endpoint, "load-balancer:50051");
     assert_eq!(ga.seed, 42);
     assert_eq!(store.max_age_generations, 5);

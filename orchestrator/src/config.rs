@@ -1,5 +1,10 @@
 use std::time::Duration;
 
+#[derive(Debug, Clone, Default)]
+pub struct LeadConfig {
+    pub endpoint: Option<String>,
+}
+
 /// Single source of truth for tunable GA + transport parameters.
 /// SRP: holds configuration only; no behaviour.
 #[derive(Debug, Clone)]
@@ -73,7 +78,7 @@ impl Default for GeneStoreConfig {
 }
 
 /// Reads overrides from environment. SRP: parsing env, nothing else.
-pub fn config_from_env() -> (GaConfig, TransportConfig, GeneStoreConfig) {
+pub fn config_from_env() -> (GaConfig, TransportConfig, GeneStoreConfig, LeadConfig) {
     let mut ga = GaConfig::default();
     if let Ok(endpoint) = std::env::var("EVAL_ENDPOINT") {
         ga.eval_endpoint = endpoint;
@@ -90,7 +95,12 @@ pub fn config_from_env() -> (GaConfig, TransportConfig, GeneStoreConfig) {
         store.max_age_generations = max_age;
     }
 
-    (ga, TransportConfig::default(), store)
+    let mut lead = LeadConfig::default();
+    if let Ok(ep) = std::env::var("LEAD_ENDPOINT") {
+        lead.endpoint = Some(ep);
+    }
+
+    (ga, TransportConfig::default(), store, lead)
 }
 
 /// Clips a gene into the normalized [0,1] range. Pure helper.

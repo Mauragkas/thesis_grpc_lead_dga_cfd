@@ -13,6 +13,7 @@ message KeyMsg { string key = 1; }
 message ValueMsg { string value = 1; }
 message KeyValue { string key = 1; string value = 2; }
 message PutRequest { string key = 1; string value = 2; }
+message PutRoutedRequest { string key = 1; string value = 2; }
 message BoolMsg { bool ok = 1; }
 message NodeAddrList { repeated NodeAddr nodes = 1; }
 message NotifyRequest { uint64 vid = 1; optional NodeAddr other = 2; }
@@ -31,7 +32,6 @@ message RangeForwardRequest {
 message ModelParams { uint64 version = 1; bytes data = 2; }
 message ModelRequest { string coordinator = 1; }
 message HeartbeatMsg { string sender = 1; bool update_ready = 2; uint64 model_version = 3; }
-message PutRoutedRequest { string key = 1; string value = 2; }
 
 service Chord {
   rpc FindSuccessor(FindSuccRequest) returns (NodeAddr);
@@ -50,6 +50,7 @@ service Chord {
   rpc PushModel(ModelParams) returns (BoolMsg);
   rpc RequestModel(ModelRequest) returns (ModelParams);
   rpc Heartbeat(HeartbeatMsg) returns (BoolMsg);
+
   rpc PutRouted(PutRoutedRequest) returns (BoolMsg);
   rpc GetRouted(KeyMsg) returns (ValueMsg);
 }

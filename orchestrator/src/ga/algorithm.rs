@@ -2,7 +2,8 @@ use crate::config::GaConfig;
 use crate::evaluator::Evaluator;
 use crate::ga::operators::{next_generation, random_population, select_survivors};
 use crate::gene_store::GeneStore;
-use log::info;
+use crate::lead_store::{gene_key, GenePayload, LeadStore};
+use log::{info, warn};
 use rand::rngs::StdRng;
 use rand_distr::Normal;
 use std::time::Instant;
@@ -14,6 +15,7 @@ pub struct GaRunner<'a> {
     pub cfg: &'a GaConfig,
     pub evaluator: &'a dyn Evaluator,
     pub store: &'a dyn GeneStore,
+    pub lead_store: Option<&'a dyn LeadStore>,
 }
 
 impl<'a> GaRunner<'a> {
@@ -54,6 +56,19 @@ impl<'a> GaRunner<'a> {
                 for ((&i, g), f) in uncached_idx.iter().zip(uncached.iter()).zip(fresh.iter()) {
                     fitnesses[i] = *f;
                     self.store.store(g.clone(), *f, gen).await;
+
+                    if let Some(ls) = self.lead_store {
+                        let key = gene_key(g);
+                        let payload = GenePayload {
+                            genes: g.clone(),
+                            fitness: *f,
+                            generation: gen,
+                        };
+                        let value = serde_json::to_string(&payload).unwrap_or_default();
+                        if let Err(e) = ls.store_gene(&key, &value).await {
+                            warn!("lead store failed (gen {gen}): {e}");
+                        }
+                    }
                 }
             }
 
