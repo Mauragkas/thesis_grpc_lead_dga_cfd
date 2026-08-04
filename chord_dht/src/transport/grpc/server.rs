@@ -10,8 +10,9 @@ use crate::transport::{RangeResult, RemoteNode};
 use super::gen::chord_server::{Chord, ChordServer};
 use super::gen::{
     BoolMsg, Empty, FindSuccRequest, GetPredRequest, HeartbeatMsg, KeyMsg, ModelParams,
-    ModelRequest, NodeAddr as ProtoNode, NodeAddrList, NotifyRequest, OptionalNodeAddr, PutRequest,
-    RangeEntry, RangeForwardRequest, RangeRequest, RangeResponse, ValueMsg, VidMsg,
+    ModelRequest, NodeAddr as ProtoNode, NodeAddrList, NotifyRequest, OptionalNodeAddr,
+    PutRoutedRequest, PutRequest, RangeEntry, RangeForwardRequest, RangeRequest, RangeResponse,
+    ValueMsg, VidMsg,
 };
 
 pub struct ChordGrpcService<S, R>
@@ -58,6 +59,40 @@ where
     S: KeyStore + 'static,
     R: RemoteNode + 'static,
 {
+
+    async fn put_routed(
+        &self,
+        req: Request<PutRoutedRequest>,
+    ) -> Result<Response<BoolMsg>, Status> {
+        let r = req.into_inner();
+        let target = self.node.lookup_target(&r.key).await;
+        let ok = if target.address == self.node.self_uri {
+            self.node.storage().put(r.key.clone(), r.value).await;
+            self.node.record_insertion(&r.key).await;
+            true
+        } else {
+            self.node
+                .remote()
+                .put_local(&target.address, &r.key, &r.value)
+                .await
+        };
+        Ok(Response::new(BoolMsg { ok }))
+    }
+
+    async fn get_routed(&self, req: Request<KeyMsg>) -> Result<Response<ValueMsg>, Status> {
+        let key = req.into_inner().key;
+        let target = self.node.lookup_target(&key).await;
+        let value = if target.address == self.node.self_uri {
+            self.node.storage().get(&key).await
+        } else {
+            self.node.remote().get_local(&target.address, &key).await
+        };
+        match value {
+            Some(v) => Ok(Response::new(ValueMsg { value: v })),
+            None => Err(Status::not_found("key not found")),
+        }
+    }
+
     async fn find_successor(
         &self,
         req: Request<FindSuccRequest>,
