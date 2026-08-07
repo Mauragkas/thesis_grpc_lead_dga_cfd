@@ -22,6 +22,7 @@ pub trait RemoteNode: Send + Sync {
     async fn put_local(&self, addr: &str, key: &str, val: &str) -> bool;
     async fn delete_local(&self, addr: &str, key: &str) -> bool;
     async fn ping(&self, addr: &str) -> bool;
+    async fn get_keys(&self, addr: &str) -> Option<Vec<String>>;
 
     async fn range_query(
         &self,

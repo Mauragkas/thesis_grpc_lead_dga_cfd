@@ -194,6 +194,7 @@ where
     }
 }
 
+#[allow(unused)]
 /// Federated Averaging over leaf parameters, weighted by training-set size.
 fn fed_avg(models: Vec<RmiModel>, version: u64) -> RmiModel {
     if models.is_empty() {

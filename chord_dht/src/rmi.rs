@@ -57,19 +57,11 @@ impl Default for RmiModel {
     }
 }
 
-/// Order-preserving feature in [0,1): first 8 key bytes as a big-endian int.
-/// Splits into hi/lo 32-bit halves to avoid precision loss for large u64 values.
+// Hash the full key (not just first 8 bytes) so configs with shared
+// JSON prefixes still get distinct, uniformly distributed features.
 fn feature(key: &str) -> f64 {
-    let bytes = key.as_bytes();
-    let n = bytes.len().min(8);
-    let mut acc: u64 = 0;
-    for i in 0..n {
-        acc = (acc << 8) | bytes[i] as u64;
-    }
-    acc <<= 8 * (8 - n);
-    let hi = (acc >> 32) as f64;
-    let lo = (acc & 0xFFFFFFFF) as f64;
-    (hi * 4294967296.0 + lo) / 18446744073709551616.0
+    let h = crate::ring::peer_hash(key);
+    (h as f64) / (u64::MAX as f64)
 }
 
 impl RmiModel {
