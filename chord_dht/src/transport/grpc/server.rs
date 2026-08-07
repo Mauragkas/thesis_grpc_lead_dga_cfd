@@ -8,11 +8,12 @@ use crate::storage::KeyStore;
 use crate::transport::{RangeResult, RemoteNode};
 
 use super::gen::chord_server::{Chord, ChordServer};
+use super::gen::KeyList;
 use super::gen::{
     BoolMsg, Empty, FindSuccRequest, GetPredRequest, HeartbeatMsg, KeyMsg, ModelParams,
-    ModelRequest, NodeAddr as ProtoNode, NodeAddrList, NotifyRequest, OptionalNodeAddr,
-    PutRoutedRequest, PutRequest, RangeEntry, RangeForwardRequest, RangeRequest, RangeResponse,
-    ValueMsg, VidMsg,
+    ModelRequest, NodeAddr as ProtoNode, NodeAddrList, NotifyRequest, OptionalNodeAddr, PutRequest,
+    PutRoutedRequest, RangeEntry, RangeForwardRequest, RangeRequest, RangeResponse, ValueMsg,
+    VidMsg,
 };
 
 pub struct ChordGrpcService<S, R>
@@ -59,6 +60,17 @@ where
     S: KeyStore + 'static,
     R: RemoteNode + 'static,
 {
+    async fn get_keys(&self, _req: Request<Empty>) -> Result<Response<KeyList>, Status> {
+        let keys: Vec<String> = self
+            .node
+            .storage()
+            .snapshot()
+            .await
+            .into_iter()
+            .map(|(k, _)| k)
+            .collect();
+        Ok(Response::new(KeyList { keys }))
+    }
 
     async fn put_routed(
         &self,

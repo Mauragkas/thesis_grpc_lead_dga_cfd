@@ -86,6 +86,15 @@ fn entries_from_proto(v: Vec<RangeEntry>) -> Vec<(String, String)> {
 
 #[async_trait]
 impl RemoteNode for GrpcRemote {
+    async fn get_keys(&self, addr: &str) -> Option<Vec<String>> {
+        let mut c = self.client(addr).await?;
+        let resp = tokio::time::timeout(RPC_TIMEOUT, c.get_keys(Empty {}))
+            .await
+            .ok()?
+            .ok()?;
+        Some(resp.into_inner().keys)
+    }
+
     async fn find_successor(&self, addr: &str, vid: u64, id: u64) -> Option<NodeAddr> {
         let mut c = self.client(addr).await?;
         let resp = tokio::time::timeout(RPC_TIMEOUT, c.find_successor(FindSuccRequest { vid, id }))
