@@ -46,7 +46,7 @@ where
         let version = self.model_version_counter.load(Ordering::SeqCst);
         let model = RmiModel::train(&keys, version);
         self.rmi.write().await.update = Some(model);
-        info!("FRM: retrained update_rmi on {} keys", keys.len());
+        info!("FRM: retrained local model on {} keys", keys.len());
     }
 
     pub async fn heartbeat_round(&self) {
@@ -54,12 +54,15 @@ where
             let rmi = self.rmi.read().await;
             (rmi.update_ready, rmi.active.version, rmi.update.is_some())
         };
-        let neighbors = self.immediate_neighbors().await;
-        if neighbors.is_empty() {
+
+        let peers = self.all_peers().await;
+        if peers.is_empty() {
             return;
         }
+
+        // Send heartbeats to all peers
         let mut total = 0usize;
-        for addr in &neighbors {
+        for addr in &peers {
             if self
                 .remote
                 .heartbeat(addr, &self.self_uri, ready, version)
@@ -69,69 +72,129 @@ where
                 total += 1;
             }
         }
+
+        // Only the node with the highest address (deterministic leader)
+        // initiates the global training round when ready.
         if ready && has_update && total > 0 {
-            self.assume_coordinator().await;
+            let max_addr = peers.iter().max().cloned().unwrap_or_default();
+            if self.self_uri == max_addr {
+                self.run_global_training_round().await;
+            }
         }
     }
 
-    async fn immediate_neighbors(&self) -> HashSet<String> {
-        let mut set = HashSet::new();
-        for vnode in &self.vnodes {
-            let succ = vnode.successor().await;
-            if succ.id != vnode.vid && succ.address != self.self_uri {
-                set.insert(succ.address.clone());
+    /// Collect all distinct node addresses from the ring.
+    /// Traverses the successor chain starting from the first vnode until
+    /// we loop back to the start.
+    async fn all_peers(&self) -> Vec<String> {
+        let mut peers = HashSet::new();
+        peers.insert(self.self_uri.clone());
+
+        if self.vnodes.is_empty() {
+            return peers.into_iter().collect();
+        }
+
+        let start_vid = self.vnodes[0].vid;
+        let mut current = self.vnodes[0].successor().await;
+
+        // Walk the ring until we come back to start_vid
+        for _ in 0..1000 {
+            // safety limit
+            if current.id == start_vid {
+                break;
             }
-            if let Some(p) = vnode.predecessor.read().await.clone() {
-                if p.id != vnode.vid && p.address != self.self_uri {
-                    set.insert(p.address.clone());
+            if current.address != self.self_uri {
+                peers.insert(current.address.clone());
+            }
+            // Ask the current node for its successor of the same vnode
+            if let Some(next) = self
+                .remote
+                .get_successor(&current.address, current.id)
+                .await
+            {
+                if next.id == current.id || next.address == current.address {
+                    break; // alone or stuck
                 }
+                current = next;
+            } else {
+                break;
             }
         }
-        set
+        peers.into_iter().collect()
     }
 
-    async fn assume_coordinator(&self) {
-        info!("FRM: assuming transient coordinator role");
-        let neighbors = self.immediate_neighbors().await;
+    /// Leader-driven global training round:
+    /// 1. Collect models from ALL peers (not just neighbors).
+    /// 2. Compute federated average.
+    /// 3. Push the global model to all peers.
+    /// 4. Activate locally and migrate keys.
+    async fn run_global_training_round(&self) {
+        info!("FRM: starting global training round as leader");
 
-        let mut params: Vec<RmiModel> = Vec::new();
+        let peers = self.all_peers().await;
+        let mut models: Vec<RmiModel> = Vec::new();
+
+        // Include own model
         {
             let rmi = self.rmi.read().await;
-            params.push(rmi.update.clone().unwrap_or_else(|| rmi.active.clone()));
+            models.push(rmi.update.clone().unwrap_or_else(|| rmi.active.clone()));
         }
-        for addr in &neighbors {
+
+        // Collect from all other peers
+        for addr in &peers {
+            if *addr == self.self_uri {
+                continue;
+            }
             if let Some((version, data)) = self.remote.request_model(addr, &self.self_uri).await {
+                // Accept any version >= our active version (they might be ahead)
                 let active_ver = self.rmi.read().await.active.version;
                 if version >= active_ver {
                     if let Ok(m) = serde_json::from_slice::<RmiModel>(&data) {
-                        params.push(m);
+                        models.push(m);
                     }
                 }
             }
         }
-        if params.is_empty() {
+
+        if models.is_empty() {
             return;
         }
-        let new_version = self.model_version_counter.fetch_add(1, Ordering::SeqCst) + 1;
-        let new_model = fed_avg(params, new_version);
-        let data = serde_json::to_vec(&new_model).unwrap_or_default();
-        for addr in &neighbors {
-            let _ = self.remote.push_model(addr, new_model.version, &data).await;
+
+        // Compute new global version: max of all received versions + 1
+        let max_version = models.iter().map(|m| m.version).max().unwrap_or(1);
+        let new_version = max_version + 1;
+        let global_model = fed_avg(models, new_version);
+        let data = serde_json::to_vec(&global_model).unwrap_or_default();
+
+        // Push to all peers
+        for addr in &peers {
+            if *addr == self.self_uri {
+                continue;
+            }
+            let _ = self
+                .remote
+                .push_model(addr, global_model.version, &data)
+                .await;
         }
-        let model_version = new_model.version;
+
+        // Activate locally
         {
             let mut rmi = self.rmi.write().await;
-            rmi.active = new_model;
+            rmi.active = global_model;
             rmi.update = None;
             rmi.drift_new = 0;
             rmi.update_ready = false;
         }
-        info!("FRM: broadcast model version {}", model_version);
+
+        info!(
+            "FRM: global model version {} activated, migrating keys",
+            new_version
+        );
         self.migrate_keys_for_new_model().await;
     }
 
-    /// After a model update, scan local storage and forward keys that are
-    /// no longer owned by this node to their new owner.
+    // After a model update, scan local storage and forward keys that are
+    // no longer owned by this node to their new owner.
     async fn migrate_keys_for_new_model(&self) {
         let snap = self.storage.snapshot().await;
         let mut migrated = 0usize;
@@ -149,6 +212,20 @@ where
         if migrated > 0 {
             info!("FRM: migrated {} keys after model update", migrated);
         }
+        // Migration delivers keys via put_local, which increments drift_new.
+        // These are NOT new user inserts — reset the counters so the post-
+        // migration state doesn't immediately retrigger drift detection.
+        self.reset_drift_state().await;
+    }
+
+    /// Reset drift counters to reflect the current, settled storage contents.
+    /// This prevents migration-induced inserts from falsely triggering retraining.
+    async fn reset_drift_state(&self) {
+        let n = self.storage.len().await;
+        self.keys_total.store(n, Ordering::Relaxed);
+        let mut rmi = self.rmi.write().await;
+        rmi.drift_new = 0;
+        rmi.update_ready = false;
     }
 
     pub async fn push_model(&self, version: u64, data: &[u8]) -> bool {
@@ -194,7 +271,6 @@ where
     }
 }
 
-#[allow(unused)]
 /// Federated Averaging over leaf parameters, weighted by training-set size.
 fn fed_avg(models: Vec<RmiModel>, version: u64) -> RmiModel {
     if models.is_empty() {
