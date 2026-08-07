@@ -60,6 +60,22 @@ impl Default for RmiModel {
 // Hash the full key (not just first 8 bytes) so configs with shared
 // JSON prefixes still get distinct, uniformly distributed features.
 fn feature(key: &str) -> f64 {
+    // For Hilbert-prefixed keys ("hex|json"), parse the hex prefix as the
+    // feature. This makes the feature monotonic in the key's lexicographic
+    // order, so learned_hash(key) preserves key order and range queries
+    // return keys in the correct Hilbert sequence.
+    if let Some(hex_part) = key.split('|').next() {
+        if !hex_part.is_empty() && hex_part.chars().all(|c| c.is_ascii_hexdigit()) {
+            // Use the first 16 hex chars (64 bits). Since the hex prefix is
+            // zero-padded, this gives the most-significant 64 bits of the
+            // Hilbert index — sufficient for monotonic vnode placement.
+            let prefix = &hex_part[..hex_part.len().min(16)];
+            if let Ok(h) = u64::from_str_radix(prefix, 16) {
+                return h as f64 / (u64::MAX as f64);
+            }
+        }
+    }
+    // Fallback for non-Hilbert keys: uniform hash (original behavior)
     let h = crate::ring::peer_hash(key);
     (h as f64) / (u64::MAX as f64)
 }
