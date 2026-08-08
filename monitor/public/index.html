@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>loadbalanceGA Monitor</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --panel: #1e293b;
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+      --info: #60a5fa;
+      --warn: #fbbf24;
+      --error: #f87171;
+      --debug: #a78bfa;
+      --border: #334155;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 13px;
+    }
+    header {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 12px 20px;
+      background: var(--panel);
+      border-bottom: 1px solid var(--border);
+    }
+    header h1 { margin: 0; font-size: 16px; font-weight: 600; }
+    .stats { display: flex; gap: 12px; flex-wrap: wrap; }
+    .stat {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 4px 10px;
+      font-size: 12px;
+    }
+    .stat b { color: var(--accent); }
+    .status-dot {
+      width: 10px; height: 10px; border-radius: 50%;
+      background: var(--error);
+    }
+    .status-dot.live { background: #22c55e; }
+    .controls {
+      display: flex; gap: 8px; flex-wrap: wrap;
+      padding: 10px 20px;
+      background: var(--panel);
+      border-bottom: 1px solid var(--border);
+    }
+    select, input, button {
+      background: var(--bg);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 4px 8px;
+      font: inherit;
+    }
+    button { cursor: pointer; }
+    button:hover { border-color: var(--accent); }
+    #logs {
+      height: calc(100vh - 130px);
+      overflow-y: auto;
+      padding: 8px 20px;
+    }
+    .log {
+      display: grid;
+      grid-template-columns: 130px 70px 130px 220px 1fr;
+      gap: 10px;
+      padding: 3px 0;
+      border-bottom: 1px solid #1e293b;
+      align-items: baseline;
+    }
+    .log:hover { background: rgba(56,189,248,0.05); }
+    .ts { color: var(--muted); }
+    .level { font-weight: 600; text-align: center; border-radius: 3px; padding: 1px 4px; }
+    .level.INFO, .level.info { color: var(--info); }
+    .level.WARN, .level.WARNING, .level.warn { color: var(--warn); background: rgba(251,191,36,0.1); }
+    .level.ERROR, .level.error { color: var(--error); background: rgba(248,113,113,0.1); }
+    .level.DEBUG, .level.debug { color: var(--debug); }
+    .source { color: var(--accent); font-size: 11px; }
+    .target { color: var(--muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .msg { white-space: pre-wrap; word-break: break-word; }
+    .meta { color: var(--muted); font-size: 11px; margin-top: 2px; }
+    .paused { opacity: 0.5; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="status-dot" id="dot"></div>
+    <h1>loadbalanceGA Monitor</h1>
+    <div class="stats" id="stats"></div>
+  </header>
+
+  <div class="controls">
+    <select id="source">
+      <option value="">all sources</option>
+      <option value="logs.chord">logs.chord</option>
+      <option value="logs.orchestrator">logs.orchestrator</option>
+      <option value="logs.worker">logs.worker</option>
+    </select>
+    <select id="level">
+      <option value="">all levels</option>
+      <option value="DEBUG">DEBUG</option>
+      <option value="INFO">INFO</option>
+      <option value="WARN">WARN</option>
+      <option value="ERROR">ERROR</option>
+    </select>
+    <input id="search" type="text" placeholder="search..." style="width: 200px" />
+    <button id="pause">Pause</button>
+    <button id="clear">Clear</button>
+    <button id="backfill">Load recent (50)</button>
+    <span style="margin-left:auto; color: var(--muted)" id="count">0 shown</span>
+  </div>
+
+  <div id="logs"></div>
+
+  <script>
+    const MAX = 500;
+    let paused = false;
+    const buffer = [];
+    let filter = {};
+
+    const dot = document.getElementById('dot');
+    const logsEl = document.getElementById('logs');
+    const countEl = document.getElementById('count');
+    const statsEl = document.getElementById('stats');
+
+    function readFilter() {
+      filter = {
+        source: document.getElementById('source').value || undefined,
+        level: document.getElementById('level').value || undefined,
+        search: document.getElementById('search').value || undefined,
+      };
+      sendFilter();
+      render();
+    }
+
+    function passes(log) {
+      if (filter.source && log.source !== filter.source) return false;
+      if (filter.level) {
+        const want = filter.level.toUpperCase();
+        const got = String(log.level || '').toUpperCase();
+        if (want === 'ERROR') {
+          if (!['ERROR','CRIT','ALERT','EMERG'].includes(got)) return false;
+        } else if (got !== want) return false;
+      }
+      if (filter.search) {
+        if (!JSON.stringify(log).toLowerCase().includes(filter.search.toLowerCase())) return false;
+      }
+      return true;
+    }
+
+    function fmtTs(ts) {
+      if (!ts) return '';
+      const d = new Date(ts);
+      return d.toISOString().split('T')[1].replace('Z','');
+    }
+
+    function renderLog(log) {
+      const div = document.createElement('div');
+      div.className = 'log';
+      const lvl = String(log.level || '').toUpperCase();
+      const target = log.target || log.name || '';
+      const msg = log.message || log.msg || log.fields?.message || JSON.stringify(log);
+      const meta = [];
+      if (log.worker_id) meta.push(`worker=${log.worker_id}`);
+      if (log.generation !== undefined) meta.push(`gen=${log.generation}`);
+      if (log.offset) meta.push(`off=${log.offset}`);
+      div.innerHTML = `
+        <span class="ts">${fmtTs(log.ts)}</span>
+        <span class="level ${lvl}">${lvl}</span>
+        <span class="source">${log.source || ''}</span>
+        <span class="target" title="${target}">${target}</span>
+        <span>
+          <div class="msg">${escapeHtml(msg)}</div>
+          ${meta.length ? `<div class="meta">${meta.join(' · ')}</div>` : ''}
+        </span>
+      `;
+      return div;
+    }
+
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, c => ({
+        '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+      }[c]));
+    }
+
+    function render() {
+      // Keep only matching logs, newest at top
+      const matching = buffer.filter(passes).slice(-MAX).reverse();
+      logsEl.innerHTML = '';
+      const frag = document.createDocumentFragment();
+      for (const l of matching) frag.appendChild(renderLog(l));
+      logsEl.appendChild(frag);
+      countEl.textContent = `${matching.length} shown`;
+    }
+
+    function addLog(log) {
+      buffer.push(log);
+      if (buffer.length > MAX * 2) buffer.splice(0, buffer.length - MAX * 2);
+      if (paused) return;
+      if (!passes(log)) return;
+      // prepend
+      const el = renderLog(log);
+      logsEl.insertBefore(el, logsEl.firstChild);
+      while (logsEl.children.length > MAX) logsEl.removeChild(logsEl.lastChild);
+      countEl.textContent = `${logsEl.children.length} shown`;
+    }
+
+    function sendFilter() {
+      if (ws.readyState === ws.OPEN) {
+        ws.send(JSON.stringify({ type: 'filter', filter }));
+      }
+    }
+
+    function refreshStats() {
+      fetch('/stats').then(r => r.json()).then(s => {
+        const parts = [];
+        parts.push(`<span class="stat">total <b>${s.total}</b></span>`);
+        for (const [src, n] of Object.entries(s.bySource || {})) {
+          parts.push(`<span class="stat">${src} <b>${n}</b></span>`);
+        }
+        statsEl.innerHTML = parts.join('');
+      }).catch(() => {});
+    }
+
+    let ws;
+    function connect() {
+      const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+      ws = new WebSocket(`${proto}://${location.host}/stream`);
+      ws.onopen = () => {
+        dot.classList.add('live');
+        sendFilter();
+      };
+      ws.onmessage = (ev) => {
+        const log = JSON.parse(ev.data);
+        if (log.type === 'hello' || log.type === 'ack' || log.type === 'pong') return;
+        addLog(log);
+      };
+      ws.onclose = () => {
+        dot.classList.remove('live');
+        setTimeout(connect, 2000);
+      };
+      ws.onerror = () => ws.close();
+    }
+
+    document.getElementById('source').addEventListener('change', readFilter);
+    document.getElementById('level').addEventListener('change', readFilter);
+    document.getElementById('search').addEventListener('input', readFilter);
+    document.getElementById('pause').addEventListener('click', (e) => {
+      paused = !paused;
+      e.target.textContent = paused ? 'Resume' : 'Pause';
+      logsEl.classList.toggle('paused', paused);
+    });
+    document.getElementById('clear').addEventListener('click', () => {
+      buffer.length = 0;
+      logsEl.innerHTML = '';
+      countEl.textContent = '0 shown';
+    });
+    document.getElementById('backfill').addEventListener('click', async () => {
+      const src = document.getElementById('source').value;
+      const url = '/logs/tail?limit=50' + (src ? `&source=${encodeURIComponent(src)}` : '');
+      const r = await fetch(url);
+      const j = await r.json();
+      for (const l of j.logs) addLog(l);
+    });
+
+    connect();
+    setInterval(refreshStats, 2000);
+    refreshStats();
+  </script>
+</body>
+</html>
