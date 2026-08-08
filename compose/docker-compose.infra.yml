@@ -34,7 +34,7 @@ services:
       - "24224:24224"
       - "2020:2020"
     volumes:
-      - ./fluent-bit.conf:/fluent-bit/etc/fluent-bit.conf:ro
+      - ../fluent-bit.conf:/fluent-bit/etc/fluent-bit.conf:ro
     healthcheck:
       test: ["CMD-SHELL", "echo > /dev/tcp/127.0.0.1/24224 2>/dev/null"]
       interval: 3s
@@ -48,7 +48,7 @@ services:
       - default
 
   monitor:
-    build: ./monitor
+    build: ../monitor
     container_name: monitor
     environment:
       - KAFKA_BROKERS=kafka:9092
