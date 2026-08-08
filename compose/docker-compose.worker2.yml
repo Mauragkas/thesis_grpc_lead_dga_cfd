@@ -1,0 +1,68 @@
+services:
+  worker2:
+    build: ./worker
+    container_name: worker2
+    environment:
+      - WORKER_ID=${WORKER_ID:-worker2}
+      - LOG_LEVEL=${LOG_LEVEL:-DEBUG}
+      - V_MIN_FUSE_MM3=20000.0
+      - OMP_NUM_THREADS=1
+      - OPENBLAS_NUM_THREADS=1
+      - MKL_NUM_THREADS=1
+      - NUMEXPR_NUM_THREADS=1
+      - VECLIB_MAXIMUM_THREADS=1
+      - LEAD_ENDPOINT=http://lead-node1:50051   # register with the DHT
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import socket; s=socket.socket(); s.settimeout(2); s.connect(('127.0.0.1',50051)); s.close()\""]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
+    networks:
+      - default
+    logging:
+      driver: fluentd
+      options:
+        fluentd-address: localhost:24224
+        tag: worker2.main
+
+  load-balancer2:
+    image: envoyproxy/envoy:v1.28-latest
+    container_name: load-balancer2
+    volumes:
+      - ./envoy.yaml:/etc/envoy/envoy.yaml:ro
+    ports:
+      - "50052:50051"           # host-mapped: keep envoy's internal port at 50051,
+                                # but expose on a new host port to avoid conflict
+    depends_on:
+      worker2:
+        condition: service_healthy
+    networks:
+      - default
+
+  orchestrator2:
+    build: ./orchestrator
+    container_name: orchestrator2
+    environment:
+      - RUST_LOG=info,orchestrator=debug
+      - RUST_LOG_STYLE=always
+      - EVAL_ENDPOINT=load-balancer2:50051   # local envoy (same project)
+      - LEAD_ENDPOINT=http://lead-node1:50051   # same DHT bootstrap
+      - N_WORKERS=${N_WORKERS:-1}
+      - GA_SEED=${GA_SEED:-43}               # different seed for varied runs
+    depends_on:
+      load-balancer2:
+        condition: service_started
+    restart: "no"
+    networks:
+      - default
+    logging:
+      driver: fluentd
+      options:
+        fluentd-address: localhost:24224
+        tag: orchestrator2.main
+
+networks:
+  default:
+    external: true
+    name: simulated-lan

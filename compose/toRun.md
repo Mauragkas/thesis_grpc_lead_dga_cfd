@@ -1,0 +1,22 @@
+How to run
+
+```bash
+# 1. Shared network (once)
+docker network create simulated-lan
+
+# 2. Infra first (until Kafka is healthy)
+docker compose -f compose/docker-compose.infra.yml up -d --build
+
+# 3. Lead cluster
+docker compose -f compose/docker-compose.lead.yml up -d --build
+
+# 4. Worker side
+docker compose -f compose/docker-compose.worker.yml up -d --build
+docker compose -f compose/docker-compose.worker2.yml up -d --build
+```
+
+To simulate failure of a “remote” machine, just stop one project:
+
+```bash
+docker compose -f compose/docker-compose.lead.yml stop   # lead machine goes down
+```

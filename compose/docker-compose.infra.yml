@@ -1,0 +1,71 @@
+services:
+  kafka:
+    image: apache/kafka:3.9.0
+    container_name: kafka
+    environment:
+      KAFKA_NODE_ID: 0
+      KAFKA_PROCESS_ROLES: controller,broker
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 0@kafka:9093
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_CLUSTER_ID: loadbalanceGA12345678
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+    ports:
+      - "9092:9092"
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list >/dev/null 2>&1"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 15s
+    networks:
+      - default
+
+  fluent-bit:
+    image: fluent/fluent-bit:3.0
+    container_name: fluent-bit
+    ports:
+      - "24224:24224"
+      - "2020:2020"
+    volumes:
+      - ./fluent-bit.conf:/fluent-bit/etc/fluent-bit.conf:ro
+    healthcheck:
+      test: ["CMD-SHELL", "echo > /dev/tcp/127.0.0.1/24224 2>/dev/null"]
+      interval: 3s
+      timeout: 3s
+      retries: 15
+      start_period: 5s
+    depends_on:
+      kafka:
+        condition: service_healthy
+    networks:
+      - default
+
+  monitor:
+    build: ./monitor
+    container_name: monitor
+    environment:
+      - KAFKA_BROKERS=kafka:9092
+      - KAFKA_TOPICS=logs.chord,logs.orchestrator,logs.worker
+      - KAFKA_GROUP_ID=monitor-group
+      - PORT=3000
+      - BUFFER_CAP=10000
+    ports:
+      - "3000:3000"
+    depends_on:
+      kafka:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - default
+
+networks:
+  default:
+    external: true
+    name: simulated-lan
