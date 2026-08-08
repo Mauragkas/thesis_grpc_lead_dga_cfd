@@ -4,6 +4,7 @@ services:
     build: ./chord_dht
     container_name: lead_node1
     environment:
+      - RUST_LOG=info,chord_node=debug
       - HTTP_BIND=0.0.0.0:2001
       - GRPC_BIND=0.0.0.0:50051
       - SELF_URI=http://lead-node1:50051
@@ -18,6 +19,7 @@ services:
     build: ./chord_dht
     container_name: lead_node2
     environment:
+      - RUST_LOG=info,chord_node=debug
       - HTTP_BIND=0.0.0.0:2002
       - GRPC_BIND=0.0.0.0:50052
       - SELF_URI=http://lead-node2:50052
@@ -34,6 +36,7 @@ services:
     build: ./chord_dht
     container_name: lead_node3
     environment:
+      - RUST_LOG=info,chord_node=debug
       - HTTP_BIND=0.0.0.0:2003
       - GRPC_BIND=0.0.0.0:50053
       - SELF_URI=http://lead-node3:50053
@@ -50,6 +53,8 @@ services:
   orchestrator:
     build: ./orchestrator
     environment:
+      - RUST_LOG=info,orchestrator=debug
+      - RUST_LOG_STYLE=always
       - EVAL_ENDPOINT=load-balancer:50051
       - LEAD_ENDPOINT=http://lead-node1:50051
       - N_WORKERS=${N_WORKERS:-1}

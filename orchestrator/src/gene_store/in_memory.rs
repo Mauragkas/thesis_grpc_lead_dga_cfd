@@ -3,6 +3,7 @@ use crate::gene_store::metric::DistanceMetric;
 use crate::gene_store::r#trait::GeneStore;
 use crate::gene_store::record::GeneRecord;
 use tokio::sync::Mutex;
+use tracing::{debug, info};
 
 /// Concrete in-process store. Holds a flat `Vec<GeneRecord>` behind a
 /// `tokio::sync::Mutex` so the trait stays `&self`-shareable across
@@ -45,6 +46,7 @@ where
             generation,
             last_accessed_gen: generation,
         });
+        debug!("Stored gene record (gen {generation}, fitness {fitness:.4})");
     }
 
     async fn query_knn(
@@ -70,6 +72,11 @@ where
             records[idx].last_accessed_gen = current_generation;
             out.push(records[idx].clone());
         }
+        debug!(
+            "KNN query returned {} of {} records (k={k})",
+            out.len(),
+            records.len()
+        );
         out
     }
 
@@ -79,14 +86,24 @@ where
             if r.genes.len() == genes.len() && r.genes.iter().zip(genes.iter()).all(|(a, b)| a == b)
             {
                 r.last_accessed_gen = current_generation;
+                debug!("Exact cache hit (gen {current_generation})");
                 return Some(r.fitness);
             }
         }
+        debug!("Exact cache miss (gen {current_generation})");
         None
     }
 
     async fn evict_expired(&self, current_generation: usize) {
         let mut records = self.records.lock().await;
+        let before = records.len();
         records.retain(|r| !self.eviction.should_evict(r, current_generation));
+        let evicted = before - records.len();
+        if evicted > 0 {
+            info!(
+                "Evicted {evicted} stale gene records at gen {current_generation} ({} remain)",
+                records.len()
+            );
+        }
     }
 }

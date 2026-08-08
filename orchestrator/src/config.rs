@@ -1,4 +1,5 @@
 use std::time::Duration;
+use tracing::{info, warn};
 
 #[derive(Debug, Clone, Default)]
 pub struct LeadConfig {
@@ -80,24 +81,51 @@ impl Default for GeneStoreConfig {
 /// Reads overrides from environment. SRP: parsing env, nothing else.
 pub fn config_from_env() -> (GaConfig, TransportConfig, GeneStoreConfig, LeadConfig) {
     let mut ga = GaConfig::default();
-    if let Ok(endpoint) = std::env::var("EVAL_ENDPOINT") {
-        ga.eval_endpoint = endpoint;
+
+    match std::env::var("EVAL_ENDPOINT") {
+        Ok(endpoint) => {
+            info!("EVAL_ENDPOINT override: {endpoint}");
+            ga.eval_endpoint = endpoint;
+        }
+        Err(_) => info!(
+            "EVAL_ENDPOINT not set; using default '{}'",
+            ga.eval_endpoint
+        ),
     }
-    if let Some(seed) = std::env::var("GA_SEED").ok().and_then(|s| s.parse().ok()) {
-        ga.seed = seed;
+
+    match std::env::var("GA_SEED") {
+        Ok(raw) => match raw.parse::<u64>() {
+            Ok(seed) => {
+                info!("GA_SEED override: {seed}");
+                ga.seed = seed;
+            }
+            Err(_) => warn!("Ignoring invalid GA_SEED '{raw}': not a valid u64"),
+        },
+        Err(_) => info!("GA_SEED not set; using default {}", ga.seed),
     }
 
     let mut store = GeneStoreConfig::default();
-    if let Some(max_age) = std::env::var("GENE_STORE_MAX_AGE")
-        .ok()
-        .and_then(|s| s.parse().ok())
-    {
-        store.max_age_generations = max_age;
+    match std::env::var("GENE_STORE_MAX_AGE") {
+        Ok(raw) => match raw.parse::<usize>() {
+            Ok(max_age) => {
+                info!("GENE_STORE_MAX_AGE override: {max_age}");
+                store.max_age_generations = max_age;
+            }
+            Err(_) => warn!("Ignoring invalid GENE_STORE_MAX_AGE '{raw}': not a valid usize"),
+        },
+        Err(_) => info!(
+            "GENE_STORE_MAX_AGE not set; using default {}",
+            store.max_age_generations
+        ),
     }
 
     let mut lead = LeadConfig::default();
-    if let Ok(ep) = std::env::var("LEAD_ENDPOINT") {
-        lead.endpoint = Some(ep);
+    match std::env::var("LEAD_ENDPOINT") {
+        Ok(ep) => {
+            info!("LEAD_ENDPOINT override: {ep}");
+            lead.endpoint = Some(ep);
+        }
+        Err(_) => info!("LEAD_ENDPOINT not set; LEAD persistence disabled"),
     }
 
     (ga, TransportConfig::default(), store, lead)
