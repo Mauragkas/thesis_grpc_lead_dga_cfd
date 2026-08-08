@@ -73,6 +73,7 @@ services:
     build: ./worker
     environment:
       - WORKER_ID=${WORKER_ID:-worker}
+      - LOG_LEVEL=${LOG_LEVEL:-DEBUG}
       - V_MIN_FUSE_MM3=20000.0
       - OMP_NUM_THREADS=1
       - OPENBLAS_NUM_THREADS=1
