@@ -1,18 +1,10 @@
 const { WebSocketServer } = require('ws');
 
-/**
- * Attaches a WebSocket server at /stream.
- * Clients can send a JSON filter message to narrow what they receive;
- * otherwise they get everything.
- *
- * Returns a broadcast(log) function used by the consumer.
- */
 function attachWebSocket(server, _store) {
   const wss = new WebSocketServer({ server, path: '/stream' });
-
   const clients = new Set();
 
-  wss.on('connection', (ws, req) => {
+  wss.on('connection', (ws) => {
     ws.filter = null;
     clients.add(ws);
 
@@ -39,6 +31,7 @@ function attachWebSocket(server, _store) {
   function passesFilter(log, filter) {
     if (!filter) return true;
     if (filter.source && log.source !== filter.source) return false;
+    if (filter.container && log.source_tag !== filter.container) return false;  // ← add this
     if (filter.level) {
       const want = String(filter.level).toUpperCase();
       const got = String(log.level || '').toUpperCase();
@@ -58,6 +51,7 @@ function attachWebSocket(server, _store) {
   }
 
   function broadcast(log) {
+    if (clients.size === 0) return;          // skip work if nobody is watching
     const payload = JSON.stringify(log);
     for (const ws of clients) {
       if (ws.readyState !== ws.OPEN) continue;

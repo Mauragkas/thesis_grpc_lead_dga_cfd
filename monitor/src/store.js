@@ -6,6 +6,10 @@
 function createStore({ capPerSource = 10000 } = {}) {
   const buckets = new Map(); // source -> array of logs (newest at end)
 
+  // Trim threshold: only sweep when at 125% capacity, then prune 20% off the front.
+  const TRIGGER = Math.floor(capPerSource * 1.25);
+  const KEEP    = Math.floor(capPerSource * 0.80);
+
   function bucket(source) {
     if (!buckets.has(source)) buckets.set(source, []);
     return buckets.get(source);
@@ -14,8 +18,10 @@ function createStore({ capPerSource = 10000 } = {}) {
   function push(log) {
     const arr = bucket(log.source);
     arr.push(log);
-    if (arr.length > capPerSource) {
-      arr.splice(0, arr.length - capPerSource);
+    // Bulk trim: only fire when significantly over capacity
+    if (arr.length > TRIGGER) {
+      const remove = arr.length - KEEP;
+      arr.splice(0, remove);   // one O(n) sweep instead of per-push
     }
   }
 

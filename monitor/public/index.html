@@ -76,6 +76,8 @@
       padding: 3px 0;
       border-bottom: 1px solid #1e293b;
       align-items: baseline;
+      content-visibility: auto;
+      contain-intrinsic-size: auto 21px;
     }
     .log:hover { background: rgba(56,189,248,0.05); }
     .ts { color: var(--muted); }
@@ -105,6 +107,9 @@
       <option value="logs.orchestrator">logs.orchestrator</option>
       <option value="logs.worker">logs.worker</option>
     </select>
+    <select id="container">
+      <option value="">all containers</option>
+    </select>
     <select id="level">
       <option value="">all levels</option>
       <option value="DEBUG">DEBUG</option>
@@ -126,24 +131,59 @@
     let paused = false;
     const buffer = [];
     let filter = {};
+    let pendingLogs = [];
+    let rafId = null;
+    let filterDirty = false;
+    const seenContainers = new Set();
 
     const dot = document.getElementById('dot');
     const logsEl = document.getElementById('logs');
     const countEl = document.getElementById('count');
     const statsEl = document.getElementById('stats');
 
+    function debounce(fn, delay) {
+      let timer;
+      return function(...args) {
+        clearTimeout(timer);
+        timer = setTimeout(() => fn.apply(this, args), delay);
+      };
+    }
+
+    function updateContainerDropdown() {
+      const sel = document.getElementById('container');
+      const current = sel.value;
+      sel.innerHTML = '<option value="">all containers</option>';
+      for (const c of [...seenContainers].sort()) {
+        const opt = document.createElement('option');
+        opt.value = c;
+        opt.textContent = c;
+        if (c === current) opt.selected = true;
+        sel.appendChild(opt);
+      }
+    }
+
     function readFilter() {
       filter = {
-        source: document.getElementById('source').value || undefined,
-        level: document.getElementById('level').value || undefined,
-        search: document.getElementById('search').value || undefined,
+        source:    document.getElementById('source').value    || undefined,
+        container: document.getElementById('container').value || undefined,
+        level:     document.getElementById('level').value     || undefined,
+        search:    document.getElementById('search').value    || undefined,
       };
       sendFilter();
-      render();
+      filterDirty = true;
+      scheduleRender();
     }
+
+    const readFilterDebounced = debounce(readFilter, 300);
+
+    document.getElementById('source').addEventListener('change', readFilter);
+    document.getElementById('container').addEventListener('change', readFilter);
+    document.getElementById('level').addEventListener('change', readFilter);
+    document.getElementById('search').addEventListener('input', readFilterDebounced);
 
     function passes(log) {
       if (filter.source && log.source !== filter.source) return false;
+      if (filter.container && log.source_tag !== filter.container) return false;
       if (filter.level) {
         const want = filter.level.toUpperCase();
         const got = String(log.level || '').toUpperCase();
@@ -170,6 +210,7 @@
       const target = log.target || log.name || '';
       const msg = log.message || log.msg || log.fields?.message || JSON.stringify(log);
       const meta = [];
+      if (log.source_tag) meta.push(log.source_tag);
       if (log.worker_id) meta.push(`worker=${log.worker_id}`);
       if (log.generation !== undefined) meta.push(`gen=${log.generation}`);
       if (log.offset) meta.push(`off=${log.offset}`);
@@ -192,30 +233,54 @@
       }[c]));
     }
 
-    function render() {
-      // Keep only matching logs, newest at top
-      const matching = buffer.filter(passes).slice(-MAX).reverse();
-      logsEl.innerHTML = '';
-      const frag = document.createDocumentFragment();
-      for (const l of matching) frag.appendChild(renderLog(l));
-      logsEl.appendChild(frag);
-      countEl.textContent = `${matching.length} shown`;
+    function scheduleRender() {
+      if (rafId !== null) return;
+      rafId = requestAnimationFrame(() => {
+        rafId = null;
+        doRender();
+      });
+    }
+
+    function doRender() {
+      if (filterDirty) {
+        const matching = buffer.filter(passes).slice(-MAX).reverse();
+        const frag = document.createDocumentFragment();
+        for (const l of matching) frag.appendChild(renderLog(l));
+        logsEl.replaceChildren(frag);
+        countEl.textContent = `${matching.length} shown`;
+        filterDirty = false;
+        pendingLogs = [];
+      } else if (pendingLogs.length > 0) {
+        const toAdd = [];
+        for (const l of pendingLogs) {
+          if (passes(l)) toAdd.push(l);
+        }
+        pendingLogs = [];
+
+        if (toAdd.length > 0) {
+          const frag = document.createDocumentFragment();
+          for (const l of toAdd.reverse()) frag.appendChild(renderLog(l));
+          logsEl.prepend(frag);
+          while (logsEl.children.length > MAX) logsEl.removeChild(logsEl.lastChild);
+          countEl.textContent = `${logsEl.children.length} shown`;
+        }
+      }
     }
 
     function addLog(log) {
       buffer.push(log);
       if (buffer.length > MAX * 2) buffer.splice(0, buffer.length - MAX * 2);
+      if (log.source_tag && !seenContainers.has(log.source_tag)) {
+        seenContainers.add(log.source_tag);
+        updateContainerDropdown();
+      }
       if (paused) return;
-      if (!passes(log)) return;
-      // prepend
-      const el = renderLog(log);
-      logsEl.insertBefore(el, logsEl.firstChild);
-      while (logsEl.children.length > MAX) logsEl.removeChild(logsEl.lastChild);
-      countEl.textContent = `${logsEl.children.length} shown`;
+      pendingLogs.push(log);
+      scheduleRender();
     }
 
     function sendFilter() {
-      if (ws.readyState === ws.OPEN) {
+      if (ws && ws.readyState === ws.OPEN) {
         ws.send(JSON.stringify({ type: 'filter', filter }));
       }
     }
@@ -251,17 +316,19 @@
       ws.onerror = () => ws.close();
     }
 
-    document.getElementById('source').addEventListener('change', readFilter);
-    document.getElementById('level').addEventListener('change', readFilter);
-    document.getElementById('search').addEventListener('input', readFilter);
     document.getElementById('pause').addEventListener('click', (e) => {
       paused = !paused;
       e.target.textContent = paused ? 'Resume' : 'Pause';
       logsEl.classList.toggle('paused', paused);
+      if (!paused) {
+        filterDirty = true;
+        scheduleRender();
+      }
     });
     document.getElementById('clear').addEventListener('click', () => {
       buffer.length = 0;
-      logsEl.innerHTML = '';
+      pendingLogs = [];
+      logsEl.replaceChildren();
       countEl.textContent = '0 shown';
     });
     document.getElementById('backfill').addEventListener('click', async () => {

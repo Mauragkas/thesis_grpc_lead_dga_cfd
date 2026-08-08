@@ -35,11 +35,16 @@ async function startConsumer({ brokers, topics, groupId, onLog }) {
           log.partition = partition;
           log.offset = message.offset;
 
-          // Normalize timestamp: prefer the payload's `timestamp` (ISO string),
-          // then `ts` (ms epoch), then Kafka's message timestamp, then Date.now().
+          // ── Extract unique container identity ─────────────
+          // Docker's fluentd driver sends "container_name" (e.g. "/lead_node1").
+          // Strip the leading slash and use it to distinguish instances.
+          if (log.container_name && typeof log.container_name === 'string') {
+            log.source_tag = log.container_name.replace(/^\//, '');
+          }
+
+          // Normalize timestamp
           if (!log.ts) {
             if (log.timestamp) {
-              // ISO 8601 string → ms epoch
               log.ts = new Date(log.timestamp).getTime();
             } else {
               const t = message.timestamp;
