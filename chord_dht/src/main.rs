@@ -2,6 +2,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use tracing::info;
+use tracing_subscriber::EnvFilter;
 
 use chord_node::api;
 use chord_node::chord::ChordNode;
@@ -12,7 +13,12 @@ use chord_node::transport::RemoteNode;
 
 #[tokio::main]
 async fn main() {
-    tracing_subscriber::fmt::init();
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
+        )
+        .with_target(true)
+        .init();
 
     let cfg = Config::from_env();
     info!(

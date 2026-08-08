@@ -3,6 +3,7 @@ services:
     build: .
     container_name: lead_node1
     environment:
+      - RUST_LOG=info,chord_node=debug
       - HTTP_BIND=0.0.0.0:2001
       - GRPC_BIND=0.0.0.0:50051
       - SELF_URI=http://node1:50051
@@ -17,6 +18,7 @@ services:
     build: .
     container_name: lead_node2
     environment:
+      - RUST_LOG=info,chord_node=debug
       - HTTP_BIND=0.0.0.0:2002
       - GRPC_BIND=0.0.0.0:50052
       - SELF_URI=http://node2:50052
@@ -33,6 +35,7 @@ services:
     build: .
     container_name: lead_node3
     environment:
+      - RUST_LOG=info,chord_node=debug
       - HTTP_BIND=0.0.0.0:2003
       - GRPC_BIND=0.0.0.0:50053
       - SELF_URI=http://node3:50053

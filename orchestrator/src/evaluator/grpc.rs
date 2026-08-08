@@ -1,8 +1,8 @@
 use crate::config::TransportConfig;
 use crate::evaluator::r#trait::Evaluator;
 use crate::proto::eval::{evaluator_client::EvaluatorClient, BatchRequest, Individual};
-use log::info;
 use tonic::{transport::Channel, Code, Request, Status};
+use tracing::{debug, error, info, warn};
 
 /// Concrete gRPC-backed evaluator. Low-level detail owned by this module;
 /// high-level GA code never names `EvaluatorClient` directly (DIP).
@@ -38,6 +38,11 @@ impl GrpcEvaluator {
             let call = client.evaluate_batch(Request::new(req.clone()));
             match tokio::time::timeout(cfg.rpc_timeout, call).await {
                 Ok(Ok(resp)) => {
+                    debug!(
+                        "Batch of {} evaluated on attempt {}",
+                        individuals.len(),
+                        attempt + 1
+                    );
                     return Ok(resp
                         .into_inner()
                         .results
@@ -46,21 +51,35 @@ impl GrpcEvaluator {
                         .collect());
                 }
                 Ok(Err(e)) if e.code() == Code::Unavailable => {
-                    info!("upstream not ready (attempt {}), retrying...", attempt + 1);
+                    warn!(
+                        "Upstream unavailable (attempt {}/{}): {e}; retrying in {:?}...",
+                        attempt + 1,
+                        cfg.max_attempts,
+                        cfg.retry_delay
+                    );
                     last_err = Some(e);
                     tokio::time::sleep(cfg.retry_delay).await;
                 }
-                Ok(Err(e)) => return Err(e),
+                Ok(Err(e)) => {
+                    error!("Non-retryable gRPC error: {e}");
+                    return Err(e);
+                }
                 Err(_) => {
-                    info!(
-                        "evaluate_batch timed out (attempt {}), retrying...",
-                        attempt + 1
+                    warn!(
+                        "evaluate_batch timed out after {:?} (attempt {}/{}); retrying...",
+                        cfg.rpc_timeout,
+                        attempt + 1,
+                        cfg.max_attempts
                     );
                     last_err = Some(Status::unavailable("rpc timed out"));
                     tokio::time::sleep(cfg.retry_delay).await;
                 }
             }
         }
+        warn!(
+            "Exhausted {}/{} attempts; last error: {:?}",
+            cfg.max_attempts, cfg.max_attempts, last_err
+        );
         Err(last_err.unwrap_or_else(|| Status::unavailable("exhausted retries")))
     }
 }
@@ -69,6 +88,12 @@ impl GrpcEvaluator {
 impl Evaluator for GrpcEvaluator {
     async fn evaluate_population(&self, population: &[Vec<f64>]) -> Result<Vec<f64>, Status> {
         let chunks: Vec<&[Vec<f64>]> = population.chunks(self.batch_size).collect();
+        info!(
+            "Evaluating {} individuals in {} batch(es) (batch_size={})",
+            population.len(),
+            chunks.len(),
+            self.batch_size
+        );
         let mut handles = Vec::with_capacity(chunks.len());
         for chunk in chunks {
             // Each task gets its own clone of the channel; tonic channels
@@ -83,10 +108,10 @@ impl Evaluator for GrpcEvaluator {
 
         let mut flat = Vec::with_capacity(population.len());
         for h in handles {
-            flat.extend(
-                h.await
-                    .map_err(|e| Status::internal(format!("join error: {e}")))??,
-            );
+            flat.extend(h.await.map_err(|e| {
+                error!("Batch task join error: {e}");
+                Status::internal(format!("join error: {e}"))
+            })??);
         }
         Ok(flat)
     }

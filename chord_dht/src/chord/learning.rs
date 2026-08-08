@@ -23,16 +23,51 @@ where
         let total = self.keys_total.load(Ordering::Relaxed);
         if total >= MIN_KEYS_FOR_DRIFT {
             let drift_ratio = rmi.drift_new as f64 / total.max(1) as f64;
-            if drift_ratio >= DRIFT_THRESHOLD {
+            if drift_ratio >= DRIFT_THRESHOLD && !rmi.update_ready {
                 rmi.update_ready = true;
+                info!(
+                    drift_new = rmi.drift_new,
+                    keys_total = total,
+                    drift_ratio,
+                    "FRM: drift threshold crossed, marking update_ready"
+                );
+            } else {
+                tracing::debug!(
+                    drift_new = rmi.drift_new,
+                    keys_total = total,
+                    drift_ratio,
+                    "FRM: insertion recorded"
+                );
             }
         }
     }
 
     pub async fn maybe_retrain(&self) {
-        if !self.rmi.read().await.update_ready {
+        let (update_ready, has_update, drift_new, keys_total, active_ver) = {
+            let rmi = self.rmi.read().await;
+            (
+                rmi.update_ready,
+                rmi.update.is_some(),
+                rmi.drift_new,
+                self.keys_total.load(Ordering::Relaxed),
+                rmi.active.version,
+            )
+        };
+
+        if !update_ready {
             return;
         }
+
+        if has_update {
+            tracing::debug!(
+                active_ver,
+                drift_new,
+                keys_total,
+                "FRM: update_ready=true but local model already pending, skipping retrain"
+            );
+            return;
+        }
+
         let keys: Vec<String> = self
             .storage
             .snapshot()
@@ -41,12 +76,27 @@ where
             .map(|(k, _)| k)
             .collect();
         if keys.is_empty() {
+            tracing::debug!("FRM: update_ready=true but storage empty, skipping retrain");
             return;
         }
+
         let version = self.model_version_counter.load(Ordering::SeqCst);
+        tracing::debug!(
+            active_ver,
+            drift_new,
+            keys_total,
+            keys_in_storage = keys.len(),
+            "FRM: drift threshold crossed, training local model"
+        );
         let model = RmiModel::train(&keys, version);
         self.rmi.write().await.update = Some(model);
-        info!("FRM: retrained local model on {} keys", keys.len());
+        info!(
+            "FRM: retrained local model on {} keys (drift_new={}, keys_total={}, active_ver={})",
+            keys.len(),
+            drift_new,
+            keys_total,
+            active_ver
+        );
     }
 
     pub async fn heartbeat_round(&self) {
@@ -57,27 +107,53 @@ where
 
         let peers = self.all_peers().await;
         if peers.is_empty() {
+            tracing::debug!("FRM: heartbeat round — no peers");
             return;
         }
 
-        // Send heartbeats to all peers
+        tracing::debug!(
+            ready,
+            has_update,
+            version,
+            peer_count = peers.len(),
+            "FRM: heartbeat round starting"
+        );
+
         let mut total = 0usize;
+        let mut peers_ready = 0usize;
         for addr in &peers {
-            if self
+            if let Some(ok) = self
                 .remote
                 .heartbeat(addr, &self.self_uri, ready, version)
                 .await
-                .is_some()
             {
                 total += 1;
+                if ok {
+                    peers_ready += 1;
+                }
+            } else {
+                warn!("FRM: heartbeat to {addr} failed");
             }
         }
 
-        // Only the node with the highest address (deterministic leader)
-        // initiates the global training round when ready.
+        tracing::debug!(
+            total,
+            peers_ready,
+            ready,
+            has_update,
+            "FRM: heartbeat round complete"
+        );
+
         if ready && has_update && total > 0 {
             let max_addr = peers.iter().max().cloned().unwrap_or_default();
-            if self.self_uri == max_addr {
+            let is_leader = self.self_uri == max_addr;
+            tracing::debug!(
+                is_leader,
+                leader = %max_addr,
+                self_uri = %self.self_uri,
+                "FRM: leader election check"
+            );
+            if is_leader {
                 self.run_global_training_round().await;
             }
         }
@@ -134,50 +210,79 @@ where
         let peers = self.all_peers().await;
         let mut models: Vec<RmiModel> = Vec::new();
 
-        // Include own model
         {
             let rmi = self.rmi.read().await;
             models.push(rmi.update.clone().unwrap_or_else(|| rmi.active.clone()));
         }
+        tracing::debug!(own_model = true, "FRM: collected own model");
 
-        // Collect from all other peers
         for addr in &peers {
             if *addr == self.self_uri {
                 continue;
             }
-            if let Some((version, data)) = self.remote.request_model(addr, &self.self_uri).await {
-                // Accept any version >= our active version (they might be ahead)
-                let active_ver = self.rmi.read().await.active.version;
-                if version >= active_ver {
-                    if let Ok(m) = serde_json::from_slice::<RmiModel>(&data) {
-                        models.push(m);
+            match self.remote.request_model(addr, &self.self_uri).await {
+                Some((version, data)) => {
+                    let active_ver = self.rmi.read().await.active.version;
+                    if version >= active_ver {
+                        match serde_json::from_slice::<RmiModel>(&data) {
+                            Ok(m) => {
+                                tracing::debug!(
+                                    peer = %addr,
+                                    version,
+                                    n = m.n,
+                                    "FRM: collected peer model"
+                                );
+                                models.push(m);
+                            }
+                            Err(e) => warn!("FRM: bad model from {addr}: {e}"),
+                        }
+                    } else {
+                        tracing::debug!(
+                            peer = %addr,
+                            version,
+                            active_ver,
+                            "FRM: peer model stale, skipping"
+                        );
                     }
                 }
+                None => warn!("FRM: request_model from {addr} failed"),
             }
         }
 
         if models.is_empty() {
+            warn!("FRM: global round aborted — no models collected");
             return;
         }
 
-        // Compute new global version: max of all received versions + 1
         let max_version = models.iter().map(|m| m.version).max().unwrap_or(1);
         let new_version = max_version + 1;
+        let total_keys: usize = models.iter().map(|m| m.n).sum();
+        tracing::debug!(
+            models_collected = models.len(),
+            max_version,
+            new_version,
+            total_keys,
+            "FRM: computing federated average"
+        );
         let global_model = fed_avg(models, new_version);
         let data = serde_json::to_vec(&global_model).unwrap_or_default();
 
-        // Push to all peers
         for addr in &peers {
             if *addr == self.self_uri {
                 continue;
             }
-            let _ = self
+            match self
                 .remote
                 .push_model(addr, global_model.version, &data)
-                .await;
+                .await
+            {
+                true => {
+                    tracing::debug!(peer = %addr, version = global_model.version, "FRM: pushed model")
+                }
+                false => warn!("FRM: push_model to {addr} rejected/failed"),
+            }
         }
 
-        // Activate locally
         {
             let mut rmi = self.rmi.write().await;
             rmi.active = global_model;
@@ -198,6 +303,7 @@ where
     async fn migrate_keys_for_new_model(&self) {
         let snap = self.storage.snapshot().await;
         let mut migrated = 0usize;
+        let mut kept = 0usize;
         for (k, v) in snap {
             if !self.owns_key(&k).await {
                 let target = self.lookup_target(&k).await;
@@ -205,16 +311,23 @@ where
                     if self.remote.put_local(&target.address, &k, &v).await {
                         self.storage.remove(&k).await;
                         migrated += 1;
+                    } else {
+                        warn!(
+                            "FRM: migration put_local failed for key={k} -> {}",
+                            target.address
+                        );
                     }
+                } else {
+                    kept += 1;
                 }
+            } else {
+                kept += 1;
             }
         }
-        if migrated > 0 {
-            info!("FRM: migrated {} keys after model update", migrated);
-        }
-        // Migration delivers keys via put_local, which increments drift_new.
-        // These are NOT new user inserts — reset the counters so the post-
-        // migration state doesn't immediately retrigger drift detection.
+        info!(
+            "FRM: migrated {} keys after model update (kept {})",
+            migrated, kept
+        );
         self.reset_drift_state().await;
     }
 
@@ -226,6 +339,7 @@ where
         let mut rmi = self.rmi.write().await;
         rmi.drift_new = 0;
         rmi.update_ready = false;
+        tracing::debug!(keys_total = n, "FRM: drift state reset after migration");
     }
 
     pub async fn push_model(&self, version: u64, data: &[u8]) -> bool {
