@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
 from datetime import datetime, timezone
@@ -14,19 +15,24 @@ from fitness import FitnessEvaluator
 from service import EvaluatorServicer
 
 
-class TracingFormatter(logging.Formatter):
-    """Mimic tracing-subscriber's default format:
-    2026-08-08T14:06:49.203890Z DEBUG module::path: message
-    """
+class JsonFormatter(logging.Formatter):
+    """Output JSON log lines compatible with fluent-bit JSON parser and the monitor dashboard."""
 
-    def formatTime(self, record, datefmt=None):
-        dt = datetime.fromtimestamp(record.created, tz=timezone.utc)
-        return dt.strftime("%Y-%m-%dT%H:%M:%S") + f".{int(record.msecs):06d}Z"
-
-    def format(self, record):
-        record.asctime = self.formatTime(record)
-        level = f"{record.levelname:<5}"
-        return f"{record.asctime} {level} {record.name}: {record.getMessage()}"
+    def format(self, record: logging.LogRecord) -> str:
+        payload = {
+            "timestamp": datetime.fromtimestamp(record.created, tz=timezone.utc).strftime(
+                "%Y-%m-%dT%H:%M:%S.%fZ"
+            ),
+            "level": record.levelname,
+            "target": record.name,
+            "message": record.getMessage(),
+        }
+        # Include extra fields if present (e.g. worker_id, generation)
+        for key in ("worker_id", "generation", "offset", "elapsed"):
+            val = getattr(record, key, None)
+            if val is not None:
+                payload[key] = val
+        return json.dumps(payload, default=str)
 
 
 def _configure_logging() -> logging.Logger:
@@ -34,7 +40,7 @@ def _configure_logging() -> logging.Logger:
     level = getattr(logging, level_name, logging.INFO)
 
     handler = logging.StreamHandler()
-    handler.setFormatter(TracingFormatter())
+    handler.setFormatter(JsonFormatter())
     root = logging.getLogger()
     root.handlers.clear()
     root.addHandler(handler)

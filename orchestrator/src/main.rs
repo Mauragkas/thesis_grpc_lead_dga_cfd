@@ -19,10 +19,8 @@ async fn main() -> Result<(), Status> {
         .with_env_filter(
             EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
         )
+        .json()
         .with_target(true)
-        .with_thread_ids(false)
-        .with_thread_names(false)
-        .with_ansi(true)
         .init();
 
     let (ga_cfg, transport_cfg, store_cfg, lead_cfg) = config_from_env();
