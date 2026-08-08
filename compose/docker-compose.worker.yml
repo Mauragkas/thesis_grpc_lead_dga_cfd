@@ -1,6 +1,6 @@
 services:
   worker:
-    build: ./worker
+    build: ../worker
     environment:
       - WORKER_ID=${WORKER_ID:-worker}
       - LOG_LEVEL=${LOG_LEVEL:-DEBUG}
@@ -27,7 +27,7 @@ services:
   load-balancer:
     image: envoyproxy/envoy:v1.28-latest
     volumes:
-      - ./envoy.yaml:/etc/envoy/envoy.yaml:ro
+      - ../envoy.yaml:/etc/envoy/envoy.yaml:ro
     ports:
       - "50051:50051"
     depends_on:
@@ -37,7 +37,7 @@ services:
       - default
 
   orchestrator:
-    build: ./orchestrator
+    build: ../orchestrator
     environment:
       - RUST_LOG=info,orchestrator=debug
       - RUST_LOG_STYLE=always

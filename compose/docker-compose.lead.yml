@@ -1,6 +1,6 @@
 services:
   lead-node1:
-    build: ./chord_dht
+    build: ../chord_dht
     container_name: lead_node1
     environment:
       - RUST_LOG=info,chord_node=debug
@@ -20,7 +20,7 @@ services:
         tag: chord.node1
 
   lead-node2:
-    build: ./chord_dht
+    build: ../chord_dht
     container_name: lead_node2
     environment:
       - RUST_LOG=info,chord_node=debug
@@ -42,7 +42,7 @@ services:
         tag: chord.node2
 
   lead-node3:
-    build: ./chord_dht
+    build: ../chord_dht
     container_name: lead_node3
     environment:
       - RUST_LOG=info,chord_node=debug
