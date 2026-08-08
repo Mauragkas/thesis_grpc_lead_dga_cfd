@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+from datetime import datetime, timezone
 
 import grpc
 
@@ -13,13 +14,32 @@ from fitness import FitnessEvaluator
 from service import EvaluatorServicer
 
 
+class TracingFormatter(logging.Formatter):
+    """Mimic tracing-subscriber's default format:
+    2026-08-08T14:06:49.203890Z DEBUG module::path: message
+    """
+
+    def formatTime(self, record, datefmt=None):
+        dt = datetime.fromtimestamp(record.created, tz=timezone.utc)
+        return dt.strftime("%Y-%m-%dT%H:%M:%S") + f".{int(record.msecs):06d}Z"
+
+    def format(self, record):
+        record.asctime = self.formatTime(record)
+        level = f"{record.levelname:<5}"
+        return f"{record.asctime} {level} {record.name}: {record.getMessage()}"
+
+
 def _configure_logging() -> logging.Logger:
     level_name = os.getenv("LOG_LEVEL", "INFO").upper()
     level = getattr(logging, level_name, logging.INFO)
-    logging.basicConfig(
-        level=level,
-        format="%(asctime)s [%(levelname)s] [%(name)s]: %(message)s",
-    )
+
+    handler = logging.StreamHandler()
+    handler.setFormatter(TracingFormatter())
+    root = logging.getLogger()
+    root.handlers.clear()
+    root.addHandler(handler)
+    root.setLevel(level)
+
     # grpc/aio internals are noisy at DEBUG
     logging.getLogger("grpc").setLevel(logging.WARNING)
     return logging.getLogger("worker")
