@@ -27,7 +27,7 @@ async fn runner_returns_best_fitness_on_happy_path() {
         cfg: &cfg,
         evaluator: &evaluator,
         store: &store,
-        lead_store: None,
+        neighbor_store: None,
     };
     let best = runner.run(&mut rng).await.unwrap();
     // best ever should be the max of the supplied fitnesses
@@ -46,7 +46,7 @@ async fn runner_propagates_evaluator_errors() {
         cfg: &cfg,
         evaluator: &evaluator,
         store: &store,
-        lead_store: None,
+        neighbor_store: None,
     };
     let err = runner.run(&mut rng).await.unwrap_err();
     assert_eq!(err.code(), Status::internal("x").code());
@@ -75,7 +75,7 @@ async fn runner_skips_evaluator_for_cached_individuals() {
         cfg: &cfg,
         evaluator: &evaluator,
         store: &store,
-        lead_store: None,
+        neighbor_store: None,
     };
     let best = runner.run(&mut rng).await.unwrap();
     // At least one generation ran; cached individuals returned fitness 100.0
@@ -93,7 +93,7 @@ async fn runner_invokes_eviction_each_generation() {
         cfg: &cfg,
         evaluator: &evaluator,
         store: &store,
-        lead_store: None,
+        neighbor_store: None,
     };
     runner.run(&mut rng).await.unwrap();
     assert_eq!(
@@ -113,7 +113,7 @@ async fn runner_stores_each_newly_evaluated_individual() {
         cfg: &cfg,
         evaluator: &evaluator,
         store: &store,
-        lead_store: None,
+        neighbor_store: None,
     };
     runner.run(&mut rng).await.unwrap();
     // At minimum, generation 1 evaluates the full initial population uncached.

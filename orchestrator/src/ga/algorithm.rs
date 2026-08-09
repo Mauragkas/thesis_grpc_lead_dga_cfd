@@ -2,20 +2,21 @@ use crate::config::GaConfig;
 use crate::evaluator::Evaluator;
 use crate::ga::operators::{next_generation, random_population, select_survivors};
 use crate::gene_store::GeneStore;
-use crate::lead_store::{gene_key, GenePayload, LeadStore};
+use crate::neighbor_store::NeighborStore;
 use rand::rngs::StdRng;
 use rand_distr::Normal;
 use std::time::Instant;
 use tonic::Status;
 use tracing::{error, info, warn};
 
-/// SRP: orchestrates the generational loop. Depends on the `Evaluator`
-/// and `GeneStore` abstractions (DIP), never on concrete impls directly.
+/// SRP: orchestrates the generational loop. Depends on the `Evaluator`,
+/// `GeneStore`, and `NeighborStore` abstractions (DIP), never on concrete
+/// impls directly.
 pub struct GaRunner<'a> {
     pub cfg: &'a GaConfig,
     pub evaluator: &'a dyn Evaluator,
     pub store: &'a dyn GeneStore,
-    pub lead_store: Option<&'a dyn LeadStore>,
+    pub neighbor_store: Option<&'a dyn NeighborStore>,
 }
 
 impl<'a> GaRunner<'a> {
@@ -73,22 +74,9 @@ impl<'a> GaRunner<'a> {
                     fitnesses[i] = *f;
                     self.store.store(g.clone(), *f, gen).await;
 
-                    if let Some(ls) = self.lead_store {
-                        let key = gene_key(g);
-                        let payload = GenePayload {
-                            genes: g.clone(),
-                            fitness: *f,
-                            generation: gen,
-                        };
-                        let value = match serde_json::to_string(&payload) {
-                            Ok(v) => v,
-                            Err(e) => {
-                                warn!("Failed to serialize gene payload (gen {gen}): {e}; skipping LEAD store");
-                                continue;
-                            }
-                        };
-                        if let Err(e) = ls.store_gene(&key, &value).await {
-                            warn!("lead store failed (gen {gen}, key {key}): {e}");
+                    if let Some(ns) = self.neighbor_store {
+                        if let Err(e) = ns.store(g, *f, gen).await {
+                            warn!("neighbor store failed (gen {gen}): {e}");
                         }
                     }
                 }
