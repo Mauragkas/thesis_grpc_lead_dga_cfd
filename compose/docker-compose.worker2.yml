@@ -1,7 +1,7 @@
 services:
   worker2:
     build: ../worker
-    container_name: worker2
+    # container_name: worker2
     environment:
       - WORKER_ID=${WORKER_ID:-worker2}
       - LOG_LEVEL=${LOG_LEVEL:-DEBUG}
@@ -30,7 +30,7 @@ services:
     image: envoyproxy/envoy:v1.28-latest
     container_name: load-balancer2
     volumes:
-      - ../envoy.yaml:/etc/envoy/envoy.yaml:ro
+      - ./envoy2.yaml:/etc/envoy/envoy.yaml:ro
     ports:
       - "50052:50051"           # host-mapped: keep envoy's internal port at 50051,
                                 # but expose on a new host port to avoid conflict
@@ -44,7 +44,7 @@ services:
     build: ../orchestrator
     container_name: orchestrator2
     environment:
-      - RUST_LOG=info,orchestrator=debug
+      - RUST_LOG=info
       - RUST_LOG_STYLE=always
       - EVAL_ENDPOINT=load-balancer2:50051   # local envoy (same project)
       - LEAD_ENDPOINT=http://lead-node1:50051   # same DHT bootstrap
