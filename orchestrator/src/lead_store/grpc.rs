@@ -1,6 +1,6 @@
 use crate::lead_store::r#trait::LeadStore;
 use crate::proto::chord::chord_client::ChordClient;
-use crate::proto::chord::{KeyMsg, PutRoutedRequest};
+use crate::proto::chord::{KeyMsg, PutRoutedRequest, RangeRequest};
 use tonic::{transport::Channel, Code, Status};
 use tracing::{debug, error};
 
@@ -59,5 +59,26 @@ impl LeadStore for GrpcLeadStore {
                 Err(e)
             }
         }
+    }
+
+    async fn range_query(
+        &self,
+        start_key: &str,
+        count: u64,
+    ) -> Result<Vec<(String, String)>, Status> {
+        let mut c = self.client.clone();
+        let resp = c
+            .range_query(RangeRequest {
+                start_key: start_key.to_string(),
+                count,
+                caller_address: String::new(),
+            })
+            .await?;
+        Ok(resp
+            .into_inner()
+            .entries
+            .into_iter()
+            .map(|e| (e.key, e.value))
+            .collect())
     }
 }

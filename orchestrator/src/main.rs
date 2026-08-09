@@ -4,7 +4,9 @@ use orchestrator::ga::algorithm::GaRunner;
 use orchestrator::gene_store::{
     EuclideanDistance, GeneStore, GenerationEvictor, InMemoryGeneStore,
 };
-use orchestrator::lead_store::{GrpcLeadStore, LeadStore};
+use orchestrator::hilbert::HilbertKeyGenerator;
+use orchestrator::lead_store::GrpcLeadStore;
+use orchestrator::neighbor_store::{HilbertNeighborStore, NeighborStore};
 use orchestrator::transport::channel::{build_endpoint, wait_for_channel};
 use rand::rngs::StdRng;
 use rand::SeedableRng;
@@ -66,7 +68,7 @@ async fn main() -> Result<(), Status> {
     };
     let store = InMemoryGeneStore::new(EuclideanDistance::default(), evictor);
 
-    let lead_store = if let Some(ep) = &lead_cfg.endpoint {
+    let neighbor_store = if let Some(ep) = &lead_cfg.endpoint {
         let lead_endpoint = build_endpoint(ep, &transport_cfg).map_err(|e| {
             error!("Failed to build LEAD endpoint '{ep}': {e}");
             e
@@ -83,7 +85,9 @@ async fn main() -> Result<(), Status> {
             })?;
         info!("LEAD node ready at {ep}");
         let chord_client = orchestrator::proto::chord::chord_client::ChordClient::new(lead_channel);
-        Some(GrpcLeadStore::new(chord_client))
+        let grpc_lead = GrpcLeadStore::new(chord_client);
+        let keygen = HilbertKeyGenerator::new(ga_cfg.genes_len);
+        Some(HilbertNeighborStore::new(keygen, grpc_lead))
     } else {
         info!("LEAD_ENDPOINT not set; LEAD persistence disabled");
         None
@@ -94,7 +98,7 @@ async fn main() -> Result<(), Status> {
         cfg: &ga_cfg,
         evaluator: &evaluator as &dyn Evaluator,
         store: &store as &dyn GeneStore,
-        lead_store: lead_store.as_ref().map(|s| s as &dyn LeadStore),
+        neighbor_store: neighbor_store.as_ref().map(|s| s as &dyn NeighborStore),
     };
     info!("Starting GA run with seed {}", ga_cfg.seed);
     match runner.run(&mut rng).await {
