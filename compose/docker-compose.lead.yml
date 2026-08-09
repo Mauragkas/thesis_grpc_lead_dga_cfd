@@ -3,11 +3,11 @@ services:
     build: ../chord_dht
     container_name: lead_node1
     environment:
-      - RUST_LOG=info,chord_node=debug
+      - RUST_LOG=info
       - HTTP_BIND=0.0.0.0:2001
       - GRPC_BIND=0.0.0.0:50051
       - SELF_URI=http://lead-node1:50051
-      - VIRTUAL_NODE_COUNT=10
+      - VIRTUAL_NODE_COUNT=100
     ports:
       - "2001:2001"      # HTTP API (host debugging)
       - "50061:50051"    # gRPC (host-mapped for possible external access)
@@ -23,12 +23,12 @@ services:
     build: ../chord_dht
     container_name: lead_node2
     environment:
-      - RUST_LOG=info,chord_node=debug
+      - RUST_LOG=info
       - HTTP_BIND=0.0.0.0:2002
       - GRPC_BIND=0.0.0.0:50052
       - SELF_URI=http://lead-node2:50052
       - JOIN_URI=http://lead-node1:50051
-      - VIRTUAL_NODE_COUNT=10
+      - VIRTUAL_NODE_COUNT=100
     ports:
       - "2002:2002"
       # optional: map gRPC port for external debugging
@@ -45,12 +45,12 @@ services:
     build: ../chord_dht
     container_name: lead_node3
     environment:
-      - RUST_LOG=info,chord_node=debug
+      - RUST_LOG=info
       - HTTP_BIND=0.0.0.0:2003
       - GRPC_BIND=0.0.0.0:50053
       - SELF_URI=http://lead-node3:50053
       - JOIN_URI=http://lead-node1:50051
-      - VIRTUAL_NODE_COUNT=10
+      - VIRTUAL_NODE_COUNT=100
     ports:
       - "2003:2003"
       # optional: map gRPC port

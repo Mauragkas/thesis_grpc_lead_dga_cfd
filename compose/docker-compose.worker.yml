@@ -39,7 +39,7 @@ services:
   orchestrator:
     build: ../orchestrator
     environment:
-      - RUST_LOG=info,orchestrator=debug
+      - RUST_LOG=info
       - RUST_LOG_STYLE=always
       - EVAL_ENDPOINT=load-balancer:50051
       - LEAD_ENDPOINT=http://lead-node1:50051   # bootstrap lead

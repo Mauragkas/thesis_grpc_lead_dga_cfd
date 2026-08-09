@@ -11,12 +11,23 @@ docker compose -f compose/docker-compose.infra.yml up -d --build
 docker compose -f compose/docker-compose.lead.yml up -d --build
 
 # 4. Worker side
-docker compose -f compose/docker-compose.worker.yml up -d --build
-docker compose -f compose/docker-compose.worker2.yml up -d --build
+docker compose -f compose/docker-compose.worker.yml up -d --build --scale worker=4
+docker compose -f compose/docker-compose.worker2.yml up -d --build --scale worker2=4
 ```
 
 To simulate failure of a “remote” machine, just stop one project:
 
 ```bash
-docker compose -f compose/docker-compose.lead.yml stop   # lead machine goes down
+docker compose \
+  -f compose/docker-compose.infra.yml \
+  -f compose/docker-compose.lead.yml \
+  -f compose/docker-compose.worker.yml \
+  -f compose/docker-compose.worker2.yml \
+  down -v --remove-orphans
+```
+
+or 
+
+```bash
+docker compose -p compose down -v --remove-orphans
 ```
