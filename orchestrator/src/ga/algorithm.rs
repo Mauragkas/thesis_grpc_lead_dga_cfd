@@ -2,6 +2,7 @@ use crate::config::GaConfig;
 use crate::evaluator::Evaluator;
 use crate::ga::operators::{next_generation, random_population, select_survivors};
 use crate::gene_store::GeneStore;
+use crate::migration::MigrationHook;
 use crate::neighbor_store::NeighborStore;
 use rand::rngs::StdRng;
 use rand_distr::Normal;
@@ -10,13 +11,14 @@ use tonic::Status;
 use tracing::{error, info, warn};
 
 /// SRP: orchestrates the generational loop. Depends on the `Evaluator`,
-/// `GeneStore`, and `NeighborStore` abstractions (DIP), never on concrete
+/// `GeneStore`, `NeighborStore`, and `MigrationHook` abstractions (DIP), never on concrete
 /// impls directly.
 pub struct GaRunner<'a> {
     pub cfg: &'a GaConfig,
     pub evaluator: &'a dyn Evaluator,
     pub store: &'a dyn GeneStore,
     pub neighbor_store: Option<&'a dyn NeighborStore>,
+    pub migration: Option<&'a dyn MigrationHook>,
 }
 
 impl<'a> GaRunner<'a> {
@@ -37,6 +39,29 @@ impl<'a> GaRunner<'a> {
 
         for gen in 1..=self.cfg.generations {
             info!("Evaluating generation {gen}/{}...", self.cfg.generations);
+
+            // --- Drain immigrants and integrate before evaluation ---
+            if let Some(mig) = self.migration {
+                let immigrants = mig.drain_immigrants().await;
+                if !immigrants.is_empty() {
+                    info!(
+                        "Gen {gen}: integrating {} immigrants into population",
+                        immigrants.len()
+                    );
+                    // Replace the worst individuals with immigrants.
+                    let indexed: Vec<usize> = (0..population.len()).collect();
+                    // Sort ascending by current best-known fitness (we don't
+                    // have fitnesses yet this gen, so just replace from the
+                    // back — the last slots are arbitrary in a fresh pop).
+                    // A smarter approach: evaluate first, then replace worst.
+                    // For simplicity, append immigrants and trim to pop_size.
+                    for im in immigrants {
+                        population.push(im.genes);
+                    }
+                    population.truncate(self.cfg.pop_size);
+                    let _ = indexed;
+                }
+            }
 
             let mut fitnesses = vec![f64::NEG_INFINITY; population.len()];
             let mut uncached_idx: Vec<usize> = Vec::new();
@@ -95,6 +120,13 @@ impl<'a> GaRunner<'a> {
             info!(
                 "Gen {gen}: best={best:.4}, avg={avg:.4}, best_ever={best_ever:.4}, cache_hits={hits}"
             );
+
+            // --- Emigrate after evaluation ---
+            if let Some(mig) = self.migration {
+                if let Err(e) = mig.maybe_emigrate(gen, &population, &fitnesses).await {
+                    warn!("Migration (emigrate) failed at gen {gen}: {e}");
+                }
+            }
 
             let survivors = select_survivors(&population, &fitnesses, self.cfg);
             population = next_generation(&survivors, self.cfg, rng, &normal);

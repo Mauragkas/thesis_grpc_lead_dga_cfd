@@ -1,5 +1,6 @@
 use std::time::Duration;
 use tracing::{info, warn};
+use crate::migration::config::{MigrationConfig, RingConfig};
 
 #[derive(Debug, Clone, Default)]
 pub struct LeadConfig {
@@ -79,7 +80,14 @@ impl Default for GeneStoreConfig {
 }
 
 /// Reads overrides from environment. SRP: parsing env, nothing else.
-pub fn config_from_env() -> (GaConfig, TransportConfig, GeneStoreConfig, LeadConfig) {
+pub fn config_from_env() -> (
+    GaConfig,
+    TransportConfig,
+    GeneStoreConfig,
+    LeadConfig,
+    RingConfig,
+    MigrationConfig,
+) {
     let mut ga = GaConfig::default();
 
     match std::env::var("EVAL_ENDPOINT") {
@@ -128,7 +136,61 @@ pub fn config_from_env() -> (GaConfig, TransportConfig, GeneStoreConfig, LeadCon
         Err(_) => info!("LEAD_ENDPOINT not set; LEAD persistence disabled"),
     }
 
-    (ga, TransportConfig::default(), store, lead)
+    let mut ring = RingConfig::default();
+    match std::env::var("RING_BIND") {
+        Ok(addr) => {
+            info!("RING_BIND override: {addr}");
+            ring.bind_address = addr;
+        }
+        Err(_) => info!("RING_BIND not set; using default '{}'", ring.bind_address),
+    }
+    match std::env::var("RING_SELF_ADDRESS") {
+        Ok(addr) => {
+            info!("RING_SELF_ADDRESS override: {addr}");
+            ring.self_address = addr;
+        }
+        Err(_) => info!(
+            "RING_SELF_ADDRESS not set; using default '{}'",
+            ring.self_address
+        ),
+    }
+    match std::env::var("RING_BOOTSTRAP") {
+        Ok(addr) => {
+            info!("RING_BOOTSTRAP override: {addr}");
+            ring.bootstrap_address = Some(addr);
+        }
+        Err(_) => info!("RING_BOOTSTRAP not set; joining as first node"),
+    }
+
+    let mut migration = MigrationConfig::default();
+    match std::env::var("MIGRATION_INTERVAL") {
+        Ok(raw) => match raw.parse::<usize>() {
+            Ok(n) => {
+                info!("MIGRATION_INTERVAL override: {n}");
+                migration.interval_generations = n;
+            }
+            Err(_) => warn!("Ignoring invalid MIGRATION_INTERVAL '{raw}'"),
+        },
+        Err(_) => info!(
+            "MIGRATION_INTERVAL not set; using default {}",
+            migration.interval_generations
+        ),
+    }
+    match std::env::var("MIGRATION_COUNT") {
+        Ok(raw) => match raw.parse::<usize>() {
+            Ok(n) => {
+                info!("MIGRATION_COUNT override: {n}");
+                migration.migrant_count = n;
+            }
+            Err(_) => warn!("Ignoring invalid MIGRATION_COUNT '{raw}'"),
+        },
+        Err(_) => info!(
+            "MIGRATION_COUNT not set; using default {}",
+            migration.migrant_count
+        ),
+    }
+
+    (ga, TransportConfig::default(), store, lead, ring, migration)
 }
 
 /// Clips a gene into the normalized [0,1] range. Pure helper.

@@ -50,6 +50,13 @@ services:
       - LEAD_ENDPOINT=http://lead-node1:50051   # same DHT bootstrap
       - N_WORKERS=${N_WORKERS:-1}
       - GA_SEED=${GA_SEED:-43}               # different seed for varied runs
+      # Ring config — joins the first orchestrator
+      - RING_BIND=0.0.0.0:50060
+      - RING_SELF_ADDRESS=orchestrator2:50060
+      - RING_BOOTSTRAP=http://orchestrator:50060
+      # Migration config
+      - MIGRATION_INTERVAL=5
+      - MIGRATION_COUNT=3
     depends_on:
       load-balancer2:
         condition: service_started

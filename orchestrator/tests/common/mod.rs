@@ -5,6 +5,7 @@
 use async_trait::async_trait;
 use orchestrator::evaluator::Evaluator;
 use orchestrator::gene_store::{GeneRecord, GeneStore};
+use orchestrator::migration::{MigrantIndividual, MigrationHook};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Mutex;
@@ -127,6 +128,25 @@ impl GeneStore for MockGeneStore {
 
     async fn evict_expired(&self, _current_generation: usize) {
         self.evict_calls.fetch_add(1, Ordering::SeqCst);
+    }
+}
+
+/// No-op migration hook for tests.
+pub struct NoopMigration;
+
+#[async_trait]
+impl MigrationHook for NoopMigration {
+    async fn maybe_emigrate(
+        &self,
+        _generation: usize,
+        _population: &[Vec<f64>],
+        _fitnesses: &[f64],
+    ) -> Result<(), tonic::Status> {
+        Ok(())
+    }
+
+    async fn drain_immigrants(&self) -> Vec<MigrantIndividual> {
+        Vec::new()
     }
 }
 
