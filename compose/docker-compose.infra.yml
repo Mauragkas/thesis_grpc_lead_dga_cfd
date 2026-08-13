@@ -52,7 +52,7 @@ services:
     container_name: monitor
     environment:
       - KAFKA_BROKERS=kafka:9092
-      - KAFKA_TOPICS=logs.chord,logs.orchestrator,logs.worker
+      - KAFKA_TOPICS=logs.lead,logs.orchestrator,logs.worker
       - KAFKA_GROUP_ID=monitor-group
       - PORT=3000
       - BUFFER_CAP=10000

@@ -14,7 +14,7 @@ use tonic::transport::Channel;
 use tonic::Status;
 use tracing::{debug, info, warn};
 
-pub struct ChordMigration<S: MigrantSelector> {
+pub struct LeadMigration<S: MigrantSelector> {
     config: MigrationConfig,
     member: Arc<LocalRingMember>,
     selector: S,
@@ -23,7 +23,7 @@ pub struct ChordMigration<S: MigrantSelector> {
     channels: tokio::sync::Mutex<std::collections::HashMap<String, Channel>>,
 }
 
-impl<S: MigrantSelector> ChordMigration<S> {
+impl<S: MigrantSelector> LeadMigration<S> {
     pub fn new(
         config: MigrationConfig,
         member: Arc<LocalRingMember>,
@@ -60,7 +60,7 @@ impl<S: MigrantSelector> ChordMigration<S> {
 }
 
 #[async_trait::async_trait]
-impl<S: MigrantSelector> MigrationHook for ChordMigration<S> {
+impl<S: MigrantSelector> MigrationHook for LeadMigration<S> {
     async fn maybe_emigrate(
         &self,
         generation: usize,

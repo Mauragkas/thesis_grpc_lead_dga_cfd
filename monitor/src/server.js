@@ -9,7 +9,7 @@ const { attachWebSocket } = require('./ws');
 
 const PORT = process.env.PORT || 3000;
 const KAFKA_BROKERS = (process.env.KAFKA_BROKERS || 'kafka:9092').split(',');
-const TOPICS = (process.env.KAFKA_TOPICS || 'logs.chord,logs.orchestrator,logs.worker').split(',');
+const TOPICS = (process.env.KAFKA_TOPICS || 'logs.lead,logs.orchestrator,logs.worker').split(',');
 const BUFFER_CAP = parseInt(process.env.BUFFER_CAP || '10000', 10);
 
 async function main() {

@@ -6,14 +6,14 @@
 //! the GA loop, replacing the worst individuals.
 
 pub mod buffer;
-pub mod chord_migration;
 pub mod config;
+pub mod lead_migration;
 pub mod selector;
 pub mod r#trait;
 
 pub use buffer::MigrantBuffer;
-pub use chord_migration::ChordMigration;
 pub use config::MigrationConfig;
+pub use lead_migration::LeadMigration;
 pub use r#trait::MigrationHook;
 pub use selector::{MigrantSelector, TopKSelector};
 

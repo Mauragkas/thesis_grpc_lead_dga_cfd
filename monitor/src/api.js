@@ -19,7 +19,7 @@ function buildApi(app, store) {
    *   since    - ms epoch (inclusive)
    *   until    - ms epoch (inclusive)
    *   search   - case-insensitive substring over the whole JSON
-   *   target   - tracing target (e.g. chord_node::chord::routing)
+   *   target   - tracing target (e.g. lead_node::lead::routing)
    *   workerId - worker_id field
    *   limit    - max results (default 200, max 1000)
    *   order    - "desc" (default, newest first) | "asc"

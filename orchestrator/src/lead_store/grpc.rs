@@ -1,17 +1,17 @@
 use crate::lead_store::r#trait::LeadStore;
-use crate::proto::chord::chord_client::ChordClient;
-use crate::proto::chord::{KeyMsg, PutRoutedRequest, RangeRequest};
+use crate::proto::lead::lead_client::LeadClient;
+use crate::proto::lead::{KeyMsg, PutRoutedRequest, RangeRequest};
 use tonic::{transport::Channel, Code, Status};
 use tracing::{debug, error};
 
 /// gRPC-backed lead store. Talks to any LEAD node; `PutRouted`/`GetRouted`
-/// route the key to the responsible node inside the chord ring.
+/// route the key to the responsible node inside the lead ring.
 pub struct GrpcLeadStore {
-    client: ChordClient<Channel>,
+    client: LeadClient<Channel>,
 }
 
 impl GrpcLeadStore {
-    pub fn new(client: ChordClient<Channel>) -> Self {
+    pub fn new(client: LeadClient<Channel>) -> Self {
         Self { client }
     }
 }

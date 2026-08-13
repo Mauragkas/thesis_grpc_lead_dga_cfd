@@ -1,6 +1,6 @@
 services:
   lead-node1:
-    build: ../chord_dht
+    build: ../lead_dht
     container_name: lead_node1
     environment:
       - RUST_LOG=info
@@ -17,10 +17,10 @@ services:
       driver: fluentd
       options:
         fluentd-address: localhost:24224
-        tag: chord.node1
+        tag: lead.node1
 
   lead-node2:
-    build: ../chord_dht
+    build: ../lead_dht
     container_name: lead_node2
     environment:
       - RUST_LOG=info
@@ -39,10 +39,10 @@ services:
       driver: fluentd
       options:
         fluentd-address: localhost:24224
-        tag: chord.node2
+        tag: lead.node2
 
   lead-node3:
-    build: ../chord_dht
+    build: ../lead_dht
     container_name: lead_node3
     environment:
       - RUST_LOG=info
@@ -61,7 +61,7 @@ services:
       driver: fluentd
       options:
         fluentd-address: localhost:24224
-        tag: chord.node3
+        tag: lead.node3
 
 networks:
   default:

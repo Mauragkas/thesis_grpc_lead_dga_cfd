@@ -1,4 +1,4 @@
-//! SRP: runs the Chord stabilization loop. Periodically verifies the
+//! SRP: runs the Lead stabilization loop. Periodically verifies the
 //! successor pointer and notifies the successor. Depends on `RingClient`
 //! (DIP) and `RingState` — never on concrete gRPC types.
 
@@ -56,7 +56,7 @@ impl<C: RingClient + 'static> Stabilizer<C> {
         }
     }
 
-    /// Core Chord stabilization:
+    /// Core Lead stabilization:
     /// 1. Ask successor for its predecessor `x`.
     /// 2. If `x` is in (self, successor), set `x` as our successor.
     /// 3. Notify our successor about us.

@@ -15,7 +15,7 @@ pub struct GenePayload {
     pub generation: usize,
 }
 
-/// Deterministic string key for a gene vector. The chord node applies its
+/// Deterministic string key for a gene vector. The lead node applies its
 /// learned hash to this string to pick the owning virtual node.
 pub fn gene_key(genes: &[f64]) -> String {
     serde_json::to_string(genes).unwrap_or_else(|e| {
