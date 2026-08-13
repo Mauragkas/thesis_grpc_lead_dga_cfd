@@ -51,7 +51,7 @@ where
 
         // Online PID anchor adjustment every PID_ADJUST_INTERVAL inserts
         let since = self.insert_since_pid.fetch_add(1, Ordering::Relaxed);
-        if since > 0 && since % PID_ADJUST_INTERVAL == 0 {
+        if since > 0 && since.is_multiple_of(PID_ADJUST_INTERVAL) {
             self.run_pid_adjustment().await;
         }
     }

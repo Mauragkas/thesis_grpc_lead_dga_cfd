@@ -33,7 +33,7 @@ where
             if *addr == self.self_uri {
                 continue;
             }
-            match self.remote.request_model(&addr, &self.self_uri).await {
+            match self.remote.request_model(addr, &self.self_uri).await {
                 Some((version, data)) => {
                     let active_ver = self.rmi.read().await.active.version;
                     if version >= active_ver {

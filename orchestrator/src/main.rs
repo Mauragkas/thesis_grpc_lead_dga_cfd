@@ -139,7 +139,7 @@ async fn main() -> Result<(), Status> {
     let evictor = GenerationEvictor {
         max_age: store_cfg.max_age_generations,
     };
-    let store = InMemoryGeneStore::new(EuclideanDistance::default(), evictor);
+    let store = InMemoryGeneStore::new(EuclideanDistance, evictor);
 
     // --- Set up the LEAD neighbor store (optional) ---
     let neighbor_store = if let Some(ep) = &lead_cfg.endpoint {
