@@ -8,12 +8,12 @@ use crate::storage::KeyStore;
 use crate::transport::{RangeResult, RemoteNode};
 
 use super::gen::chord_server::{Chord, ChordServer};
-use super::gen::KeyList;
 use super::gen::{
-    BoolMsg, Empty, FindSuccRequest, GetPredRequest, HeartbeatMsg, KeyMsg, ModelParams,
-    ModelRequest, NodeAddr as ProtoNode, NodeAddrList, NotifyRequest, OptionalNodeAddr, PutRequest,
-    PutRoutedRequest, RangeEntry, RangeForwardRequest, RangeRequest, RangeResponse, ValueMsg,
-    VidMsg,
+    BoolMsg, DeliverRangeRequest, Empty, FindSuccRequest, GetPredRequest, HeartbeatMsg, KeyList,
+    KeyMsg, LeafDiff, ModelDiff, ModelDiffRequest, ModelParams, ModelRequest,
+    NodeAddr as ProtoNode, NodeAddrList, NotifyRequest, OptionalNodeAddr, PruneRequest, PutRequest,
+    PutRoutedRequest, RangeEntry, RangeForwardRequest, RangeRequest, RangeResponse, ResourceReport,
+    ValueMsg, VidMsg,
 };
 
 pub struct ChordGrpcService<S, R>
@@ -184,7 +184,7 @@ where
         let r = req.into_inner();
         let result = self
             .node
-            .handle_range_query(&r.start_key, r.count, &r.caller_address)
+            .handle_range_query(&r.start_key, r.count, &r.caller_address, r.model_version)
             .await;
         Ok(Response::new(range_resp(result)))
     }
@@ -203,10 +203,24 @@ where
                 r.count,
                 &r.caller_address,
                 r.origin_vid,
+                r.model_version,
                 payload,
             )
             .await;
         Ok(Response::new(range_resp(result)))
+    }
+
+    async fn deliver_range(
+        &self,
+        req: Request<DeliverRangeRequest>,
+    ) -> Result<Response<BoolMsg>, Status> {
+        let r = req.into_inner();
+        tracing::debug!(
+            entries = r.entries.len(),
+            complete = r.complete,
+            "received direct range delivery"
+        );
+        Ok(Response::new(BoolMsg { ok: true }))
     }
 
     async fn push_model(&self, req: Request<ModelParams>) -> Result<Response<BoolMsg>, Status> {
@@ -221,6 +235,64 @@ where
     ) -> Result<Response<ModelParams>, Status> {
         let (version, data) = self.node.request_model().await;
         Ok(Response::new(ModelParams { version, data }))
+    }
+
+    async fn get_model_diff(
+        &self,
+        req: Request<ModelDiffRequest>,
+    ) -> Result<Response<ModelDiff>, Status> {
+        let _r = req.into_inner();
+        let rmi = self.node.rmi.read().await;
+        let current = rmi.update.as_ref().unwrap_or(&rmi.active);
+        let diffs: Vec<LeafDiff> = rmi
+            .dirty_leaves
+            .iter()
+            .map(|&idx| {
+                let leaf = current.leaves.get(idx);
+                let (w, bias, off) = leaf
+                    .map(|l| match l {
+                        crate::rmi::LeafKind::Linear(li) => (li.weight, li.bias, li.anchor.offset),
+                        crate::rmi::LeafKind::RadixSpline(rs) => (0.0, 0.0, rs.anchor.offset),
+                    })
+                    .unwrap_or((0.0, 0.0, 0.0));
+                LeafDiff {
+                    index: idx as u32,
+                    weight: w,
+                    bias,
+                    anchor_offset: off,
+                }
+            })
+            .collect();
+        Ok(Response::new(ModelDiff {
+            new_version: current.version,
+            leaves: diffs,
+            n: current.n as u64,
+        }))
+    }
+
+    async fn report_resources(
+        &self,
+        req: Request<ResourceReport>,
+    ) -> Result<Response<BoolMsg>, Status> {
+        let r = req.into_inner();
+        tracing::debug!(
+            mem = r.memory_bytes,
+            cpu = r.cpu_percent,
+            keys = r.key_count,
+            "resource report"
+        );
+        Ok(Response::new(BoolMsg { ok: true }))
+    }
+
+    async fn prune_vnode(&self, req: Request<PruneRequest>) -> Result<Response<BoolMsg>, Status> {
+        let r = req.into_inner();
+        if let Some(v) = self.node.find_vnode(r.vid) {
+            v.pruned.store(1, std::sync::atomic::Ordering::Relaxed);
+            tracing::info!("pruned vnode {} by request: {}", r.vid, r.reason);
+            Ok(Response::new(BoolMsg { ok: true }))
+        } else {
+            Ok(Response::new(BoolMsg { ok: false }))
+        }
     }
 
     async fn heartbeat(&self, req: Request<HeartbeatMsg>) -> Result<Response<BoolMsg>, Status> {

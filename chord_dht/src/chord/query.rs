@@ -11,6 +11,41 @@ where
     S: KeyStore,
     R: RemoteNode,
 {
+    pub async fn owns_key_with_model(&self, key: &str, model: &crate::rmi::RmiModel) -> bool {
+        let id = model.predict(key);
+        for vnode in &self.vnodes {
+            let pred = vnode.predecessor.read().await.clone();
+            match pred {
+                Some(p) => {
+                    if in_range(id, p.id, vnode.vid, true) {
+                        return true;
+                    }
+                }
+                None => {
+                    if vnode.successor().await.id == vnode.vid {
+                        return true;
+                    }
+                }
+            }
+        }
+        false
+    }
+
+    async fn get_model_for_version(&self, version: u64) -> crate::rmi::RmiModel {
+        let rmi = self.rmi.read().await;
+        if rmi.active.version == version {
+            rmi.active.clone()
+        } else if let Some(ref update) = rmi.update {
+            if update.version == version {
+                update.clone()
+            } else {
+                rmi.active.clone() // fallback
+            }
+        } else {
+            rmi.active.clone()
+        }
+    }
+
     pub async fn lookup_target(&self, key: &str) -> NodeAddr {
         let id = self.learned_hash(key).await;
         let vnode = self.best_vnode_for(id);
@@ -89,12 +124,15 @@ where
     }
 
     pub async fn range_query(&self, start_key: &str, count: u64, caller: &str) -> RangeResult {
-        if self.owns_key(start_key).await {
-            self.handle_range_query(start_key, count, caller).await
+        let model = self.rmi.read().await.active.clone();
+        let version = model.version;
+        if self.owns_key_with_model(start_key, &model).await {
+            self.handle_range_query(start_key, count, caller, version)
+                .await
         } else {
             let target = self.lookup_target(start_key).await;
             self.remote
-                .range_query(&target.address, start_key, count, caller)
+                .range_query(&target.address, start_key, count, caller, version)
                 .await
                 .unwrap_or_default()
         }
@@ -105,11 +143,12 @@ where
         start_key: &str,
         count: u64,
         caller: &str,
+        model_version: u64,
     ) -> RangeResult {
         let need = count as usize;
 
         // Read RMI model once for consistent hashing throughout this query
-        let model = self.rmi.read().await.active.clone();
+        let model = self.get_model_for_version(model_version).await;
         let id = model.predict(start_key);
 
         // Find the vnode that owns this key and its hash range (pred, vid]
@@ -171,6 +210,7 @@ where
                 remaining as u64,
                 caller,
                 origin_vid,
+                model_version,
                 payload.clone(),
             )
             .await
@@ -187,12 +227,13 @@ where
         count: u64,
         caller: &str,
         origin_vid: u64,
+        model_version: u64,
         mut payload: Vec<(String, String)>,
     ) -> RangeResult {
         let need = count as usize;
 
         // Read RMI model once for consistent hashing
-        let model = self.rmi.read().await.active.clone();
+        let model = self.get_model_for_version(model_version).await;
         let from_id = model.predict(from_key);
 
         // Find the local vnode whose range immediately follows from_id.
@@ -254,6 +295,7 @@ where
                 remaining as u64,
                 caller,
                 origin_vid,
+                model_version,
                 payload.clone(),
             )
             .await

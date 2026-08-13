@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::sync::atomic::{AtomicU64, AtomicUsize};
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -16,6 +17,14 @@ pub use vnode::{RmiState, VirtualNode};
 
 pub const R: usize = 4; // successor-list length
 pub const DEFAULT_K: usize = 10; // virtual nodes per physical node
+pub const DRIFT_THRESHOLD: f64 = 0.40;
+pub const MIN_KEYS_FOR_DRIFT: usize = 50;
+pub const FRM_GRACE_PERIOD_SECS: u64 = 10;
+
+// Shadow Balancer pruning thresholds
+pub const PRUNE_ERROR_RATE: f64 = 0.30;
+pub const PRUNE_INACTIVE_SECS: u64 = 120;
+pub const PID_ADJUST_INTERVAL: usize = 100;
 
 /// A physical LEAD node hosting `k` virtual nodes.
 pub struct ChordNode<S, R>
@@ -31,6 +40,8 @@ where
     pub(crate) rmi: RwLock<RmiState>,
     pub(crate) keys_total: AtomicUsize,
     pub(crate) model_version_counter: AtomicU64,
+    pub(crate) insert_since_pid: AtomicUsize,
+    pub(crate) start_time: std::time::Instant,
 }
 
 impl<S, R> ChordNode<S, R>
@@ -40,7 +51,6 @@ where
 {
     pub fn new(self_uri: String, k: usize, storage: Arc<S>, remote: Arc<R>) -> Self {
         let k = k.max(1);
-
         let mut vids: Vec<NodeId> = (0..k)
             .map(|i| peer_hash(&format!("{i}|{self_uri}")))
             .collect();
@@ -51,8 +61,6 @@ where
             .map(|&vid| VirtualNode::new(vid, &self_uri))
             .collect();
 
-        // Link siblings into an initial ring so the node starts in a valid state
-        // instead of 10 disconnected "alone" vnodes.
         let n = vnodes.len();
         for (i, vnode) in vnodes.iter_mut().enumerate() {
             let next = vids[(i + 1) % n];
@@ -84,20 +92,21 @@ where
                 update: None,
                 drift_new: 0,
                 update_ready: false,
+                dirty_leaves: HashSet::new(),
             }),
             keys_total: AtomicUsize::new(0),
             model_version_counter: AtomicU64::new(1),
+            insert_since_pid: AtomicUsize::new(0),
+            start_time: std::time::Instant::now(),
         }
     }
 
     pub fn storage(&self) -> Arc<S> {
         self.storage.clone()
     }
-
     pub fn remote(&self) -> Arc<R> {
         self.remote.clone()
     }
-
     pub fn vnode_count(&self) -> usize {
         self.vnodes.len()
     }
@@ -123,7 +132,6 @@ where
         self.vnodes.iter().find(|v| v.vid == vid)
     }
 
-    /// Pick the vnode whose VID is closest preceding `id` (for initiating lookups).
     pub(crate) fn best_vnode_for(&self, id: NodeId) -> &VirtualNode {
         let mut best = &self.vnodes[0];
         for v in &self.vnodes[1..] {
@@ -132,6 +140,25 @@ where
             }
         }
         best
+    }
+
+    /// Get immediate neighbors: active predecessor and successor list peers.
+    pub(crate) async fn neighbor_set(&self) -> HashSet<String> {
+        let mut peers = HashSet::new();
+        for v in &self.vnodes {
+            let pred = v.predecessor.read().await.clone();
+            if let Some(p) = pred {
+                if p.address != self.self_uri {
+                    peers.insert(p.address.clone());
+                }
+            }
+            for s in v.successor_list.read().await.iter() {
+                if s.address != self.self_uri {
+                    peers.insert(s.address.clone());
+                }
+            }
+        }
+        peers
     }
 }
 
