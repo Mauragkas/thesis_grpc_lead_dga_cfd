@@ -1,13 +1,8 @@
-use async_trait::async_trait;
-
-use crate::transport::RemoteNode;
-
 use super::super::gen::{Empty, KeyMsg, PutRequest};
 use super::{GrpcRemote, RPC_TIMEOUT};
 
-#[async_trait]
-impl RemoteNode for GrpcRemote {
-    async fn get_local(&self, addr: &str, key: &str) -> Option<String> {
+impl GrpcRemote {
+    pub(super) async fn get_local_inner(&self, addr: &str, key: &str) -> Option<String> {
         let mut c = self.client(addr).await?;
         let resp = tokio::time::timeout(
             RPC_TIMEOUT,
@@ -21,7 +16,7 @@ impl RemoteNode for GrpcRemote {
         Some(resp.into_inner().value)
     }
 
-    async fn put_local(&self, addr: &str, key: &str, val: &str) -> bool {
+    pub(super) async fn put_local_inner(&self, addr: &str, key: &str, val: &str) -> bool {
         let mut c = match self.client(addr).await {
             Some(c) => c,
             None => return false,
@@ -38,7 +33,7 @@ impl RemoteNode for GrpcRemote {
         .unwrap_or(false)
     }
 
-    async fn delete_local(&self, addr: &str, key: &str) -> bool {
+    pub(super) async fn delete_local_inner(&self, addr: &str, key: &str) -> bool {
         let mut c = match self.client(addr).await {
             Some(c) => c,
             None => return false,
@@ -54,7 +49,7 @@ impl RemoteNode for GrpcRemote {
         .unwrap_or(false)
     }
 
-    async fn get_keys(&self, addr: &str) -> Option<Vec<String>> {
+    pub(super) async fn get_keys_inner(&self, addr: &str) -> Option<Vec<String>> {
         let mut c = self.client(addr).await?;
         let resp = tokio::time::timeout(RPC_TIMEOUT, c.get_keys(Empty {}))
             .await
