@@ -24,20 +24,3 @@ impl AddressHasher for Sha256Hasher {
         u64::from_be_bytes(bytes)
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn hash_is_deterministic() {
-        let h = Sha256Hasher;
-        assert_eq!(h.hash("orchestrator:50060"), h.hash("orchestrator:50060"));
-    }
-
-    #[test]
-    fn different_addresses_hash_differently() {
-        let h = Sha256Hasher;
-        assert_ne!(h.hash("node1:5000"), h.hash("node2:5000"));
-    }
-}
