@@ -1,14 +1,11 @@
-use async_trait::async_trait;
-
-use crate::transport::{RangeResult, RemoteNode};
+use crate::transport::RangeResult;
 
 use super::super::gen::{DeliverRangeRequest, RangeForwardRequest, RangeRequest};
 use super::convert::{entries_from_proto, entries_to_proto};
 use super::{GrpcRemote, RANGE_TIMEOUT, RPC_TIMEOUT};
 
-#[async_trait]
-impl RemoteNode for GrpcRemote {
-    async fn deliver_range(
+impl GrpcRemote {
+    pub(super) async fn deliver_range_inner(
         &self,
         addr: &str,
         entries: &[(String, String)],
@@ -31,7 +28,7 @@ impl RemoteNode for GrpcRemote {
         .unwrap_or(false)
     }
 
-    async fn range_query(
+    pub(super) async fn range_query_inner(
         &self,
         addr: &str,
         start_key: &str,
@@ -60,7 +57,7 @@ impl RemoteNode for GrpcRemote {
         })
     }
 
-    async fn range_forward(
+    pub(super) async fn range_forward_inner(
         &self,
         addr: &str,
         from_key: &str,

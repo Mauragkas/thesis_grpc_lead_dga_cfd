@@ -1,4 +1,8 @@
 mod convert;
+mod kv;
+mod model;
+mod range;
+mod ring;
 
 use std::collections::HashMap;
 use std::time::Duration;
@@ -11,17 +15,10 @@ use crate::ring::NodeAddr;
 use crate::transport::{RangeResult, RemoteNode};
 
 use super::gen::chord_client::ChordClient;
-use super::gen::{
-    DeliverRangeRequest, Empty, FindSuccRequest, GetPredRequest, HeartbeatMsg, KeyMsg, ModelParams,
-    ModelRequest, NotifyRequest, PruneRequest, PutRequest, RangeForwardRequest, RangeRequest,
-    VidMsg,
-};
-
-use convert::{entries_from_proto, entries_to_proto, from_proto, to_proto};
 
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(2);
-const RPC_TIMEOUT: Duration = Duration::from_secs(5);
-const RANGE_TIMEOUT: Duration = Duration::from_secs(30);
+pub(super) const RPC_TIMEOUT: Duration = Duration::from_secs(5);
+pub(super) const RANGE_TIMEOUT: Duration = Duration::from_secs(30);
 
 pub struct GrpcRemote {
     pub(super) channels: Mutex<HashMap<String, Channel>>,
@@ -34,6 +31,7 @@ impl GrpcRemote {
         }
     }
 
+    /// Cached channel lookup — connects once per address, reuses thereafter.
     pub(super) async fn client(&self, addr: &str) -> Option<ChordClient<Channel>> {
         {
             let cache = self.channels.lock().await;
@@ -60,162 +58,53 @@ impl Default for GrpcRemote {
     }
 }
 
+// Single, authoritative trait implementation. Bodies live in the
+// `kv`, `ring`, `range`, and `model` submodules as inherent helpers.
 #[async_trait]
 impl RemoteNode for GrpcRemote {
-    // ---------------------------------------------------------------
-    // KV
-    // ---------------------------------------------------------------
+    // -- KV --
     async fn get_local(&self, addr: &str, key: &str) -> Option<String> {
-        let mut c = self.client(addr).await?;
-        let resp = tokio::time::timeout(
-            RPC_TIMEOUT,
-            c.get_local(KeyMsg {
-                key: key.to_string(),
-            }),
-        )
-        .await
-        .ok()?
-        .ok()?;
-        Some(resp.into_inner().value)
+        self.get_local_inner(addr, key).await
     }
-
     async fn put_local(&self, addr: &str, key: &str, val: &str) -> bool {
-        let mut c = match self.client(addr).await {
-            Some(c) => c,
-            None => return false,
-        };
-        tokio::time::timeout(
-            RPC_TIMEOUT,
-            c.put_local(PutRequest {
-                key: key.to_string(),
-                value: val.to_string(),
-            }),
-        )
-        .await
-        .map(|r| r.map(|r| r.into_inner().ok).unwrap_or(false))
-        .unwrap_or(false)
+        self.put_local_inner(addr, key, val).await
     }
-
     async fn delete_local(&self, addr: &str, key: &str) -> bool {
-        let mut c = match self.client(addr).await {
-            Some(c) => c,
-            None => return false,
-        };
-        tokio::time::timeout(
-            RPC_TIMEOUT,
-            c.delete_local(KeyMsg {
-                key: key.to_string(),
-            }),
-        )
-        .await
-        .map(|r| r.map(|r| r.into_inner().ok).unwrap_or(false))
-        .unwrap_or(false)
+        self.delete_local_inner(addr, key).await
     }
-
     async fn get_keys(&self, addr: &str) -> Option<Vec<String>> {
-        let mut c = self.client(addr).await?;
-        let resp = tokio::time::timeout(RPC_TIMEOUT, c.get_keys(Empty {}))
-            .await
-            .ok()?
-            .ok()?;
-        Some(resp.into_inner().keys)
+        self.get_keys_inner(addr).await
     }
 
-    // ---------------------------------------------------------------
-    // Ring
-    // ---------------------------------------------------------------
+    // -- Ring --
     async fn find_successor(&self, addr: &str, vid: u64, id: u64) -> Option<NodeAddr> {
-        let mut c = self.client(addr).await?;
-        let resp = tokio::time::timeout(RPC_TIMEOUT, c.find_successor(FindSuccRequest { vid, id }))
-            .await
-            .ok()?
-            .ok()?;
-        Some(from_proto(resp.into_inner()))
+        self.find_successor_inner(addr, vid, id).await
     }
-
     async fn get_predecessor(&self, addr: &str, vid: u64) -> Option<NodeAddr> {
-        let mut c = self.client(addr).await?;
-        let resp = tokio::time::timeout(RPC_TIMEOUT, c.get_predecessor(GetPredRequest { vid }))
-            .await
-            .ok()?
-            .ok()?;
-        resp.into_inner().node.map(from_proto)
+        self.get_predecessor_inner(addr, vid).await
     }
-
     async fn get_successor(&self, addr: &str, vid: u64) -> Option<NodeAddr> {
-        let mut c = self.client(addr).await?;
-        let resp = tokio::time::timeout(RPC_TIMEOUT, c.get_successor(VidMsg { vid }))
-            .await
-            .ok()?
-            .ok()?;
-        Some(from_proto(resp.into_inner()))
+        self.get_successor_inner(addr, vid).await
     }
-
     async fn get_successor_list(&self, addr: &str, vid: u64) -> Vec<NodeAddr> {
-        let mut c = match self.client(addr).await {
-            Some(c) => c,
-            None => return Vec::new(),
-        };
-        match tokio::time::timeout(RPC_TIMEOUT, c.get_successor_list(VidMsg { vid })).await {
-            Ok(Ok(r)) => r.into_inner().nodes.into_iter().map(from_proto).collect(),
-            _ => Vec::new(),
-        }
+        self.get_successor_list_inner(addr, vid).await
     }
-
     async fn notify(&self, addr: &str, vid: u64, self_info: &NodeAddr) -> bool {
-        let mut c = match self.client(addr).await {
-            Some(c) => c,
-            None => return false,
-        };
-        tokio::time::timeout(
-            RPC_TIMEOUT,
-            c.notify(NotifyRequest {
-                vid,
-                other: Some(to_proto(self_info)),
-            }),
-        )
-        .await
-        .map(|r| r.map(|r| r.into_inner().ok).unwrap_or(false))
-        .unwrap_or(false)
+        self.notify_inner(addr, vid, self_info).await
     }
-
     async fn ping(&self, addr: &str) -> bool {
-        let mut c = match self.client(addr).await {
-            Some(c) => c,
-            None => return false,
-        };
-        tokio::time::timeout(RPC_TIMEOUT, c.ping(Empty {}))
-            .await
-            .map(|r| r.map(|r| r.into_inner().ok).unwrap_or(false))
-            .unwrap_or(false)
+        self.ping_inner(addr).await
     }
 
-    // ---------------------------------------------------------------
-    // Range
-    // ---------------------------------------------------------------
+    // -- Range --
     async fn deliver_range(
         &self,
         addr: &str,
         entries: &[(String, String)],
         complete: bool,
     ) -> bool {
-        let mut c = match self.client(addr).await {
-            Some(c) => c,
-            None => return false,
-        };
-        tokio::time::timeout(
-            RPC_TIMEOUT,
-            c.deliver_range(DeliverRangeRequest {
-                caller_address: addr.to_string(),
-                entries: entries_to_proto(entries),
-                complete,
-            }),
-        )
-        .await
-        .map(|r| r.map(|r| r.into_inner().ok).unwrap_or(false))
-        .unwrap_or(false)
+        self.deliver_range_inner(addr, entries, complete).await
     }
-
     async fn range_query(
         &self,
         addr: &str,
@@ -224,27 +113,9 @@ impl RemoteNode for GrpcRemote {
         caller: &str,
         model_version: u64,
     ) -> Option<RangeResult> {
-        let mut c = self.client(addr).await?;
-        let resp = tokio::time::timeout(
-            RANGE_TIMEOUT,
-            c.range_query(RangeRequest {
-                start_key: start_key.to_string(),
-                count,
-                caller_address: caller.to_string(),
-                model_version,
-            }),
-        )
-        .await
-        .ok()?
-        .ok()?;
-        let inner = resp.into_inner();
-        Some(RangeResult {
-            entries: entries_from_proto(inner.entries),
-            complete: inner.complete,
-            next_address: inner.next_address,
-        })
+        self.range_query_inner(addr, start_key, count, caller, model_version)
+            .await
     }
-
     async fn range_forward(
         &self,
         addr: &str,
@@ -255,82 +126,28 @@ impl RemoteNode for GrpcRemote {
         model_version: u64,
         payload: Vec<(String, String)>,
     ) -> Option<RangeResult> {
-        let mut c = self.client(addr).await?;
-        let resp = tokio::time::timeout(
-            RANGE_TIMEOUT,
-            c.range_forward(RangeForwardRequest {
-                start_key: from_key.to_string(),
-                count,
-                caller_address: caller.to_string(),
-                payload: entries_to_proto(&payload),
-                origin_vid,
-                model_version,
-            }),
+        self.range_forward_inner(
+            addr,
+            from_key,
+            count,
+            caller,
+            origin_vid,
+            model_version,
+            payload,
         )
         .await
-        .ok()?
-        .ok()?;
-        let inner = resp.into_inner();
-        Some(RangeResult {
-            entries: entries_from_proto(inner.entries),
-            complete: inner.complete,
-            next_address: inner.next_address,
-        })
     }
 
-    // ---------------------------------------------------------------
-    // Model
-    // ---------------------------------------------------------------
+    // -- Model / control --
     async fn prune_vnode(&self, addr: &str, vid: u64, target_vid: u64, reason: &str) -> bool {
-        let mut c = match self.client(addr).await {
-            Some(c) => c,
-            None => return false,
-        };
-        tokio::time::timeout(
-            RPC_TIMEOUT,
-            c.prune_vnode(PruneRequest {
-                vid,
-                target_vid,
-                reason: reason.to_string(),
-            }),
-        )
-        .await
-        .map(|r| r.map(|r| r.into_inner().ok).unwrap_or(false))
-        .unwrap_or(false)
+        self.prune_vnode_inner(addr, vid, target_vid, reason).await
     }
-
     async fn push_model(&self, addr: &str, version: u64, data: &[u8]) -> bool {
-        let mut c = match self.client(addr).await {
-            Some(c) => c,
-            None => return false,
-        };
-        tokio::time::timeout(
-            RPC_TIMEOUT,
-            c.push_model(ModelParams {
-                version,
-                data: data.to_vec(),
-            }),
-        )
-        .await
-        .map(|r| r.map(|r| r.into_inner().ok).unwrap_or(false))
-        .unwrap_or(false)
+        self.push_model_inner(addr, version, data).await
     }
-
     async fn request_model(&self, addr: &str, coordinator: &str) -> Option<(u64, Vec<u8>)> {
-        let mut c = self.client(addr).await?;
-        let resp = tokio::time::timeout(
-            RPC_TIMEOUT,
-            c.request_model(ModelRequest {
-                coordinator: coordinator.to_string(),
-            }),
-        )
-        .await
-        .ok()?
-        .ok()?;
-        let inner = resp.into_inner();
-        Some((inner.version, inner.data))
+        self.request_model_inner(addr, coordinator).await
     }
-
     async fn heartbeat(
         &self,
         addr: &str,
@@ -338,18 +155,7 @@ impl RemoteNode for GrpcRemote {
         update_ready: bool,
         model_version: u64,
     ) -> Option<bool> {
-        let mut c = self.client(addr).await?;
-        let resp = tokio::time::timeout(
-            RPC_TIMEOUT,
-            c.heartbeat(HeartbeatMsg {
-                sender: sender.to_string(),
-                update_ready,
-                model_version,
-            }),
-        )
-        .await
-        .ok()?
-        .ok()?;
-        Some(resp.into_inner().ok)
+        self.heartbeat_inner(addr, sender, update_ready, model_version)
+            .await
     }
 }

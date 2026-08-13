@@ -1,17 +1,19 @@
-use async_trait::async_trait;
 use tonic::transport::Channel;
 
 use crate::ring::NodeAddr;
-use crate::transport::RemoteNode;
 
 use super::super::gen::chord_client::ChordClient;
 use super::super::gen::{Empty, FindSuccRequest, GetPredRequest, NotifyRequest, VidMsg};
 use super::convert::{from_proto, to_proto};
 use super::{GrpcRemote, RPC_TIMEOUT};
 
-#[async_trait]
-impl RemoteNode for GrpcRemote {
-    async fn find_successor(&self, addr: &str, vid: u64, id: u64) -> Option<NodeAddr> {
+impl GrpcRemote {
+    pub(super) async fn find_successor_inner(
+        &self,
+        addr: &str,
+        vid: u64,
+        id: u64,
+    ) -> Option<NodeAddr> {
         let mut c: ChordClient<Channel> = self.client(addr).await?;
         let resp = tokio::time::timeout(RPC_TIMEOUT, c.find_successor(FindSuccRequest { vid, id }))
             .await
@@ -20,7 +22,7 @@ impl RemoteNode for GrpcRemote {
         Some(from_proto(resp.into_inner()))
     }
 
-    async fn get_predecessor(&self, addr: &str, vid: u64) -> Option<NodeAddr> {
+    pub(super) async fn get_predecessor_inner(&self, addr: &str, vid: u64) -> Option<NodeAddr> {
         let mut c = self.client(addr).await?;
         let resp = tokio::time::timeout(RPC_TIMEOUT, c.get_predecessor(GetPredRequest { vid }))
             .await
@@ -29,7 +31,7 @@ impl RemoteNode for GrpcRemote {
         resp.into_inner().node.map(from_proto)
     }
 
-    async fn get_successor(&self, addr: &str, vid: u64) -> Option<NodeAddr> {
+    pub(super) async fn get_successor_inner(&self, addr: &str, vid: u64) -> Option<NodeAddr> {
         let mut c = self.client(addr).await?;
         let resp = tokio::time::timeout(RPC_TIMEOUT, c.get_successor(VidMsg { vid }))
             .await
@@ -38,7 +40,7 @@ impl RemoteNode for GrpcRemote {
         Some(from_proto(resp.into_inner()))
     }
 
-    async fn get_successor_list(&self, addr: &str, vid: u64) -> Vec<NodeAddr> {
+    pub(super) async fn get_successor_list_inner(&self, addr: &str, vid: u64) -> Vec<NodeAddr> {
         let mut c = match self.client(addr).await {
             Some(c) => c,
             None => return Vec::new(),
@@ -49,7 +51,7 @@ impl RemoteNode for GrpcRemote {
         }
     }
 
-    async fn notify(&self, addr: &str, vid: u64, self_info: &NodeAddr) -> bool {
+    pub(super) async fn notify_inner(&self, addr: &str, vid: u64, self_info: &NodeAddr) -> bool {
         let mut c = match self.client(addr).await {
             Some(c) => c,
             None => return false,
@@ -66,7 +68,7 @@ impl RemoteNode for GrpcRemote {
         .unwrap_or(false)
     }
 
-    async fn ping(&self, addr: &str) -> bool {
+    pub(super) async fn ping_inner(&self, addr: &str) -> bool {
         let mut c = match self.client(addr).await {
             Some(c) => c,
             None => return false,
