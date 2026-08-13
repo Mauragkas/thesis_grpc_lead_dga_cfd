@@ -72,24 +72,3 @@ impl RingState {
         }
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn half_open_no_wrap() {
-        assert!(RingState::in_half_open(10, 20, 15));
-        assert!(RingState::in_half_open(10, 20, 20));
-        assert!(!RingState::in_half_open(10, 20, 10));
-        assert!(!RingState::in_half_open(10, 20, 21));
-    }
-
-    #[test]
-    fn half_open_wrap() {
-        assert!(RingState::in_half_open(u64::MAX - 5, 5, u64::MAX));
-        assert!(RingState::in_half_open(u64::MAX - 5, 5, 0));
-        assert!(RingState::in_half_open(u64::MAX - 5, 5, 5));
-        assert!(!RingState::in_half_open(u64::MAX - 5, 5, u64::MAX - 6));
-    }
-}

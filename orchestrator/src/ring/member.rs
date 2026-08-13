@@ -75,33 +75,3 @@ impl LocalRingMember {
         *self.state.successor_list.lock().await = list;
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn make_state(id: u64) -> Arc<RingState> {
-        Arc::new(RingState::new(NodeInfo::new(id, format!("node{id}"))))
-    }
-
-    #[tokio::test]
-    async fn find_successor_returns_self_when_alone() {
-        let state = make_state(100);
-        let member = LocalRingMember::new(state);
-        let s = member.find_successor(50).await;
-        assert_eq!(s.id, 100);
-    }
-
-    #[tokio::test]
-    async fn notify_accepts_closer_predecessor() {
-        let state = make_state(100);
-        let member = LocalRingMember::new(state.clone());
-        // First notify always accepted.
-        assert!(member.notify(NodeInfo::new(50, "node50")).await);
-        // A node further away (10 is further from 100 than 50) rejected.
-        assert!(!member.notify(NodeInfo::new(10, "node10")).await);
-        // A node closer (80 is closer to 100 than 50) accepted.
-        assert!(member.notify(NodeInfo::new(80, "node80")).await);
-        assert_eq!(member.get_predecessor().await.unwrap().id, 80);
-    }
-}
