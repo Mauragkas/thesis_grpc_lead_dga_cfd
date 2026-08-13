@@ -4,7 +4,7 @@ use orchestrator::ga::algorithm::GaRunner;
 use orchestrator::gene_store::{EuclideanDistance, GenerationEvictor, InMemoryGeneStore};
 use orchestrator::hilbert::HilbertKeyGenerator;
 use orchestrator::lead_store::GrpcLeadStore;
-use orchestrator::migration::{ChordMigration, MigrantBuffer, TopKSelector};
+use orchestrator::migration::{LeadMigration, MigrantBuffer, TopKSelector};
 use orchestrator::neighbor_store::{HilbertNeighborStore, NeighborStore};
 use orchestrator::ring::{
     AddressHasher, GrpcRingClient, LocalRingMember, NodeInfo, RingServer, RingState, Sha256Hasher,
@@ -158,8 +158,8 @@ async fn main() -> Result<(), Box<tonic::Status>> {
                 e
             })?;
         info!("LEAD node ready at {ep}");
-        let chord_client = orchestrator::proto::chord::chord_client::ChordClient::new(lead_channel);
-        let grpc_lead = GrpcLeadStore::new(chord_client);
+        let lead_client = orchestrator::proto::lead::lead_client::LeadClient::new(lead_channel);
+        let grpc_lead = GrpcLeadStore::new(lead_client);
         let keygen = HilbertKeyGenerator::new(ga_cfg.genes_len);
         Some(HilbertNeighborStore::new(keygen, grpc_lead))
     } else {
@@ -168,7 +168,7 @@ async fn main() -> Result<(), Box<tonic::Status>> {
     };
 
     // --- Set up migration ---
-    let migration: ChordMigration<TopKSelector> = ChordMigration::new(
+    let migration: LeadMigration<TopKSelector> = LeadMigration::new(
         migration_cfg,
         member.clone(),
         TopKSelector,

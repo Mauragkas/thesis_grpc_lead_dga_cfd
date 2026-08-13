@@ -2,8 +2,8 @@ pub mod eval {
     tonic::include_proto!("eval");
 }
 
-pub mod chord {
-    tonic::include_proto!("chord");
+pub mod lead {
+    tonic::include_proto!("lead");
 }
 
 pub mod ring {

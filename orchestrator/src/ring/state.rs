@@ -30,7 +30,7 @@ pub struct RingState {
     pub predecessor: Mutex<Option<NodeInfo>>,
     /// Immediate successor in the ring (set by stabilization / join).
     pub successor: Mutex<Option<NodeInfo>>,
-    /// `r` successors for fault tolerance (Chord successor list).
+    /// `r` successors for fault tolerance (Lead successor list).
     pub successor_list: Mutex<Vec<NodeInfo>>,
 }
 

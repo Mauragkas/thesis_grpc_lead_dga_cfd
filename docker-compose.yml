@@ -1,7 +1,7 @@
 services:
-  # ---------- LEAD (chord DHT) nodes ----------
+  # ---------- LEAD (lead DHT) nodes ----------
   lead-node1:
-    build: ./chord_dht
+    build: ./lead_dht
     container_name: lead_node1
     environment:
       - RUST_LOG=info
@@ -21,10 +21,10 @@ services:
       driver: fluentd
       options:
         fluentd-address: localhost:24224
-        tag: chord.node1
+        tag: lead.node1
 
   lead-node2:
-    build: ./chord_dht
+    build: ./lead_dht
     container_name: lead_node2
     environment:
       - RUST_LOG=info
@@ -46,10 +46,10 @@ services:
       driver: fluentd
       options:
         fluentd-address: localhost:24224
-        tag: chord.node2
+        tag: lead.node2
 
   lead-node3:
-    build: ./chord_dht
+    build: ./lead_dht
     container_name: lead_node3
     environment:
       - RUST_LOG=info
@@ -71,7 +71,7 @@ services:
       driver: fluentd
       options:
         fluentd-address: localhost:24224
-        tag: chord.node3
+        tag: lead.node3
 
   # ---------- GA orchestrator ----------
   orchestrator:
@@ -192,7 +192,7 @@ services:
     container_name: monitor
     environment:
       - KAFKA_BROKERS=kafka:9092
-      - KAFKA_TOPICS=logs.chord,logs.orchestrator,logs.worker
+      - KAFKA_TOPICS=logs.lead,logs.orchestrator,logs.worker
       - KAFKA_GROUP_ID=monitor-group
       - PORT=3000
       - BUFFER_CAP=10000

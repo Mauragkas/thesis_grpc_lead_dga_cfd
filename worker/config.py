@@ -31,8 +31,8 @@ BASELINE: dict[str, float] = {
     "nose_ratio": 0.25,
     "tail_ratio": 0.35,
     "wing_span": 140.0,
-    "wing_root_chord": 55.0,
-    "wing_tip_chord": 25.0,
+    "wing_root_lead": 55.0,
+    "wing_tip_lead": 25.0,
     "wing_sweep": 12.0,
     "wing_dihedral": 4.0,
     "wing_twist": -3.0,
@@ -52,8 +52,8 @@ BASELINE: dict[str, float] = {
 
 GENE_BOUNDS: tuple[GeneBound, ...] = (
     GeneBound("wing_span", 80.0, 220.0),
-    GeneBound("wing_root_chord", 35.0, 75.0),
-    GeneBound("wing_tip_chord", 10.0, 45.0),
+    GeneBound("wing_root_lead", 35.0, 75.0),
+    GeneBound("wing_tip_lead", 10.0, 45.0),
     GeneBound("wing_sweep", 0.0, 25.0),
     GeneBound("wing_dihedral", 0.0, 10.0),
     GeneBound("wing_twist", -6.0, 2.0),

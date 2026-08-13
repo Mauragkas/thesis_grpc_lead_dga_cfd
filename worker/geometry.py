@@ -43,8 +43,8 @@ def calculate_total_mass_and_weight(
     t_main = params["naca_t"] / 100.0
     v_main = 2.0 * wing_panel_volume(
         params["wing_span"],
-        params["wing_root_chord"],
-        params["wing_tip_chord"],
+        params["wing_root_lead"],
+        params["wing_tip_lead"],
         t_main,
     )
     v_h = 2.0 * wing_panel_volume(

@@ -1,4 +1,4 @@
-//! Chord-style stabilizing ring for orchestrator nodes.
+//! Lead-style stabilizing ring for orchestrator nodes.
 //!
 //! Each orchestrator joins a ring, maintains successor/predecessor
 //! pointers, and runs a background stabilization loop. The ring is
