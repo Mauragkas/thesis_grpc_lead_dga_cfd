@@ -36,10 +36,8 @@ where
         for v in &self.vnodes {
             let pred = v.predecessor.read().await;
             if let Some(p) = pred.as_ref() {
-                if p.id >= from_id {
-                    if best.is_none() || p.id < best.as_ref().unwrap().1 {
-                        best = Some((v, p.id, v.vid));
-                    }
+                if p.id >= from_id && (best.is_none() || p.id < best.as_ref().unwrap().1) {
+                    best = Some((v, p.id, v.vid));
                 }
             }
         }

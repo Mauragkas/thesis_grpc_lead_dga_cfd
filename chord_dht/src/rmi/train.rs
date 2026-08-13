@@ -110,9 +110,9 @@ fn train_linear_leaves(keys: &[String], bins: usize, n: usize) -> Vec<LeafKind> 
         buckets[b].push((f, p));
     }
     let mut leaves = Vec::with_capacity(bins);
-    for b in 0..bins {
-        if buckets[b].len() >= 2 {
-            let (w, bias) = linreg(&buckets[b]);
+    for bucket in buckets.iter().take(bins) {
+        if bucket.len() >= 2 {
+            let (w, bias) = linreg(bucket);
             leaves.push(LeafKind::Linear(LinearLeaf {
                 weight: w,
                 bias,
@@ -141,20 +141,20 @@ fn train_radix_leaves(keys: &[String], bins: usize, n: usize) -> Vec<LeafKind> {
         buckets[b].push((f, p));
     }
     let mut leaves = Vec::with_capacity(bins);
-    for b in 0..bins {
+    for bucket in buckets.iter().take(bins) {
         let mut table = vec![0u32; RADIX_ENTRIES];
-        if !buckets[b].is_empty() {
+        if !bucket.is_empty() {
             // Build CDF: for each radix prefix, store the maximum rank
             let mut prefix_max: Vec<usize> = vec![0; RADIX_ENTRIES];
-            for (f, _p) in &buckets[b] {
+            for (f, _p) in bucket {
                 let idx = ((*f * RADIX_ENTRIES as f64) as usize).min(RADIX_ENTRIES - 1);
-                prefix_max[idx] = prefix_max[idx].max(buckets[b].len());
+                prefix_max[idx] = prefix_max[idx].max(bucket.len());
             }
             // Fill: propagate max forward so table is monotonic
             let mut running = 0usize;
             for i in 0..RADIX_ENTRIES {
                 running = running.max(prefix_max[i]);
-                let cdf = running as f64 / buckets[b].len().max(1) as f64;
+                let cdf = running as f64 / bucket.len().max(1) as f64;
                 table[i] = (cdf * u32::MAX as f64) as u32;
             }
         }

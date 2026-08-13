@@ -17,15 +17,15 @@ pub(super) fn fed_avg(models: Vec<RmiModel>, version: u64) -> RmiModel {
         });
         bins
     ];
-    for b in 0..bins {
+    for (b, leaf) in leaves.iter_mut().enumerate() {
         let mut w_sum = 0.0;
         let mut bias_sum = 0.0;
         let mut off_sum = 0.0;
         let mut count = 0usize;
         for m in &models {
             let wt = m.n as f64 / total_n as f64;
-            if let Some(leaf) = m.leaves.get(b) {
-                match leaf {
+            if let Some(kind) = m.leaves.get(b) {
+                match kind {
                     LeafKind::Linear(l) => {
                         w_sum += l.weight * wt;
                         bias_sum += l.bias * wt;
@@ -40,7 +40,7 @@ pub(super) fn fed_avg(models: Vec<RmiModel>, version: u64) -> RmiModel {
             }
         }
         if count > 0 {
-            leaves[b] = LeafKind::Linear(LinearLeaf {
+            *leaf = LeafKind::Linear(LinearLeaf {
                 weight: w_sum,
                 bias: bias_sum,
                 anchor: Anchor {

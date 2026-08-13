@@ -15,6 +15,7 @@ pub trait KeyStore: Send + Sync {
     async fn range_scan_after(&self, after_key: &str, count: usize) -> Vec<(String, String)>;
     async fn snapshot(&self) -> Vec<(String, String)>;
     async fn len(&self) -> usize;
+    async fn is_empty(&self) -> bool;
 }
 
 pub struct InMemoryStore {
@@ -80,5 +81,9 @@ impl KeyStore for InMemoryStore {
 
     async fn len(&self) -> usize {
         self.data.read().await.len()
+    }
+
+    async fn is_empty(&self) -> bool {
+        self.data.read().await.is_empty()
     }
 }
