@@ -20,7 +20,7 @@ use tracing::{error, info, warn};
 use tracing_subscriber::EnvFilter;
 
 #[tokio::main]
-async fn main() -> Result<(), Status> {
+async fn main() -> Result<(), Box<tonic::Status>> {
     tracing_subscriber::fmt()
         .with_env_filter(
             EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
@@ -184,7 +184,7 @@ async fn main() -> Result<(), Status> {
         migration: Some(&migration),
     };
     info!("Starting GA run with seed {}", ga_cfg.seed);
-    match runner.run(&mut rng).await {
+    Ok(match runner.run(&mut rng).await {
         Ok(best) => {
             info!("GA run completed. Best fitness: {best:.4}");
             Ok(())
@@ -193,5 +193,5 @@ async fn main() -> Result<(), Status> {
             error!("GA run failed: {e}");
             Err(e)
         }
-    }
+    }?)
 }
