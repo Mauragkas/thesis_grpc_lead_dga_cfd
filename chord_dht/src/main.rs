@@ -40,10 +40,10 @@ async fn main() {
         remote,
     ));
 
-    if let Some(ju) = cfg.join_uri.clone() {
+    let join_handle = if let Some(ju) = cfg.join_uri.clone() {
         let c = chord.clone();
-        tokio::spawn(async move {
-            for _ in 0..120 {
+        Some(tokio::spawn(async move {
+            for _ in 0..300 {
                 c.join(&ju).await;
                 let mut pending = 0;
                 for v in &c.vnodes {
@@ -58,7 +58,13 @@ async fn main() {
                 info!("join: {pending} vnode(s) still alone, retrying");
                 tokio::time::sleep(Duration::from_secs(1)).await;
             }
-        });
+        }))
+    } else {
+        None
+    };
+
+    if let Some(handle) = join_handle {
+        let _ = handle.await;
     }
 
     spawn_maintenance(chord.clone());
@@ -116,14 +122,26 @@ where
         tokio::spawn(async move {
             loop {
                 c.heartbeat_round().await;
-                tokio::time::sleep(Duration::from_secs(15)).await;
+                tokio::time::sleep(Duration::from_secs(8)).await;
             }
         });
     }
-    tokio::spawn(async move {
-        loop {
-            c.maybe_retrain().await;
-            tokio::time::sleep(Duration::from_secs(10)).await;
-        }
-    });
+    {
+        let c = c.clone();
+        tokio::spawn(async move {
+            loop {
+                c.maybe_retrain().await;
+                tokio::time::sleep(Duration::from_secs(5)).await;
+            }
+        });
+    }
+    {
+        let c = c.clone();
+        tokio::spawn(async move {
+            loop {
+                c.prune_low_throughput_vnodes().await;
+                tokio::time::sleep(Duration::from_secs(30)).await;
+            }
+        });
+    }
 }

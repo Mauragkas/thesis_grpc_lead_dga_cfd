@@ -4,11 +4,11 @@ services:
     build: ./chord_dht
     container_name: lead_node1
     environment:
-      - RUST_LOG=info,chord_node=debug
+      - RUST_LOG=info
       - HTTP_BIND=0.0.0.0:2001
       - GRPC_BIND=0.0.0.0:50051
       - SELF_URI=http://lead-node1:50051
-      - VIRTUAL_NODE_COUNT=10
+      - VIRTUAL_NODE_COUNT=100
     ports:
       - "2001:2001"      # HTTP API (curl testing)
       - "50061:50051"    # gRPC (host-mapped to avoid clash with envoy's 50051)
@@ -27,16 +27,18 @@ services:
     build: ./chord_dht
     container_name: lead_node2
     environment:
-      - RUST_LOG=info,chord_node=debug
+      - RUST_LOG=info
       - HTTP_BIND=0.0.0.0:2002
       - GRPC_BIND=0.0.0.0:50052
       - SELF_URI=http://lead-node2:50052
       - JOIN_URI=http://lead-node1:50051
-      - VIRTUAL_NODE_COUNT=10
+      - VIRTUAL_NODE_COUNT=100
     ports:
       - "2002:2002"
     depends_on:
       fluent-bit:
+        condition: service_healthy
+      lead-node1:
         condition: service_healthy
     networks:
       - default
@@ -50,16 +52,18 @@ services:
     build: ./chord_dht
     container_name: lead_node3
     environment:
-      - RUST_LOG=info,chord_node=debug
+      - RUST_LOG=info
       - HTTP_BIND=0.0.0.0:2003
       - GRPC_BIND=0.0.0.0:50053
       - SELF_URI=http://lead-node3:50053
       - JOIN_URI=http://lead-node1:50051
-      - VIRTUAL_NODE_COUNT=10
+      - VIRTUAL_NODE_COUNT=100
     ports:
       - "2003:2003"
     depends_on:
       fluent-bit:
+        condition: service_healthy
+      lead-node1:
         condition: service_healthy
     networks:
       - default
@@ -73,7 +77,7 @@ services:
   orchestrator:
     build: ./orchestrator
     environment:
-      - RUST_LOG=info,orchestrator=debug
+      - RUST_LOG=info
       - RUST_LOG_STYLE=always
       - EVAL_ENDPOINT=load-balancer:50051
       - LEAD_ENDPOINT=http://lead-node1:50051

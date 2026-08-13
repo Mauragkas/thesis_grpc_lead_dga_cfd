@@ -30,6 +30,7 @@ pub trait RemoteNode: Send + Sync {
         start_key: &str,
         count: u64,
         caller: &str,
+        model_version: u64, // NEW
     ) -> Option<RangeResult>;
     async fn range_forward(
         &self,
@@ -38,8 +39,13 @@ pub trait RemoteNode: Send + Sync {
         count: u64,
         caller: &str,
         origin_vid: u64,
+        model_version: u64, // NEW
         payload: Vec<(String, String)>,
     ) -> Option<RangeResult>;
+
+    async fn deliver_range(&self, addr: &str, entries: &[(String, String)], complete: bool)
+        -> bool;
+    async fn prune_vnode(&self, addr: &str, vid: u64, target_vid: u64, reason: &str) -> bool;
 
     async fn push_model(&self, addr: &str, version: u64, data: &[u8]) -> bool;
     async fn request_model(&self, addr: &str, coordinator: &str) -> Option<(u64, Vec<u8>)>;

@@ -2,11 +2,10 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 use tracing::{info, warn};
 
-use crate::ring::{finger_start, in_range, NodeAddr, NodeId, M};
+use super::{ChordNode, VirtualNode, R};
+use crate::ring::{finger_start, in_range, NodeAddr, NodeId, F};
 use crate::storage::KeyStore;
 use crate::transport::RemoteNode;
-
-use super::{ChordNode, VirtualNode, R};
 
 impl<S, R> ChordNode<S, R>
 where
@@ -19,6 +18,11 @@ where
         } else {
             self.best_vnode_for(id)
         };
+        vnode.record_request();
+        if vnode.pruned.load(Ordering::Relaxed) == 1 {
+            vnode.record_error();
+            return vnode.successor().await;
+        }
         let succ = vnode.successor().await;
         if in_range(id, vnode.vid, succ.id, true) {
             return succ;
@@ -28,9 +32,12 @@ where
             return vnode.successor().await;
         }
         match self.remote.find_successor(&n.address, n.id, id).await {
-            Some(r) => r,
+            Some(r) => {
+                vnode.mark_active().await;
+                r
+            }
             None => {
-                // Safety rule 3: Chord fallback forwarding on RMI/remote failure.
+                vnode.record_error();
                 warn!("find_successor remote failed vid={vid} id={id}, fallback");
                 self.fallback_find_successor(vnode, id).await
             }
@@ -51,7 +58,7 @@ where
 
     async fn closest_preceding(&self, vnode: &VirtualNode, id: NodeId) -> NodeAddr {
         let fingers = vnode.fingers.read().await;
-        for i in (0..M).rev() {
+        for i in (0..F).rev() {
             if let Some(f) = &fingers[i] {
                 if in_range(f.id, vnode.vid, id, false) {
                     return f.clone();
@@ -80,6 +87,7 @@ where
                 }
                 *vnode.successor_list.write().await = list;
                 vnode.fingers.write().await[0] = Some(succ);
+                vnode.mark_active().await;
             }
         }
         info!("joined ring with {} vnodes", self.vnodes.len());
@@ -87,6 +95,9 @@ where
 
     pub async fn stabilize_all(&self) {
         for vnode in &self.vnodes {
+            if vnode.pruned.load(Ordering::Relaxed) == 1 {
+                continue;
+            }
             self.stabilize_vnode(vnode).await;
         }
     }
@@ -160,7 +171,10 @@ where
     pub async fn fix_fingers_all(&self) {
         static IDX: AtomicUsize = AtomicUsize::new(1);
         for vnode in &self.vnodes {
-            let i = IDX.fetch_add(1, Ordering::Relaxed) % M;
+            if vnode.pruned.load(Ordering::Relaxed) == 1 {
+                continue;
+            }
+            let i = IDX.fetch_add(1, Ordering::Relaxed) % F;
             if i == 0 {
                 continue;
             }
@@ -183,6 +197,9 @@ where
 
     pub async fn check_predecessor_all(&self) {
         for vnode in &self.vnodes {
+            if vnode.pruned.load(Ordering::Relaxed) == 1 {
+                continue;
+            }
             let pred = vnode.predecessor.read().await.clone();
             if let Some(p) = pred {
                 if !self.remote.ping(&p.address).await {

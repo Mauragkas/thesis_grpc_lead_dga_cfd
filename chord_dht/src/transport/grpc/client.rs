@@ -10,9 +10,9 @@ use crate::transport::{RangeResult, RemoteNode};
 
 use super::gen::chord_client::ChordClient;
 use super::gen::{
-    Empty, FindSuccRequest, GetPredRequest, HeartbeatMsg, KeyMsg, ModelParams, ModelRequest,
-    NodeAddr as ProtoNode, NotifyRequest, PutRequest, RangeEntry, RangeForwardRequest,
-    RangeRequest, VidMsg,
+    DeliverRangeRequest, Empty, FindSuccRequest, GetPredRequest, HeartbeatMsg, KeyMsg, ModelParams,
+    ModelRequest, NodeAddr as ProtoNode, NotifyRequest, PruneRequest, PutRequest, RangeEntry,
+    RangeForwardRequest, RangeRequest, VidMsg,
 };
 
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(2);
@@ -28,6 +28,49 @@ impl GrpcRemote {
         Self {
             channels: Mutex::new(HashMap::new()),
         }
+    }
+
+    #[allow(dead_code)]
+    async fn deliver_range(
+        &self,
+        addr: &str,
+        entries: &[(String, String)],
+        complete: bool,
+    ) -> bool {
+        let mut c = match self.client(addr).await {
+            Some(c) => c,
+            None => return false,
+        };
+        tokio::time::timeout(
+            RPC_TIMEOUT,
+            c.deliver_range(DeliverRangeRequest {
+                caller_address: addr.to_string(),
+                entries: entries_to_proto(entries),
+                complete,
+            }),
+        )
+        .await
+        .map(|r| r.map(|r| r.into_inner().ok).unwrap_or(false))
+        .unwrap_or(false)
+    }
+
+    #[allow(dead_code)]
+    async fn prune_vnode(&self, addr: &str, vid: u64, target_vid: u64, reason: &str) -> bool {
+        let mut c = match self.client(addr).await {
+            Some(c) => c,
+            None => return false,
+        };
+        tokio::time::timeout(
+            RPC_TIMEOUT,
+            c.prune_vnode(PruneRequest {
+                vid,
+                target_vid,
+                reason: reason.to_string(),
+            }),
+        )
+        .await
+        .map(|r| r.map(|r| r.into_inner().ok).unwrap_or(false))
+        .unwrap_or(false)
     }
 
     /// Cached channel lookup — connects once per address, reuses thereafter.
@@ -86,6 +129,47 @@ fn entries_from_proto(v: Vec<RangeEntry>) -> Vec<(String, String)> {
 
 #[async_trait]
 impl RemoteNode for GrpcRemote {
+    async fn deliver_range(
+        &self,
+        addr: &str,
+        entries: &[(String, String)],
+        complete: bool,
+    ) -> bool {
+        let mut c = match self.client(addr).await {
+            Some(c) => c,
+            None => return false,
+        };
+        tokio::time::timeout(
+            RPC_TIMEOUT,
+            c.deliver_range(DeliverRangeRequest {
+                caller_address: addr.to_string(),
+                entries: entries_to_proto(entries),
+                complete,
+            }),
+        )
+        .await
+        .map(|r| r.map(|r| r.into_inner().ok).unwrap_or(false))
+        .unwrap_or(false)
+    }
+
+    async fn prune_vnode(&self, addr: &str, vid: u64, target_vid: u64, reason: &str) -> bool {
+        let mut c = match self.client(addr).await {
+            Some(c) => c,
+            None => return false,
+        };
+        tokio::time::timeout(
+            RPC_TIMEOUT,
+            c.prune_vnode(PruneRequest {
+                vid,
+                target_vid,
+                reason: reason.to_string(),
+            }),
+        )
+        .await
+        .map(|r| r.map(|r| r.into_inner().ok).unwrap_or(false))
+        .unwrap_or(false)
+    }
+
     async fn get_keys(&self, addr: &str) -> Option<Vec<String>> {
         let mut c = self.client(addr).await?;
         let resp = tokio::time::timeout(RPC_TIMEOUT, c.get_keys(Empty {}))
@@ -214,6 +298,7 @@ impl RemoteNode for GrpcRemote {
         start_key: &str,
         count: u64,
         caller: &str,
+        model_version: u64,
     ) -> Option<RangeResult> {
         let mut c = self.client(addr).await?;
         let resp = tokio::time::timeout(
@@ -222,6 +307,7 @@ impl RemoteNode for GrpcRemote {
                 start_key: start_key.to_string(),
                 count,
                 caller_address: caller.to_string(),
+                model_version,
             }),
         )
         .await
@@ -242,6 +328,7 @@ impl RemoteNode for GrpcRemote {
         count: u64,
         caller: &str,
         origin_vid: u64,
+        model_version: u64,
         payload: Vec<(String, String)>,
     ) -> Option<RangeResult> {
         let mut c = self.client(addr).await?;
@@ -253,6 +340,7 @@ impl RemoteNode for GrpcRemote {
                 caller_address: caller.to_string(),
                 payload: entries_to_proto(&payload),
                 origin_vid,
+                model_version,
             }),
         )
         .await
