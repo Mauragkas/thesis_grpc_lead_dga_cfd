@@ -8,6 +8,8 @@ pub mod ga;
 pub mod gene_store;
 pub mod hilbert;
 pub mod lead_store;
+pub mod migration;
 pub mod neighbor_store;
 pub mod proto;
+pub mod ring;
 pub mod transport;

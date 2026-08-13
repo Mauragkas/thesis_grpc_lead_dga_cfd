@@ -1,0 +1,53 @@
+syntax = "proto3";
+
+package orchestrator_ring;
+
+service Ring {
+  rpc FindSuccessor(FindSuccRequest) returns (NodeInfo);
+  rpc GetPredecessor(Empty) returns (OptionalNodeInfo);
+  rpc Notify(NotifyRequest) returns (BoolMsg);
+  rpc GetSuccessorList(Empty) returns (NodeInfoList);
+  rpc Ping(Empty) returns (BoolMsg);
+  rpc Migrate(MigrateRequest) returns (MigrateResponse);
+}
+
+message NodeInfo {
+  uint64 id = 1;
+  string address = 2;
+}
+
+message OptionalNodeInfo {
+  optional NodeInfo node = 1;
+}
+
+message NodeInfoList {
+  repeated NodeInfo nodes = 1;
+}
+
+message FindSuccRequest {
+  uint64 id = 1;
+}
+
+message NotifyRequest {
+  NodeInfo other = 1;
+}
+
+message Empty {}
+
+message BoolMsg {
+  bool ok = 1;
+}
+
+message MigrantIndividual {
+  repeated double genes = 1;
+  double fitness = 2;
+}
+
+message MigrateRequest {
+  repeated MigrantIndividual individuals = 1;
+  string sender = 2;
+}
+
+message MigrateResponse {
+  bool accepted = 1;
+}

@@ -46,7 +46,7 @@ fn config_from_env_uses_defaults_when_unset() {
     std::env::remove_var("GA_SEED");
     std::env::remove_var("GENE_STORE_MAX_AGE");
 
-    let (ga, _t, store, _lead) = config_from_env();
+    let (ga, _t, store, _lead, _ring, _migration) = config_from_env();
     assert_eq!(ga.eval_endpoint, "load-balancer:50051");
     assert_eq!(ga.seed, 42);
     assert_eq!(store.max_age_generations, 5);
@@ -59,7 +59,7 @@ fn config_from_env_reads_overrides() {
     std::env::set_var("GA_SEED", "123");
     std::env::set_var("GENE_STORE_MAX_AGE", "17");
 
-    let (ga, _t, store, _lead) = config_from_env();
+    let (ga, _t, store, _lead, _ring, _migration) = config_from_env();
     assert_eq!(ga.eval_endpoint, "worker:9999");
     assert_eq!(ga.seed, 123);
     assert_eq!(store.max_age_generations, 17);
@@ -74,7 +74,7 @@ fn config_from_env_reads_overrides() {
 #[serial]
 fn config_from_env_ignores_invalid_seed() {
     std::env::set_var("GA_SEED", "not-a-number");
-    let (ga, _, _, _) = config_from_env();
+    let (ga, _, _, _, _, _) = config_from_env();
     assert_eq!(ga.seed, 42); // falls back to default
     std::env::remove_var("GA_SEED");
 }

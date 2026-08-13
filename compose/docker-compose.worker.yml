@@ -42,9 +42,15 @@ services:
       - RUST_LOG=info
       - RUST_LOG_STYLE=always
       - EVAL_ENDPOINT=load-balancer:50051
-      - LEAD_ENDPOINT=http://lead-node1:50051   # bootstrap lead
+      - LEAD_ENDPOINT=http://lead-node1:50051
       - N_WORKERS=${N_WORKERS:-1}
       - GA_SEED=${GA_SEED:-42}
+      - RING_BIND=0.0.0.0:50060
+      - RING_SELF_ADDRESS=orchestrator:50060
+      - MIGRATION_INTERVAL=5
+      - MIGRATION_COUNT=3
+    ports:
+      - "50060:50060"
     depends_on:
       load-balancer:
         condition: service_started
