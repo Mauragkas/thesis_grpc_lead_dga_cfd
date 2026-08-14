@@ -12,8 +12,8 @@ BASELINE = {
     "nose_ratio": 0.25,
     "tail_ratio": 0.35,
     "wing_span": 140.0,
-    "wing_root_lead": 55.0,
-    "wing_tip_lead": 25.0,
+    "wing_root_chord": 55.0,
+    "wing_tip_chord": 25.0,
     "wing_sweep": 12.0,
     "wing_dihedral": 4.0,
     "wing_twist": -3.0,
@@ -56,7 +56,7 @@ def calculate_total_mass_and_weight(p):
     v_fuse = v_nose + v_mid + v_tail
 
     t_main = p["naca_t"] / 100.0
-    v_main = 2.0 * wing_panel_volume(p["wing_span"], p["wing_root_lead"], p["wing_tip_lead"], t_main)
+    v_main = 2.0 * wing_panel_volume(p["wing_span"], p["wing_root_chord"], p["wing_tip_chord"], t_main)
     v_h = 2.0 * wing_panel_volume(p["h_stab_span"], p["h_stab_root"], p["h_stab_tip"], 0.10)
     v_v = wing_panel_volume(p["v_stab_height"], p["v_stab_root"], p["v_stab_tip"], 0.10)
 
@@ -69,7 +69,7 @@ def calculate_total_mass_and_weight(p):
 # -----------------------------------------------------------------------------
 def evaluate_configuration(p):
     mass_kg, weight_n = calculate_total_mass_and_weight(p)
-    s_ref = (2.0 * p["wing_span"] * (p["wing_root_lead"] + p["wing_tip_lead"]) / 2.0) * 1e-6
+    s_ref = (2.0 * p["wing_span"] * (p["wing_root_chord"] + p["wing_tip_chord"]) / 2.0) * 1e-6
     scale = 1e-3
 
     naca_str = f"naca{int(p['naca_m'])}{int(p['naca_p'])}{int(p['naca_t']):02d}"
@@ -80,14 +80,14 @@ def evaluate_configuration(p):
         name="Main Wing",
         symmetric=True,
         xsecs=[
-            asb.WingXSec(xyz_le=[0, 0, 0], lead=p["wing_root_lead"] * scale, twist=0, airfoil=airfoil_main),
+            asb.WingXSec(xyz_le=[0, 0, 0], lead=p["wing_root_chord"] * scale, twist=0, airfoil=airfoil_main),
             asb.WingXSec(
                 xyz_le=[
                     p["wing_span"] * scale * np.tan(np.radians(p["wing_sweep"])),
                     p["wing_span"] * scale,
                     p["wing_span"] * scale * np.tan(np.radians(p["wing_dihedral"])),
                 ],
-                lead=p["wing_tip_lead"] * scale,
+                lead=p["wing_tip_chord"] * scale,
                 twist=p["wing_twist"],
                 airfoil=airfoil_main,
             ),
@@ -170,8 +170,8 @@ def evaluate_configuration(p):
 def run_extended_analysis():
     sweep_definitions = {
         "wing_span": ("Wing Semi-Span (mm)", np.linspace(80.0, 220.0, 12)),
-        "wing_root_lead": ("Root Lead (mm)", np.linspace(35.0, 75.0, 12)),
-        "wing_tip_lead": ("Tip Lead (mm)", np.linspace(10.0, 45.0, 12)),
+        "wing_root_chord": ("Root Lead (mm)", np.linspace(35.0, 75.0, 12)),
+        "wing_tip_chord": ("Tip Lead (mm)", np.linspace(10.0, 45.0, 12)),
         "wing_sweep": ("Sweep Angle (deg)", np.linspace(0.0, 25.0, 12)),
         "wing_dihedral": ("Dihedral Angle (deg)", np.linspace(0.0, 10.0, 12)),
         "wing_twist": ("Washout Twist (deg)", np.linspace(-6.0, 2.0, 12)),

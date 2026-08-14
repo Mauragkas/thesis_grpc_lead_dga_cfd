@@ -58,8 +58,8 @@ def make_plane(i: int) -> dict[str, Any]:
     cfg["fuse_length"] = round(BASELINE["fuse_length"] + rng.uniform(-30, 60), 2)
     cfg["fuse_max_diam"] = round(BASELINE["fuse_max_diam"] + rng.uniform(-2, 5), 2)
     cfg["wing_span"] = round(BASELINE["wing_span"] + rng.uniform(-25, 50), 2)
-    cfg["wing_root_lead"] = round(BASELINE["wing_root_lead"] + rng.uniform(-10, 15), 2)
-    cfg["wing_tip_lead"] = round(BASELINE["wing_tip_lead"] + rng.uniform(-8, 12), 2)
+    cfg["wing_root_chord"] = round(BASELINE["wing_root_chord"] + rng.uniform(-10, 15), 2)
+    cfg["wing_tip_chord"] = round(BASELINE["wing_tip_chord"] + rng.uniform(-8, 12), 2)
     cfg["wing_sweep"] = round(BASELINE["wing_sweep"] + rng.uniform(-8, 10), 2)
     cfg["wing_dihedral"] = round(BASELINE["wing_dihedral"] + rng.uniform(-2, 4), 2)
     cfg["wing_twist"] = round(BASELINE["wing_twist"] + rng.uniform(-3, 3), 2)
@@ -264,7 +264,7 @@ def main() -> None:
     print(f"  wing_span:       {target_cfg['wing_span']:.1f}")
     print(f"  fuse_length:     {target_cfg['fuse_length']:.1f}")
     print(f"  wing_sweep:      {target_cfg['wing_sweep']:.1f}")
-    print(f"  wing_root_lead: {target_cfg['wing_root_lead']:.1f}")
+    print(f"  wing_root_chord: {target_cfg['wing_root_chord']:.1f}")
 
     # ── Step 5: Ground truth ─────────────────────────────────────────
     print(f"\n{'='*64}")
