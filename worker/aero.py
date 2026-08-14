@@ -40,7 +40,7 @@ class AerosandboxAeroEvaluator:
         s_ref = (
             2.0
             * params["wing_span"]
-            * (params["wing_root_lead"] + params["wing_tip_lead"])
+            * (params["wing_root_chord"] + params["wing_tip_chord"])
             / 2.0
             * 1e-6
         )
@@ -57,7 +57,7 @@ class AerosandboxAeroEvaluator:
             xsecs=[
                 asb.WingXSec(
                     xyz_le=[0, 0, 0],
-                    lead=params["wing_root_lead"] * scale,
+                    lead=params["wing_root_chord"] * scale,
                     twist=0,
                     airfoil=airfoil_main,
                 ),
@@ -67,7 +67,7 @@ class AerosandboxAeroEvaluator:
                         params["wing_span"] * scale,
                         params["wing_span"] * scale * np.tan(np.radians(params["wing_dihedral"])),
                     ],
-                    lead=params["wing_tip_lead"] * scale,
+                    lead=params["wing_tip_chord"] * scale,
                     twist=params["wing_twist"],
                     airfoil=airfoil_main,
                 ),
