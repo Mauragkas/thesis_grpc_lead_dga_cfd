@@ -57,7 +57,7 @@ class AerosandboxAeroEvaluator:
             xsecs=[
                 asb.WingXSec(
                     xyz_le=[0, 0, 0],
-                    lead=params["wing_root_chord"] * scale,
+                    chord=params["wing_root_chord"] * scale,
                     twist=0,
                     airfoil=airfoil_main,
                 ),
@@ -67,7 +67,7 @@ class AerosandboxAeroEvaluator:
                         params["wing_span"] * scale,
                         params["wing_span"] * scale * np.tan(np.radians(params["wing_dihedral"])),
                     ],
-                    lead=params["wing_tip_chord"] * scale,
+                    chord=params["wing_tip_chord"] * scale,
                     twist=params["wing_twist"],
                     airfoil=airfoil_main,
                 ),
@@ -80,7 +80,7 @@ class AerosandboxAeroEvaluator:
             xsecs=[
                 asb.WingXSec(
                     xyz_le=[0, 0, 0],
-                    lead=params["h_stab_root"] * scale,
+                    chord=params["h_stab_root"] * scale,
                     twist=0,
                     airfoil=airfoil_tail,
                 ),
@@ -90,7 +90,7 @@ class AerosandboxAeroEvaluator:
                         params["h_stab_span"] * scale,
                         0,
                     ],
-                    lead=params["h_stab_tip"] * scale,
+                    chord=params["h_stab_tip"] * scale,
                     twist=0,
                     airfoil=airfoil_tail,
                 ),
@@ -103,7 +103,7 @@ class AerosandboxAeroEvaluator:
             xsecs=[
                 asb.WingXSec(
                     xyz_le=[0, 0, 0],
-                    lead=params["v_stab_root"] * scale,
+                    chord=params["v_stab_root"] * scale,
                     twist=0,
                     airfoil=airfoil_tail,
                 ),
@@ -113,7 +113,7 @@ class AerosandboxAeroEvaluator:
                         0,
                         params["v_stab_height"] * scale,
                     ],
-                    lead=params["v_stab_tip"] * scale,
+                    chord=params["v_stab_tip"] * scale,
                     twist=0,
                     airfoil=airfoil_tail,
                 ),
@@ -140,7 +140,7 @@ class AerosandboxAeroEvaluator:
                 airplane=airplane,
                 op_point=op_point,
                 spanwise_resolution=8,
-                leadwise_resolution=3,
+                chordwise_resolution=3,
             )
             res = vlm.run()
             cl_list.append(res["CL"])
