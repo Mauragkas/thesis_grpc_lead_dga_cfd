@@ -1,6 +1,6 @@
 services:
   lead-node1:
-    build: ../lead_dht
+    build: ../lead
     container_name: lead_node1
     environment:
       - RUST_LOG=info
@@ -20,7 +20,7 @@ services:
         tag: lead.node1
 
   lead-node2:
-    build: ../lead_dht
+    build: ../lead
     container_name: lead_node2
     environment:
       - RUST_LOG=info
@@ -42,7 +42,7 @@ services:
         tag: lead.node2
 
   lead-node3:
-    build: ../lead_dht
+    build: ../lead
     container_name: lead_node3
     environment:
       - RUST_LOG=info
