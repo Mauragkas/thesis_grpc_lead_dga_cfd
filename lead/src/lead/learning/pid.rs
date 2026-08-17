@@ -7,19 +7,19 @@ use super::super::LeadNode;
 
 /// Configurable 2-bit PID controller for nudging a leaf's anchor so that the
 /// target fraction of keys stays inside its vnode's window.
-pub(crate) struct PidTuner {
+pub struct PidTuner {
     /// Desired fraction of keys inside the window.
-    pub(crate) target_ratio: f64,
+    pub target_ratio: f64,
     /// Discrete scale step applied on large corrections.
-    pub(crate) scale_step: f64,
+    pub scale_step: f64,
     /// Offset-centering step applied every adjustment.
-    pub(crate) centering_step: f64,
+    pub centering_step: f64,
     /// Error above which the proportional state saturates high (3).
-    pub(crate) upper_threshold: f64,
+    pub upper_threshold: f64,
     /// Error above which the proportional state moves to 2.
-    pub(crate) mid_threshold: f64,
+    pub mid_threshold: f64,
     /// Minimum total samples before the controller acts.
-    pub(crate) min_samples: usize,
+    pub min_samples: usize,
 }
 
 impl Default for PidTuner {
@@ -37,7 +37,7 @@ impl Default for PidTuner {
 
 impl PidTuner {
     /// Adjust `anchor` and evolve `state` for one leaf based on key counts.
-    pub(crate) fn adjust(
+    pub fn adjust(
         &self,
         state: &mut PidState,
         anchor: &mut Anchor,
@@ -156,3 +156,4 @@ where
         self.learning.adjust_pid_anchors(in_window, outside).await;
     }
 }
+

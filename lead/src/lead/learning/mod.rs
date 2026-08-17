@@ -13,7 +13,8 @@ use crate::rmi::RmiModel;
 use crate::storage::KeyStore;
 use crate::transport::RemoteNode;
 
-pub(crate) use index::LearnedIndex;
+pub use index::LearnedIndex;
+pub use pid::PidTuner;
 
 impl<S, R> LeadNode<S, R>
 where

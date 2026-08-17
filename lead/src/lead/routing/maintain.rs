@@ -1,7 +1,7 @@
 use crate::ring::{finger_start, F};
 use crate::storage::KeyStore;
 use crate::transport::RemoteNode;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::Ordering;
 use std::time::Duration;
 
 use super::super::node::LeadNode;
@@ -12,12 +12,11 @@ where
     R: RemoteNode,
 {
     pub async fn fix_fingers_all(&self) {
-        static IDX: AtomicUsize = AtomicUsize::new(1);
         for vnode in &self.vnodes {
             if vnode.pruned.load(Ordering::Relaxed) == 1 {
                 continue;
             }
-            let i = IDX.fetch_add(1, Ordering::Relaxed) % F;
+            let i = self.finger_fix_idx.fetch_add(1, Ordering::Relaxed) % F;
             if i == 0 {
                 continue;
             }
