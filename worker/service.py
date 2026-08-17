@@ -7,7 +7,7 @@ import time
 import eval_pb2
 import eval_pb2_grpc
 
-from fitness import FitnessEvaluator
+from fitness import REJECT_FITNESS, EvaluationOutcome, FitnessEvaluator
 
 
 class EvaluatorServicer(eval_pb2_grpc.EvaluatorServicer):
@@ -25,29 +25,34 @@ class EvaluatorServicer(eval_pb2_grpc.EvaluatorServicer):
         self._logger = logger
         self._semaphore = asyncio.Semaphore(semaphore_size)
 
+    def _rejection(self) -> eval_pb2.EvaluationResult:
+        return eval_pb2.EvaluationResult(worker_id=self._worker_id, fitness=REJECT_FITNESS)
+
+    def _valid_genes(self, genes: list[float]) -> bool:
+        return len(genes) == self._gene_count
+
+    def _result(self, outcome: EvaluationOutcome) -> eval_pb2.EvaluationResult:
+        return eval_pb2.EvaluationResult(
+            worker_id=self._worker_id,
+            fitness=outcome.fitness,
+        )
+
     async def Evaluate(self, request, context):
         t0 = time.perf_counter()
         async with self._semaphore:
             genes = list(request.genes)
-            if len(genes) != self._gene_count:
+            if not self._valid_genes(genes):
                 self._logger.warning(
                     "Evaluate worker=%s got=%d expected=%d",
                     self._worker_id,
                     len(genes),
                     self._gene_count,
                 )
-                return eval_pb2.EvaluationResult(worker_id=self._worker_id, fitness=-1e9)
+                return self._rejection()
 
-            self._logger.debug(
-                "Evaluate worker=%s genes=%s", self._worker_id, genes
-            )
+            self._logger.debug("Evaluate worker=%s genes=%s", self._worker_id, genes)
 
-            loop = asyncio.get_running_loop()
-            outcome = await loop.run_in_executor(
-                None,
-                self._fitness_evaluator.evaluate_genes,
-                genes,
-            )
+            outcome = await self._evaluate(genes)
 
             dt_ms = (time.perf_counter() - t0) * 1000.0
             self._logger.info(
@@ -59,10 +64,7 @@ class EvaluatorServicer(eval_pb2_grpc.EvaluatorServicer):
                 outcome.aero.cm_alpha if outcome.aero else float("nan"),
                 dt_ms,
             )
-            return eval_pb2.EvaluationResult(
-                worker_id=self._worker_id,
-                fitness=outcome.fitness,
-            )
+            return self._result(outcome)
 
     async def EvaluateBatch(self, request, context):
         t0 = time.perf_counter()
@@ -70,13 +72,12 @@ class EvaluatorServicer(eval_pb2_grpc.EvaluatorServicer):
         self._logger.info("EvaluateBatch worker=%s n=%d", self._worker_id, n)
 
         async with self._semaphore:
-            loop = asyncio.get_running_loop()
             results = []
             n_fail = 0
 
             for i, ind in enumerate(request.individuals):
                 genes = list(ind.genes)
-                if len(genes) != self._gene_count:
+                if not self._valid_genes(genes):
                     self._logger.warning(
                         "EvaluateBatch worker=%s idx=%d got=%d expected=%d",
                         self._worker_id,
@@ -84,9 +85,7 @@ class EvaluatorServicer(eval_pb2_grpc.EvaluatorServicer):
                         len(genes),
                         self._gene_count,
                     )
-                    results.append(
-                        eval_pb2.EvaluationResult(worker_id=self._worker_id, fitness=-1e9)
-                    )
+                    results.append(self._rejection())
                     n_fail += 1
                     continue
 
@@ -97,19 +96,10 @@ class EvaluatorServicer(eval_pb2_grpc.EvaluatorServicer):
                     genes,
                 )
 
-                outcome = await loop.run_in_executor(
-                    None,
-                    self._fitness_evaluator.evaluate_genes,
-                    genes,
-                )
-                if outcome.fitness <= -1e8:
+                outcome = await self._evaluate(genes)
+                if outcome.rejected:
                     n_fail += 1
-                results.append(
-                    eval_pb2.EvaluationResult(
-                        worker_id=self._worker_id,
-                        fitness=outcome.fitness,
-                    )
-                )
+                results.append(self._result(outcome))
 
             dt_ms = (time.perf_counter() - t0) * 1000.0
             self._logger.info(
@@ -122,3 +112,11 @@ class EvaluatorServicer(eval_pb2_grpc.EvaluatorServicer):
                 dt_ms / n if n else 0.0,
             )
             return eval_pb2.BatchResponse(results=results)
+
+    async def _evaluate(self, genes: list[float]) -> EvaluationOutcome:
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(
+            None,
+            self._fitness_evaluator.evaluate_genes,
+            genes,
+        )

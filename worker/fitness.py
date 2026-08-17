@@ -6,7 +6,9 @@ from typing import Sequence
 
 from aero import AeroEvaluator, AeroResult
 from config import BASELINE, GENE_BOUNDS, GeneBound, WorkerConfig
-from geometry import calculate_fuselage_volume_mm3, decode_genes
+from geometry import fuselage_volume_mm3, decode_genes
+
+REJECT_FITNESS = -1e9
 
 
 @dataclass(frozen=True)
@@ -14,6 +16,7 @@ class EvaluationOutcome:
     fitness: float
     fuselage_volume_mm3: float
     aero: AeroResult | None
+    rejected: bool
 
 
 class FitnessEvaluator:
@@ -37,7 +40,7 @@ class FitnessEvaluator:
         return self.evaluate_params(params)
 
     def evaluate_params(self, params: dict[str, float]) -> EvaluationOutcome:
-        v_fuse = calculate_fuselage_volume_mm3(params)
+        v_fuse = fuselage_volume_mm3(params)
 
         if v_fuse < self._config.v_min_fuse_mm3:
             self._logger.debug(
@@ -45,14 +48,14 @@ class FitnessEvaluator:
                 v_fuse,
                 self._config.v_min_fuse_mm3,
             )
-            return EvaluationOutcome(fitness=-1e9, fuselage_volume_mm3=v_fuse, aero=None)
+            return self._rejected(v_fuse)
 
         aero = self._aero_evaluator.evaluate(params)
         if aero is None:
             self._logger.debug(
                 "reject aero=None (trim out of sweep) v_fuse=%.0f", v_fuse
             )
-            return EvaluationOutcome(fitness=-1e9, fuselage_volume_mm3=v_fuse, aero=None)
+            return self._rejected(v_fuse)
 
         alpha_penalty = self._config.w_alpha * abs(aero.alpha_trim)
         stability_penalty = self._config.w_stability * max(0.0, aero.cm_alpha) ** 2
@@ -73,4 +76,13 @@ class FitnessEvaluator:
             fitness=fitness,
             fuselage_volume_mm3=v_fuse,
             aero=aero,
+            rejected=False,
+        )
+
+    def _rejected(self, v_fuse: float) -> EvaluationOutcome:
+        return EvaluationOutcome(
+            fitness=REJECT_FITNESS,
+            fuselage_volume_mm3=v_fuse,
+            aero=None,
+            rejected=True,
         )
