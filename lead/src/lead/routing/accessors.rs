@@ -9,6 +9,27 @@ where
     S: KeyStore,
     R: RemoteNode,
 {
+    /// VID of the local vnode whose (predecessor, vid] window contains `id`,
+    /// if any. A vnode with no predecessor (alone in the ring) owns everything.
+    pub async fn owning_vnode_for(&self, id: NodeId) -> Option<NodeId> {
+        for v in &self.vnodes {
+            let pred = v.predecessor.read().await.clone();
+            match pred {
+                Some(p) => {
+                    if in_range(id, p.id, v.vid, true) {
+                        return Some(v.vid);
+                    }
+                }
+                None => {
+                    if v.successor().await.id == v.vid {
+                        return Some(v.vid);
+                    }
+                }
+            }
+        }
+        None
+    }
+
     pub async fn predecessor(&self, vid: NodeId) -> Option<NodeAddr> {
         self.find_vnode(vid)?.predecessor.read().await.clone()
     }

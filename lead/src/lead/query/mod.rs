@@ -3,7 +3,7 @@ mod model;
 
 use std::time::Duration;
 
-use crate::ring::{in_range, NodeAddr};
+use crate::ring::NodeAddr;
 use crate::storage::KeyStore;
 use crate::transport::{RangeResult, RemoteNode};
 
@@ -15,23 +15,7 @@ where
     R: RemoteNode,
 {
     pub async fn owns_key_with_model(&self, key: &str, model: &crate::rmi::RmiModel) -> bool {
-        let id = model.predict(key);
-        for vnode in &self.vnodes {
-            let pred = vnode.predecessor.read().await.clone();
-            match pred {
-                Some(p) => {
-                    if in_range(id, p.id, vnode.vid, true) {
-                        return true;
-                    }
-                }
-                None => {
-                    if vnode.successor().await.id == vnode.vid {
-                        return true;
-                    }
-                }
-            }
-        }
-        false
+        self.owning_vnode_for(model.predict(key)).await.is_some()
     }
 
     pub async fn lookup_target(&self, key: &str) -> NodeAddr {
@@ -51,23 +35,7 @@ where
     }
 
     pub async fn owns_key(&self, key: &str) -> bool {
-        let id = self.learned_hash(key).await;
-        for vnode in &self.vnodes {
-            let pred = vnode.predecessor.read().await.clone();
-            match pred {
-                Some(p) => {
-                    if in_range(id, p.id, vnode.vid, true) {
-                        return true;
-                    }
-                }
-                None => {
-                    if vnode.successor().await.id == vnode.vid {
-                        return true; // alone: own everything
-                    }
-                }
-            }
-        }
-        false
+        self.owning_vnode_for(self.learned_hash(key).await).await.is_some()
     }
 
     pub async fn range_query(&self, start_key: &str, count: u64, caller: &str) -> RangeResult {

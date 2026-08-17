@@ -1,31 +1,7 @@
-use super::super::gen::{HeartbeatMsg, ModelParams, ModelRequest, PruneRequest};
+use super::super::gen::{HeartbeatMsg, ModelParams, ModelRequest};
 use super::{GrpcRemote, RPC_TIMEOUT};
 
 impl GrpcRemote {
-    pub(super) async fn prune_vnode_inner(
-        &self,
-        addr: &str,
-        vid: u64,
-        target_vid: u64,
-        reason: &str,
-    ) -> bool {
-        let mut c = match self.client(addr).await {
-            Some(c) => c,
-            None => return false,
-        };
-        tokio::time::timeout(
-            RPC_TIMEOUT,
-            c.prune_vnode(PruneRequest {
-                vid,
-                target_vid,
-                reason: reason.to_string(),
-            }),
-        )
-        .await
-        .map(|r| r.map(|r| r.into_inner().ok).unwrap_or(false))
-        .unwrap_or(false)
-    }
-
     pub(super) async fn push_model_inner(&self, addr: &str, version: u64, data: &[u8]) -> bool {
         let mut c = match self.client(addr).await {
             Some(c) => c,
