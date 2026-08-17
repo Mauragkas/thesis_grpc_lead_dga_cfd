@@ -44,10 +44,9 @@ where
     R: RemoteNode,
 {
     let _r = req.into_inner();
-    let rmi = node.rmi.read().await;
-    let current = rmi.update.as_ref().unwrap_or(&rmi.active);
-    let diffs: Vec<LeafDiff> = rmi
-        .dirty_leaves
+    let current = node.learning.current_model().await;
+    let dirty = node.learning.dirty_leaf_indices().await;
+    let diffs: Vec<LeafDiff> = dirty
         .iter()
         .map(|&idx| {
             let leaf = current.leaves.get(idx);

@@ -1,4 +1,4 @@
-use crate::rmi::{Anchor, LeafKind, LinearLeaf, RmiModel};
+use crate::rmi::{Anchor, LeafKind, LinearLeaf, PidState, RmiModel};
 
 // ------------------------------------------------------------------
 // Federated Averaging (unchanged, but handles both leaf kinds)
@@ -55,6 +55,6 @@ pub(super) fn fed_avg(models: Vec<RmiModel>, version: u64) -> RmiModel {
         leaves,
         n: total_n,
         version,
-        pid_state: vec![0u8; bins],
+        pid_state: vec![PidState::default(); bins],
     }
 }
