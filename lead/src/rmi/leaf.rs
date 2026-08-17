@@ -33,8 +33,8 @@ pub struct LinearLeaf {
 // ---------------------------------------------------------------------------
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct RadixSplineLeaf {
-    pub radix_table: Vec<u32>, // 2^RP entries mapping prefix → rank
-    pub rp: usize,             // radix prefix bits (default 10 → 1024 entries)
+    pub radix_table: Vec<u32>, // 2^RP entries mapping prefix -> rank
+    pub rp: usize,             // radix prefix bits (default 10 -> 1024 entries)
     pub anchor: Anchor,
 }
 

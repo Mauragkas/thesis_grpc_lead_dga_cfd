@@ -26,7 +26,7 @@ pub struct LearnedIndex {
 }
 
 impl LearnedIndex {
-    pub(crate) fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             rmi: RwLock::new(RmiState {
                 active: RmiModel::default(),
@@ -47,23 +47,23 @@ impl LearnedIndex {
     // ------------------------------------------------------------------
 
     /// Predict the hash for `key` using the currently active model.
-    pub(crate) async fn predict(&self, key: &str) -> NodeId {
+    pub async fn predict(&self, key: &str) -> NodeId {
         self.rmi.read().await.active.predict(key)
     }
 
     /// Clone of the currently active model.
-    pub(crate) async fn active_model(&self) -> RmiModel {
+    pub async fn active_model(&self) -> RmiModel {
         self.rmi.read().await.active.clone()
     }
 
     /// The model to use as "current": a pending update if present, else active.
-    pub(crate) async fn current_model(&self) -> RmiModel {
+    pub async fn current_model(&self) -> RmiModel {
         let rmi = self.rmi.read().await;
         rmi.update.clone().unwrap_or_else(|| rmi.active.clone())
     }
 
     /// Resolve the model for a specific version, falling back to active.
-    pub(crate) async fn model_for_version(&self, version: u64) -> RmiModel {
+    pub async fn model_for_version(&self, version: u64) -> RmiModel {
         let rmi = self.rmi.read().await;
         if rmi.active.version == version {
             rmi.active.clone()
@@ -78,34 +78,42 @@ impl LearnedIndex {
         }
     }
 
-    pub(crate) async fn version(&self) -> u64 {
+    pub async fn version(&self) -> u64 {
         self.rmi.read().await.active.version
     }
 
-    pub(crate) async fn is_update_ready(&self) -> bool {
+    pub async fn is_update_ready(&self) -> bool {
         self.rmi.read().await.update_ready
     }
 
     /// `(update_ready, has_pending_update)` snapshot.
-    pub(crate) async fn status(&self) -> (bool, bool) {
+    pub async fn status(&self) -> (bool, bool) {
         let rmi = self.rmi.read().await;
         (rmi.update_ready, rmi.update.is_some())
     }
 
-    pub(crate) async fn dirty_leaf_indices(&self) -> Vec<usize> {
+    pub async fn dirty_leaf_indices(&self) -> Vec<usize> {
         self.rmi.read().await.dirty_leaves.iter().copied().collect()
     }
 
     /// True while the startup grace period (before drift detection starts) is
     /// still elapsing.
-    pub(crate) fn in_grace(&self, grace_secs: u64) -> bool {
+    pub fn in_grace(&self, grace_secs: u64) -> bool {
         self.start_time.elapsed().as_secs() < grace_secs
     }
 
-    pub(crate) fn next_version(&self) -> u64 {
+    pub fn next_version(&self) -> u64 {
         self.model_version_counter.load(Ordering::SeqCst)
     }
+}
 
+impl Default for LearnedIndex {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl LearnedIndex {
     // ------------------------------------------------------------------
     // Mutations
     // ------------------------------------------------------------------
@@ -114,7 +122,7 @@ impl LearnedIndex {
     /// dirty, and raise `update_ready` when the drift threshold is crossed.
     ///
     /// Returns `true` when a PID adjustment is due (interval reached).
-    pub(crate) async fn record_insert(
+    pub async fn record_insert(
         &self,
         key: &str,
         grace_secs: u64,
@@ -150,14 +158,14 @@ impl LearnedIndex {
     }
 
     /// Store a freshly retrained local model as the pending update.
-    pub(crate) async fn set_pending_model(&self, model: RmiModel) {
+    pub async fn set_pending_model(&self, model: RmiModel) {
         let mut rmi = self.rmi.write().await;
         rmi.update = Some(model);
         rmi.dirty_leaves.clear();
     }
 
     /// Promote `model` to active, clearing all pending/drift state.
-    pub(crate) async fn activate(&self, model: RmiModel) {
+    pub async fn activate(&self, model: RmiModel) {
         let mut rmi = self.rmi.write().await;
         rmi.active = model;
         rmi.update = None;
@@ -168,7 +176,7 @@ impl LearnedIndex {
 
     /// Accept an incoming pushed model after a version + payload check.
     /// Returns `false` (without mutating) on rollback or malformed payload.
-    pub(crate) async fn accept_pushed_model(&self, version: u64, data: &[u8]) -> bool {
+    pub async fn accept_pushed_model(&self, version: u64, data: &[u8]) -> bool {
         let mut rmi = self.rmi.write().await;
         if version <= rmi.active.version {
             warn!(
@@ -194,23 +202,25 @@ impl LearnedIndex {
     }
 
     /// Reset drift counters after a migration / model activation.
-    pub(crate) async fn reset_drift(&self, keys_total: usize) {
+    pub async fn reset_drift(&self, keys_total: usize) {
         self.keys_total.store(keys_total, Ordering::Relaxed);
         let mut rmi = self.rmi.write().await;
         rmi.drift_new = 0;
         rmi.update_ready = false;
     }
 
-    pub(crate) fn set_keys_total(&self, n: usize) {
+    pub fn set_keys_total(&self, n: usize) {
         self.keys_total.store(n, Ordering::Relaxed);
     }
 
     /// Run the 2-bit PID tuner over every leaf using per-bin key counts.
-    pub(crate) async fn adjust_pid_anchors(&self, in_window: Vec<usize>, outside: Vec<usize>) {
+    pub async fn adjust_pid_anchors(&self, in_window: Vec<usize>, outside: Vec<usize>) {
         let mut rmi = self.rmi.write().await;
         let model = &mut rmi.active;
         if model.pid_state.len() < model.stage0_bins {
-            model.pid_state.resize(model.stage0_bins, PidState::default());
+            model
+                .pid_state
+                .resize(model.stage0_bins, PidState::default());
         }
         let tuner = super::pid::PidTuner::default();
         for b in 0..model.stage0_bins {
@@ -224,3 +234,4 @@ impl LearnedIndex {
         tracing::debug!("PID adjustment complete across {} bins", model.stage0_bins);
     }
 }
+

@@ -1,3 +1,4 @@
+use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 
 use crate::ring::{peer_hash, NodeAddr, NodeId};
@@ -19,6 +20,9 @@ where
     pub(crate) storage: Arc<S>,
     pub(crate) remote: Arc<R>,
     pub(crate) learning: LearnedIndex,
+    /// Round-robin finger index for `fix_fingers_all`; per-instance so
+    /// multiple nodes (and tests) don't share a process-global counter.
+    pub(crate) finger_fix_idx: AtomicUsize,
 }
 
 impl<S, R> LeadNode<S, R>
@@ -60,6 +64,7 @@ where
             storage,
             remote,
             learning: LearnedIndex::new(),
+            finger_fix_idx: AtomicUsize::new(1),
         }
     }
 
