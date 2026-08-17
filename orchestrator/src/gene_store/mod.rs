@@ -1,4 +1,3 @@
-#![allow(unused)]
 pub mod eviction;
 pub mod in_memory;
 pub mod metric;

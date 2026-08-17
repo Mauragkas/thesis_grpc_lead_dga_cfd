@@ -25,7 +25,7 @@ where
         Self {
             keygen,
             store,
-            metric: EuclideanDistance::default(),
+            metric: EuclideanDistance,
         }
     }
 }

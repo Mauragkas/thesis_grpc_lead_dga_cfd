@@ -29,4 +29,8 @@ impl MigrantBuffer {
     pub async fn len(&self) -> usize {
         self.inner.lock().await.len()
     }
+
+    pub async fn is_empty(&self) -> bool {
+        self.len().await == 0
+    }
 }

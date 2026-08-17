@@ -5,7 +5,7 @@ use tonic::Status;
 use tracing::{error, info, warn};
 
 /// SRP: builds a tonic `Endpoint` from a target string.
-pub fn build_endpoint(target: &str, cfg: &TransportConfig) -> Result<Endpoint, Status> {
+pub fn build_endpoint(target: &str, cfg: &TransportConfig) -> Result<Endpoint, Box<Status>> {
     let uri = if target.starts_with("http://") || target.starts_with("https://") {
         target.to_string()
     } else {
@@ -16,9 +16,9 @@ pub fn build_endpoint(target: &str, cfg: &TransportConfig) -> Result<Endpoint, S
         Ok(endpoint) => endpoint,
         Err(e) => {
             error!("Invalid endpoint URI '{uri}': {e}");
-            return Err(Status::invalid_argument(format!(
+            return Err(Box::new(Status::invalid_argument(format!(
                 "Invalid endpoint URI '{uri}': {e}"
-            )));
+            ))));
         }
     }
     .keep_alive_while_idle(true)

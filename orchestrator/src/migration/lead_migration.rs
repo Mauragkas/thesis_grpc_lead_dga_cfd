@@ -67,7 +67,7 @@ impl<S: MigrantSelector> MigrationHook for LeadMigration<S> {
         population: &[Vec<f64>],
         fitnesses: &[f64],
     ) -> Result<(), Status> {
-        if generation == 0 || generation % self.config.interval_generations != 0 {
+        if generation == 0 || !generation.is_multiple_of(self.config.interval_generations) {
             return Ok(());
         }
 
