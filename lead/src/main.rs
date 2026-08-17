@@ -135,13 +135,13 @@ where
             }
         });
     }
-    {
-        let c = c.clone();
-        tokio::spawn(async move {
-            loop {
-                c.prune_low_throughput_vnodes().await;
-                tokio::time::sleep(Duration::from_secs(30)).await;
-            }
-        });
-    }
+    // {
+    //     let c = c.clone();
+    //     tokio::spawn(async move {
+    //         loop {
+    //             c.prune_low_throughput_vnodes().await;
+    //             tokio::time::sleep(Duration::from_secs(30)).await;
+    //         }
+    //     });
+    // }
 }
