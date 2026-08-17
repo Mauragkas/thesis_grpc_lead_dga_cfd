@@ -12,7 +12,7 @@ use tokio::sync::Mutex;
 use tonic::transport::Channel;
 
 use crate::ring::NodeAddr;
-use crate::transport::{RangeResult, RemoteNode};
+use crate::transport::{KvClient, ModelClient, RangeClient, RangeResult, RingClient};
 
 use super::gen::lead_client::LeadClient;
 
@@ -58,11 +58,11 @@ impl Default for GrpcRemote {
     }
 }
 
-// Single, authoritative trait implementation. Bodies live in the
+// Single, authoritative transport implementation. Bodies live in the
 // `kv`, `ring`, `range`, and `model` submodules as inherent helpers.
+
 #[async_trait]
-impl RemoteNode for GrpcRemote {
-    // -- KV --
+impl KvClient for GrpcRemote {
     async fn get_local(&self, addr: &str, key: &str) -> Option<String> {
         self.get_local_inner(addr, key).await
     }
@@ -75,8 +75,10 @@ impl RemoteNode for GrpcRemote {
     async fn get_keys(&self, addr: &str) -> Option<Vec<String>> {
         self.get_keys_inner(addr).await
     }
+}
 
-    // -- Ring --
+#[async_trait]
+impl RingClient for GrpcRemote {
     async fn find_successor(&self, addr: &str, vid: u64, id: u64) -> Option<NodeAddr> {
         self.find_successor_inner(addr, vid, id).await
     }
@@ -95,16 +97,10 @@ impl RemoteNode for GrpcRemote {
     async fn ping(&self, addr: &str) -> bool {
         self.ping_inner(addr).await
     }
+}
 
-    // -- Range --
-    async fn deliver_range(
-        &self,
-        addr: &str,
-        entries: &[(String, String)],
-        complete: bool,
-    ) -> bool {
-        self.deliver_range_inner(addr, entries, complete).await
-    }
+#[async_trait]
+impl RangeClient for GrpcRemote {
     async fn range_query(
         &self,
         addr: &str,
@@ -137,11 +133,10 @@ impl RemoteNode for GrpcRemote {
         )
         .await
     }
+}
 
-    // -- Model / control --
-    async fn prune_vnode(&self, addr: &str, vid: u64, target_vid: u64, reason: &str) -> bool {
-        self.prune_vnode_inner(addr, vid, target_vid, reason).await
-    }
+#[async_trait]
+impl ModelClient for GrpcRemote {
     async fn push_model(&self, addr: &str, version: u64, data: &[u8]) -> bool {
         self.push_model_inner(addr, version, data).await
     }

@@ -1,33 +1,10 @@
 use crate::transport::RangeResult;
 
-use super::super::gen::{DeliverRangeRequest, RangeForwardRequest, RangeRequest};
+use super::super::gen::{RangeForwardRequest, RangeRequest};
 use super::convert::{entries_from_proto, entries_to_proto};
-use super::{GrpcRemote, RANGE_TIMEOUT, RPC_TIMEOUT};
+use super::{GrpcRemote, RANGE_TIMEOUT};
 
 impl GrpcRemote {
-    pub(super) async fn deliver_range_inner(
-        &self,
-        addr: &str,
-        entries: &[(String, String)],
-        complete: bool,
-    ) -> bool {
-        let mut c = match self.client(addr).await {
-            Some(c) => c,
-            None => return false,
-        };
-        tokio::time::timeout(
-            RPC_TIMEOUT,
-            c.deliver_range(DeliverRangeRequest {
-                caller_address: addr.to_string(),
-                entries: entries_to_proto(entries),
-                complete,
-            }),
-        )
-        .await
-        .map(|r| r.map(|r| r.into_inner().ok).unwrap_or(false))
-        .unwrap_or(false)
-    }
-
     pub(super) async fn range_query_inner(
         &self,
         addr: &str,

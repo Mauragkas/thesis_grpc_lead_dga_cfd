@@ -1,4 +1,3 @@
-use crate::ring::in_range;
 use crate::rmi::{Anchor, PidState};
 use crate::storage::KeyStore;
 use crate::transport::RemoteNode;
@@ -136,17 +135,7 @@ where
             let f = crate::rmi::feature(k);
             let bin = ((f * bins as f64) as usize).min(bins.saturating_sub(1));
             let hash = model.predict(k);
-            let mut owned = false;
-            for vnode in &self.vnodes {
-                let pred = vnode.predecessor.read().await;
-                if let Some(p) = pred.as_ref() {
-                    if in_range(hash, p.id, vnode.vid, true) {
-                        owned = true;
-                        break;
-                    }
-                }
-            }
-            if owned {
+            if self.owning_vnode_for(hash).await.is_some() {
                 in_window[bin] += 1;
             } else {
                 outside[bin] += 1;
