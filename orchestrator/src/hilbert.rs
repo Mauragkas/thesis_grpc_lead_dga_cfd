@@ -101,8 +101,8 @@ fn hilbert_encode_hex(point: &[u64], bits: usize, ndims: usize, hex_width: usize
         }
         q >>= 1;
     }
-    for i in 0..ndims {
-        x[i] ^= t;
+    for item in x.iter_mut().take(ndims) {
+        *item ^= t;
     }
 
     // Accumulate the interleaved bit sequence into hex digits.
@@ -110,8 +110,8 @@ fn hilbert_encode_hex(point: &[u64], bits: usize, ndims: usize, hex_width: usize
     let mut nibble: u8 = 0;
     let mut nibble_bits = 0;
     for i in 0..bits {
-        for j in 0..ndims {
-            let bit = ((x[j] >> (bits - 1 - i)) & 1) as u8;
+        for item in x.iter().take(ndims) {
+            let bit = ((item >> (bits - 1 - i)) & 1) as u8;
             nibble = (nibble << 1) | bit;
             nibble_bits += 1;
             if nibble_bits == 4 {
@@ -142,7 +142,7 @@ fn py_round(x: f64) -> u64 {
         f as u64
     } else {
         let fi = f as u64;
-        if fi % 2 == 0 {
+        if fi.is_multiple_of(2) {
             fi
         } else {
             fi + 1
@@ -192,7 +192,7 @@ impl HilbertKeyGenerator {
     pub fn new(ndims: usize) -> Self {
         Self {
             encoder: HilbertEncoder::new(ndims, BITS),
-            hex_width: (ndims * BITS + 3) / 4,
+            hex_width: (ndims * BITS).div_ceil(4),
         }
     }
 }
