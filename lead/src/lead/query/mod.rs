@@ -71,7 +71,7 @@ where
     }
 
     pub async fn range_query(&self, start_key: &str, count: u64, caller: &str) -> RangeResult {
-        let model = self.rmi.read().await.active.clone();
+        let model = self.learning.active_model().await;
         let version = model.version;
         if self.owns_key_with_model(start_key, &model).await {
             self.handle_range_query(start_key, count, caller, version)

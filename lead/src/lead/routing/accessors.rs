@@ -49,12 +49,12 @@ where
 
         let old_id = old.as_ref().map(|o| o.id).unwrap_or(vnode.vid);
         let snap = self.storage.snapshot().await;
-        let to_move: Vec<(String, String)> = {
-            let rmi = self.rmi.read().await;
-            snap.into_iter()
-                .filter(|(k, _)| in_range(rmi.active.predict(k), old_id, other.id, true))
-                .collect()
-        };
+        let mut to_move: Vec<(String, String)> = Vec::new();
+        for (k, v) in snap {
+            if in_range(self.learning.predict(&k).await, old_id, other.id, true) {
+                to_move.push((k, v));
+            }
+        }
         for (k, v) in to_move {
             if self.remote.put_local(&other.address, &k, &v).await {
                 self.storage.remove(&k).await;

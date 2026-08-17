@@ -55,27 +55,15 @@ where
         let model = self.get_model_for_version(model_version).await;
         let id = model.predict(start_key);
 
-        let (vnode, range_start, range_end) = match self.find_owning_vnode(id).await {
-            Some((v, rs, re)) => (v, rs, re),
-            None => {
-                let v = self.best_vnode_for(id);
-                let pred = v.predecessor.read().await;
-                let rs = pred.as_ref().map(|p| p.id).unwrap_or(0);
-                (v, rs, v.vid)
-            }
+        let vnode = match self.find_owning_vnode(id).await {
+            Some((v, _, _)) => v,
+            None => self.best_vnode_for(id),
         };
         let origin_vid = vnode.vid;
 
         let overscan = need.saturating_mul(3).max(need);
         let local = self.storage.range_scan(start_key, overscan).await;
-        let payload: Vec<(String, String)> = local
-            .into_iter()
-            .filter(|(k, _)| {
-                let h = model.predict(k);
-                in_range(h, range_start, range_end, true)
-            })
-            .take(need)
-            .collect();
+        let payload = self.collect_owned(local, &model, need).await;
 
         if payload.len() >= need {
             return RangeResult {
@@ -131,8 +119,8 @@ where
         let model = self.get_model_for_version(model_version).await;
         let from_id = model.predict(from_key);
 
-        let (vnode, range_start, range_end) = match self.find_next_vnode(from_id).await {
-            Some((v, rs, re)) => (v, rs, re),
+        let vnode = match self.find_next_vnode(from_id).await {
+            Some((v, _, _)) => v,
             None => {
                 return RangeResult {
                     entries: payload,
@@ -144,14 +132,7 @@ where
 
         let overscan = need.saturating_mul(3).max(need);
         let local = self.storage.range_scan_after(from_key, overscan).await;
-        let filtered: Vec<(String, String)> = local
-            .into_iter()
-            .filter(|(k, _)| {
-                let h = model.predict(k);
-                in_range(h, range_start, range_end, true)
-            })
-            .take(need)
-            .collect();
+        let filtered = self.collect_owned(local, &model, need).await;
         payload.extend(filtered);
 
         if payload.len() >= need {
@@ -193,5 +174,27 @@ where
                 complete: true,
                 next_address: String::new(),
             })
+    }
+
+    /// Keep keys from a local scan that are owned by *any* of this node's
+    /// vnodes (per the given model), up to `need`. Keys owned by remote nodes
+    /// (stale / pending migration) are excluded so the result only contains
+    /// keys this node legitimately serves.
+    async fn collect_owned(
+        &self,
+        local: Vec<(String, String)>,
+        model: &crate::rmi::RmiModel,
+        need: usize,
+    ) -> Vec<(String, String)> {
+        let mut owned = Vec::with_capacity(need.min(local.len()));
+        for (k, v) in local {
+            if self.owns_key_with_model(&k, model).await {
+                owned.push((k, v));
+                if owned.len() >= need {
+                    break;
+                }
+            }
+        }
+        owned
     }
 }

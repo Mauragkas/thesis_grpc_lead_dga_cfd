@@ -1,6 +1,6 @@
 use super::feature::feature;
 use super::leaf::{Anchor, LeafKind, LinearLeaf, RadixSplineLeaf, RADIX_ENTRIES, RP};
-use super::model::RmiModel;
+use super::model::{PidState, RmiModel};
 use super::HASH_SPACE;
 
 // ---------------------------------------------------------------------------
@@ -20,7 +20,7 @@ impl RmiModel {
                 leaves: vec![],
                 n: 0,
                 version,
-                pid_state: vec![0u8; bins],
+                pid_state: vec![PidState::default(); bins],
             };
         }
         let leaves = train_linear_leaves(&sorted, bins, n);
@@ -29,7 +29,7 @@ impl RmiModel {
             leaves,
             n,
             version,
-            pid_state: vec![0u8; bins],
+            pid_state: vec![PidState::default(); bins],
         }
     }
 
@@ -94,7 +94,7 @@ fn build_model_with_config(keys: &[String], bins: usize, kind: &str) -> RmiModel
         leaves,
         n,
         version: 1,
-        pid_state: vec![0u8; bins],
+        pid_state: vec![PidState::default(); bins],
     }
 }
 

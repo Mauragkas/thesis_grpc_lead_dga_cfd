@@ -1,14 +1,11 @@
-use std::collections::HashSet;
-use std::sync::atomic::{AtomicU64, AtomicUsize};
 use std::sync::Arc;
-use tokio::sync::RwLock;
 
 use crate::ring::{peer_hash, NodeAddr, NodeId};
-use crate::rmi::RmiModel;
 use crate::storage::KeyStore;
 use crate::transport::RemoteNode;
 
-use super::vnode::{RmiState, VirtualNode};
+use super::learning::LearnedIndex;
+use super::vnode::VirtualNode;
 
 /// A physical LEAD node hosting `k` virtual nodes.
 pub struct LeadNode<S, R>
@@ -21,11 +18,7 @@ where
     pub self_info: NodeAddr,
     pub(crate) storage: Arc<S>,
     pub(crate) remote: Arc<R>,
-    pub(crate) rmi: RwLock<RmiState>,
-    pub(crate) keys_total: AtomicUsize,
-    pub(crate) model_version_counter: AtomicU64,
-    pub(crate) insert_since_pid: AtomicUsize,
-    pub(crate) start_time: std::time::Instant,
+    pub(crate) learning: LearnedIndex,
 }
 
 impl<S, R> LeadNode<S, R>
@@ -48,17 +41,12 @@ where
         let n = vnodes.len();
         for (i, vnode) in vnodes.iter_mut().enumerate() {
             let next = vids[(i + 1) % n];
-            let prev = vids[(i + n - 1) % n];
             let next_addr = NodeAddr {
                 id: next,
                 address: self_uri.clone(),
             };
             *vnode.successor_list.get_mut() = vec![next_addr.clone()];
             vnode.fingers.get_mut()[0] = Some(next_addr);
-            *vnode.predecessor.get_mut() = Some(NodeAddr {
-                id: prev,
-                address: self_uri.clone(),
-            });
         }
 
         let self_info = NodeAddr {
@@ -71,17 +59,7 @@ where
             self_info,
             storage,
             remote,
-            rmi: RwLock::new(RmiState {
-                active: RmiModel::default(),
-                update: None,
-                drift_new: 0,
-                update_ready: false,
-                dirty_leaves: HashSet::new(),
-            }),
-            keys_total: AtomicUsize::new(0),
-            model_version_counter: AtomicU64::new(1),
-            insert_since_pid: AtomicUsize::new(0),
-            start_time: std::time::Instant::now(),
+            learning: LearnedIndex::new(),
         }
     }
 
@@ -100,7 +78,7 @@ where
     }
 
     pub async fn learned_hash(&self, key: &str) -> NodeId {
-        self.rmi.read().await.active.predict(key)
+        self.learning.predict(key).await
     }
 
     pub async fn is_alone(&self) -> bool {
