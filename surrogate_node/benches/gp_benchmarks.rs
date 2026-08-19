@@ -1,5 +1,5 @@
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
-use gp_node::{
+use surrogate_node::{
     ComputeBackend, CpuOpenMpBackend, CudaBackend, GaussianProcessSurrogate, GpHyperparameters,
     KernelType,
 };

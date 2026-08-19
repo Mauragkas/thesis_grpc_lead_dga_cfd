@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-compare_models.py — Pure plotting script for gp_node surrogate comparison.
+compare_models.py — Pure plotting script for surrogate_node surrogate comparison.
 
 Reads `compare_results.json` emitted by `cargo run --release --bin compare`
 and generates a publication-quality 6-panel figure `model_comparison.png`.

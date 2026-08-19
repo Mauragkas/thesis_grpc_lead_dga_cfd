@@ -1,15 +1,15 @@
 [package]
-name = "gp_node"
+name = "surrogate_node"
 version = "0.1.0"
 edition = "2021"
-description = "Gaussian Process surrogate modeling node with C/C++ (CUDA/ROCm/OpenMP) acceleration"
+description = "High-performance aerodynamic surrogate modeling node (Gaussian Process, Neural Network MLP, Random Forest, k-NN) with native C/C++ (CUDA/ROCm/OpenMP) acceleration"
 
 [lib]
-name = "gp_node"
+name = "surrogate_node"
 path = "src/lib.rs"
 
 [[bin]]
-name = "gp_node"
+name = "surrogate_node"
 path = "src/main.rs"
 
 [[bin]]
