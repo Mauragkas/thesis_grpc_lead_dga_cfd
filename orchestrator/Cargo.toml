@@ -30,6 +30,19 @@ sha2 = "0.10"
 [dev-dependencies]
 serial_test = "3"
 tokio-stream = { version = "0.1", features = ["net"] }
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "hilbert_bench"
+harness = false
+
+[[bench]]
+name = "gene_store_bench"
+harness = false
+
+[[bench]]
+name = "ga_operators_bench"
+harness = false
 
 [build-dependencies]
 tonic-build = "0.11"

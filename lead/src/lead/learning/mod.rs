@@ -1,4 +1,4 @@
-mod fed_avg;
+pub mod fed_avg;
 mod index;
 mod pid;
 mod prune;
@@ -13,6 +13,7 @@ use crate::rmi::RmiModel;
 use crate::storage::KeyStore;
 use crate::transport::RemoteNode;
 
+pub use fed_avg::fed_avg;
 pub use index::LearnedIndex;
 pub use pid::PidTuner;
 
