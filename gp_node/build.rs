@@ -5,55 +5,74 @@ fn main() {
     println!("cargo:rerun-if-changed=native/incl");
     println!("cargo:rerun-if-changed=native/src");
 
+    // ── Base C++ build (CPU OpenMP + ROCm stubs) ─────────────────────── //
     let mut cpp_build = cc::Build::new();
     cpp_build
         .cpp(true)
         .std("c++17")
         .opt_level(3)
         .include("native/incl")
-        .file("native/src/gp_cpu.cpp")
-        .file("native/src/gp_device.cpp")
-        .file("native/src/gp_dispatcher.cpp")
-        .file("native/src/gp_rocm.cpp")
+        .include("native/incl/common")
+        .include("native/incl/gp")
+        .include("native/incl/knn")
+        .include("native/incl/rf")
+        // Common
+        .file("native/src/common/gp_device.cpp")
+        .file("native/src/common/gp_dispatcher.cpp")
+        // Gaussian Process
+        .file("native/src/gp/gp_cpu.cpp")
+        .file("native/src/gp/gp_rocm.cpp")
+        // k-Nearest Neighbours
+        .file("native/src/knn/knn_cpu.cpp")
+        .file("native/src/knn/knn_rocm.cpp")
+        // Random Forest
+        .file("native/src/rf/rf_cpu.cpp")
+        .file("native/src/rf/rf_rocm.cpp")
         .flag_if_supported("-fopenmp")
         .flag_if_supported("/openmp");
 
-    // Check if CUDA nvcc compiler exists
-    let has_cuda = Command::new("nvcc")
+    // ── CUDA support ─────────────────────────────────────────────────── //
+    let nvcc_present = Command::new("nvcc")
         .arg("--version")
         .output()
-        .map(|out| out.status.success())
+        .map(|o| o.status.success())
         .unwrap_or_else(|_| {
             Command::new("/opt/cuda/bin/nvcc")
                 .arg("--version")
                 .output()
-                .map(|out| out.status.success())
+                .map(|o| o.status.success())
                 .unwrap_or(false)
         });
 
-    if has_cuda {
-        let cuda_path = env::var("CUDA_PATH")
-            .unwrap_or_else(|_| "/opt/cuda".to_string());
-        
+    if nvcc_present {
+        let cuda_path = env::var("CUDA_PATH").unwrap_or_else(|_| "/opt/cuda".to_string());
+
         let mut cuda_build = cc::Build::new();
         cuda_build
             .cuda(true)
             .include("native/incl")
+            .include("native/incl/common")
+            .include("native/incl/gp")
+            .include("native/incl/knn")
+            .include("native/incl/rf")
             .include(format!("{}/include", cuda_path))
-            .file("native/src/gp_cuda.cu")
+            .file("native/src/gp/gp_cuda.cu")
+            .file("native/src/knn/knn_cuda.cu")
+            .file("native/src/rf/rf_cuda.cu")
             .flag("-O3")
             .flag("-DENABLE_CUDA");
 
         if cuda_build.try_compile("gp_cuda_native").is_ok() {
             println!("cargo:rustc-link-search=native={}/lib64", cuda_path);
             println!("cargo:rustc-link-lib=cudart");
+            // Tell the C++ build that CUDA is available so stubs get elided.
             cpp_build.define("ENABLE_CUDA", "1");
-        } else {
-            cpp_build.file("native/src/gp_cuda.cu");
         }
-    } else {
-        cpp_build.file("native/src/gp_cuda.cu");
+        // If try_compile fails we fall through: the CPU stubs already defined
+        // knn_predict_cuda / rf_predict_cuda in the .cpp files.
+        // We do NOT add .cu files to the C++ build — they contain CUDA syntax.
     }
+    // When nvcc is absent: same outcome — CPU stubs provide all symbols.
 
     cpp_build.compile("gp_native");
 

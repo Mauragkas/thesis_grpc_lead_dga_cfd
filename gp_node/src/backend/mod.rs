@@ -1,13 +1,28 @@
-pub mod cpu;
-pub mod cuda;
-pub mod factory;
-pub mod ffi;
-pub mod rocm;
-pub mod traits;
+pub mod common;
+pub mod gp;
+pub mod knn;
+pub mod rf;
 
-pub use cpu::CpuOpenMpBackend;
-pub use cuda::CudaBackend;
-pub use factory::BackendFactory;
-pub use ffi::{BackendError, GpDeviceType};
-pub use rocm::RocmBackend;
-pub use traits::ComputeBackend;
+// Common exports
+pub use common::{
+    get_best_available_device, probe_available_devices, BackendError, GpDeviceInfo,
+    GpDeviceInfoFFI, GpDeviceType, GpStatusCode,
+};
+
+// GP backend exports
+pub use gp::{
+    BackendFactory, ComputeBackend, CpuOpenMpBackend, CudaBackend, GpHyperparamsFFI,
+    GpKernelType, RocmBackend,
+};
+
+// k-NN backend exports
+pub use knn::{
+    create_knn_cpu, create_knn_cuda, create_knn_rocm, KnnBackend, KnnBackendFactory,
+    KnnCpuBackend, KnnCudaBackend, KnnModelHandle, KnnRocmBackend, KnnStatusCode,
+};
+
+// RF backend exports
+pub use rf::{
+    RfBackend, RfBackendFactory, RfCpuBackend, RfCudaBackend, RfHyperparamsFFI, RfModelHandle,
+    RfRocmBackend, RfStatusCode,
+};

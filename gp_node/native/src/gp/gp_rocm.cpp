@@ -1,5 +1,5 @@
-#include "../incl/gp_rocm.h"
-#include "../incl/gp_cpu.h"
+#include "gp_rocm.h"
+#include "gp_cpu.h"
 
 #if defined(__HIPCC__) || defined(ENABLE_ROCM)
 #include <hip/hip_runtime.h>

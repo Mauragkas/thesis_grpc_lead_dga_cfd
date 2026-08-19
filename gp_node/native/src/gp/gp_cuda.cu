@@ -1,5 +1,5 @@
-#include "../incl/gp_cuda.h"
-#include "../incl/gp_cpu.h"
+#include "gp_cuda.h"
+#include "gp_cpu.h"
 #include <cmath>
 #include <vector>
 

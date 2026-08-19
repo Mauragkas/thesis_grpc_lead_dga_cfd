@@ -1,4 +1,4 @@
-#include "../incl/gp_cpu.h"
+#include "gp_cpu.h"
 #include <cmath>
 #include <cstring>
 #include <vector>

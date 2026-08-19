@@ -1,7 +1,7 @@
-#include "../incl/gp_backend.h"
-#include "../incl/gp_cpu.h"
-#include "../incl/gp_cuda.h"
-#include "../incl/gp_rocm.h"
+#include "gp_backend.h"
+#include "gp_cpu.h"
+#include "gp_cuda.h"
+#include "gp_rocm.h"
 #include <cstdlib>
 #include <new>
 
