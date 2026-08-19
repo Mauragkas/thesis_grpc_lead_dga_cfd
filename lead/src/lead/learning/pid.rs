@@ -142,7 +142,10 @@ where
             }
         }
 
-        self.learning.adjust_pid_anchors(in_window, outside).await;
+        let tuner = self.config.pid_tuner();
+        self.learning
+            .adjust_pid_anchors(&tuner, in_window, outside)
+            .await;
     }
 }
 

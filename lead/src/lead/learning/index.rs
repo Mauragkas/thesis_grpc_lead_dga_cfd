@@ -128,6 +128,7 @@ impl LearnedIndex {
         grace_secs: u64,
         min_keys_for_drift: usize,
         drift_threshold: f64,
+        pid_adjust_interval: usize,
     ) -> bool {
         self.keys_total.fetch_add(1, Ordering::Relaxed);
         let mut rmi = self.rmi.write().await;
@@ -154,7 +155,8 @@ impl LearnedIndex {
         drop(rmi);
 
         let since = self.insert_since_pid.fetch_add(1, Ordering::Relaxed);
-        since > 0 && since.is_multiple_of(super::super::PID_ADJUST_INTERVAL)
+        let interval = pid_adjust_interval.max(1);
+        since > 0 && since.is_multiple_of(interval)
     }
 
     /// Store a freshly retrained local model as the pending update.
@@ -214,7 +216,12 @@ impl LearnedIndex {
     }
 
     /// Run the 2-bit PID tuner over every leaf using per-bin key counts.
-    pub async fn adjust_pid_anchors(&self, in_window: Vec<usize>, outside: Vec<usize>) {
+    pub async fn adjust_pid_anchors(
+        &self,
+        tuner: &super::pid::PidTuner,
+        in_window: Vec<usize>,
+        outside: Vec<usize>,
+    ) {
         let mut rmi = self.rmi.write().await;
         let model = &mut rmi.active;
         if model.pid_state.len() < model.stage0_bins {
@@ -222,7 +229,6 @@ impl LearnedIndex {
                 .pid_state
                 .resize(model.stage0_bins, PidState::default());
         }
-        let tuner = super::pid::PidTuner::default();
         for b in 0..model.stage0_bins {
             tuner.adjust(
                 &mut model.pid_state[b],

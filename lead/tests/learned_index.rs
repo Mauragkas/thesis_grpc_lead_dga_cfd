@@ -14,7 +14,7 @@ async fn record_insert_raises_update_ready_after_threshold() {
     let li = LearnedIndex::new();
     // grace=0, min_keys=50, threshold=0.40; drift_new == keys_total so ratio=1.0.
     for _ in 0..50 {
-        let _ = li.record_insert("key", 0, 50, 0.40).await;
+        let _ = li.record_insert("key", 0, 50, 0.40, PID_ADJUST_INTERVAL).await;
     }
     assert!(li.is_update_ready().await);
 }
@@ -23,7 +23,7 @@ async fn record_insert_raises_update_ready_after_threshold() {
 async fn record_insert_marks_dirty_leaf() {
     let li = LearnedIndex::new();
     // grace large so update_ready is not raised; we only care about dirty.
-    let _ = li.record_insert("somekey", 10_000, 50, 0.40).await;
+    let _ = li.record_insert("somekey", 10_000, 50, 0.40, PID_ADJUST_INTERVAL).await;
     let dirty = li.dirty_leaf_indices().await;
     let bins = li.active_model().await.stage0_bins;
     let f = feature("somekey");
@@ -81,7 +81,7 @@ async fn pending_and_active_visibility_through_current_model() {
 async fn reset_drift_clears_update_ready() {
     let li = LearnedIndex::new();
     for _ in 0..50 {
-        let _ = li.record_insert("k", 0, 50, 0.40).await;
+        let _ = li.record_insert("k", 0, 50, 0.40, PID_ADJUST_INTERVAL).await;
     }
     assert!(li.is_update_ready().await);
     li.reset_drift(999).await;
@@ -93,12 +93,12 @@ async fn record_insert_returns_pid_due_at_interval() {
     let li = LearnedIndex::new();
     for i in 0..PID_ADJUST_INTERVAL {
         assert!(
-            !li.record_insert("k", 10_000, 50, 0.40).await,
+            !li.record_insert("k", 10_000, 50, 0.40, PID_ADJUST_INTERVAL).await,
             "call {i} should not trigger PID"
         );
     }
     assert!(
-        li.record_insert("k", 10_000, 50, 0.40).await,
+        li.record_insert("k", 10_000, 50, 0.40, PID_ADJUST_INTERVAL).await,
         "call {} should trigger PID",
         PID_ADJUST_INTERVAL
     );

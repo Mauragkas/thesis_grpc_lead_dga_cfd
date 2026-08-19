@@ -4,7 +4,6 @@ use crate::storage::KeyStore;
 use crate::transport::RemoteNode;
 
 use super::super::node::LeadNode;
-use super::R;
 
 impl<S, R> LeadNode<S, R>
 where
@@ -12,6 +11,7 @@ where
     R: RemoteNode,
 {
     pub async fn join(&self, known: &str) {
+        let max_extra = self.config.successor_list_len.saturating_sub(1);
         for vnode in &self.vnodes {
             if let Some(succ) = self
                 .remote
@@ -20,7 +20,7 @@ where
             {
                 let mut list = vec![succ.clone()];
                 let remote_list = self.remote.get_successor_list(&succ.address, succ.id).await;
-                for n in remote_list.into_iter().take(R - 1) {
+                for n in remote_list.into_iter().take(max_extra) {
                     if n.id != succ.id && !list.contains(&n) {
                         list.push(n);
                     }

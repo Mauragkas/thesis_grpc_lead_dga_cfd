@@ -1,6 +1,7 @@
 use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 
+use crate::config::Config;
 use crate::ring::{peer_hash, NodeAddr, NodeId};
 use crate::storage::KeyStore;
 use crate::transport::RemoteNode;
@@ -17,6 +18,7 @@ where
     pub self_uri: String,
     pub vnodes: Vec<VirtualNode>,
     pub self_info: NodeAddr,
+    pub config: Config,
     pub(crate) storage: Arc<S>,
     pub(crate) remote: Arc<R>,
     pub(crate) learning: LearnedIndex,
@@ -30,8 +32,9 @@ where
     S: KeyStore,
     R: RemoteNode,
 {
-    pub fn new(self_uri: String, k: usize, storage: Arc<S>, remote: Arc<R>) -> Self {
-        let k = k.max(1);
+    pub fn new(config: Config, storage: Arc<S>, remote: Arc<R>) -> Self {
+        let self_uri = config.self_uri.clone();
+        let k = config.virtual_node_count.max(1);
         let mut vids: Vec<NodeId> = (0..k)
             .map(|i| peer_hash(&format!("{i}|{self_uri}")))
             .collect();
@@ -58,9 +61,10 @@ where
             address: self_uri.clone(),
         };
         Self {
-            self_uri: self_uri.clone(),
+            self_uri,
             vnodes,
             self_info,
+            config,
             storage,
             remote,
             learning: LearnedIndex::new(),
