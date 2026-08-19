@@ -1,0 +1,37 @@
+sequenceDiagram
+    participant Stab as Stabilizer
+    participant Member as LocalRingMember
+    participant Client as GrpcRingClient
+    participant Bootstrap as Bootstrap /orchestrator_ring.Ring
+    participant Succ as Successor /orchestrator_ring.Ring
+
+    Note over Stab,Bootstrap: 1. Join Ring via Bootstrap Node
+    Stab->>Client: find_successor(bootstrap_addr, self_node.id)
+    Client->>Bootstrap: FindSuccessor(FindSuccRequest { id })
+    Bootstrap-->>Client: NodeInfo (successor)
+    Client-->>Stab: NodeInfo (succ)
+    Stab->>Member: set_successor(succ)
+
+    Note over Stab,Succ: 2. Periodic Stabilization (stabilize)
+    Stab->>Client: get_predecessor(succ.address)
+    Client->>Succ: GetPredecessor(Empty)
+    Succ-->>Client: OptionalNodeInfo { node: Option<x> }
+    Client-->>Stab: Option<NodeInfo> x
+
+    alt x is Some and in_open(self.id, succ.id, x.id)
+        Stab->>Member: set_successor(x)
+        Stab->>Client: notify(x.address, self_node)
+        Client->>Succ: Notify(NotifyRequest { other: self_node })
+        Succ-->>Client: BoolMsg { ok }
+    else x is not closer
+        Stab->>Client: notify(succ.address, self_node)
+        Client->>Succ: Notify(NotifyRequest { other: self_node })
+        Succ-->>Client: BoolMsg { ok }
+    end
+
+    Note over Stab,Succ: 3. Successor List Refresh (refresh_successor_list)
+    Stab->>Client: get_successor_list(succ.address)
+    Client->>Succ: GetSuccessorList(Empty)
+    Succ-->>Client: NodeInfoList { nodes }
+    Client-->>Stab: Vec<NodeInfo>
+    Stab->>Member: set_successor_list([succ, ...nodes])

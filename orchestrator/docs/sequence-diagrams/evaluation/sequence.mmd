@@ -1,0 +1,44 @@
+sequenceDiagram
+    participant Caller as caller
+    participant Eval as GrpcEvaluator::evaluate_population()
+    participant Client as EvaluatorClient<Channel>
+    participant Batch as GrpcEvaluator::eval_batch()
+    participant Remote as eval.Evaluator service
+    participant Timer as tokio::time::timeout()
+    participant Sleep as tokio::time::sleep()
+
+    Caller->>Eval: evaluate_population(population)
+    Eval->>Eval: population.chunks(batch_size)
+
+    loop for each chunk
+        Eval->>Client: clone()
+        Eval->>Batch: eval_batch(&mut client, &cfg, chunk)
+
+        Batch->>Batch: build BatchRequest from chunk
+
+        loop attempt in 0..cfg.max_attempts
+            Batch->>Timer: timeout(cfg.rpc_timeout, client.evaluate_batch(Request::new(req.clone())))
+            Timer->>Client: evaluate_batch(Request::new(req.clone()))
+            Client->>Remote: /eval.Evaluator/EvaluateBatch
+
+            alt success
+                Remote-->>Client: BatchResponse
+                Client-->>Timer: Ok(Response<BatchResponse>)
+                Timer-->>Batch: Ok(Response<BatchResponse>)
+                Batch-->>Eval: Vec<f64> fitnesses
+            else gRPC unavailable
+                Remote-->>Client: Status::Unavailable
+                Client-->>Timer: Err(Status)
+                Timer-->>Batch: Err(Status)
+                Batch->>Sleep: sleep(cfg.retry_delay)
+            else timeout
+                Timer-->>Batch: Err(elapsed)
+                Batch->>Sleep: sleep(cfg.retry_delay)
+            else non-retryable error
+                Timer-->>Batch: Err(Status)
+                Batch-->>Eval: Err(Status)
+            end
+        end
+    end
+
+    Eval-->>Caller: flat Vec<f64>

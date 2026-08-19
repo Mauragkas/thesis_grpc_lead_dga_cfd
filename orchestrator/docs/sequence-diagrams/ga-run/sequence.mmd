@@ -1,0 +1,61 @@
+sequenceDiagram
+    participant Main as main()
+    participant Runner as GaRunner::run()
+    participant Mig as MigrationHook
+    participant Ops as ga::operators
+    participant Store as GeneStore
+    participant Eval as Evaluator
+    participant NStore as NeighborStore
+    participant Normal as rand_distr::Normal
+
+    Main->>Runner: run(&mut rng)
+    Runner->>Ops: random_population(rng, cfg)
+    Ops-->>Runner: population
+
+    Runner->>Normal: Normal::new(0.0, cfg.mut_sigma)
+
+    loop for gen in 1..=cfg.generations
+        opt migration is Some(...)
+            Runner->>Mig: drain_immigrants()
+            Mig-->>Runner: immigrants
+            alt immigrants not empty
+                Runner->>Runner: integrate immigrants into population
+            end
+        end
+
+        loop for each individual in population
+            Runner->>Store: lookup_exact(genes, gen)
+            alt cache hit
+                Store-->>Runner: Some(fitness)
+            else cache miss
+                Store-->>Runner: None
+                Runner->>Runner: collect uncached genes
+            end
+        end
+
+        alt uncached individuals exist
+            Runner->>Eval: evaluate_population(&uncached)
+            Eval-->>Runner: fresh fitnesses
+
+            loop for each fresh result
+                Runner->>Store: store(genes, fitness, gen)
+                opt neighbor_store is Some(...)
+                    Runner->>NStore: store(genes, fitness, gen)
+                end
+            end
+        end
+
+        Runner->>Store: evict_expired(gen)
+
+        opt migration is Some(...)
+            Runner->>Mig: maybe_emigrate(gen, &population, &fitnesses)
+        end
+
+        Runner->>Ops: select_survivors(&population, &fitnesses, cfg)
+        Ops-->>Runner: survivors
+        Runner->>Ops: next_generation(&survivors, cfg, rng, &normal)
+        Ops-->>Runner: next population
+    end
+
+    Runner-->>Main: Ok(best_ever)
+

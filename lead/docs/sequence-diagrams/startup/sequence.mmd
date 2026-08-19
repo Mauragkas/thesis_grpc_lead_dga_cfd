@@ -1,0 +1,33 @@
+sequenceDiagram
+    participant Main as main()
+    participant Config as Config::from_env()
+    participant Store as InMemoryStore
+    participant Remote as GrpcRemote
+    participant Lead as LeadNode
+    participant Join as Join Task
+    participant Maint as Maintenance Tasks
+    participant Grpc as tonic::Server
+    participant Http as axum::serve
+
+    Main->>Config: Config::from_env()
+    Config-->>Main: cfg
+
+    Main->>Store: InMemoryStore::new()
+    Main->>Remote: GrpcRemote::new()
+    Main->>Lead: LeadNode::new(cfg.self_uri, cfg.vnodes, store, remote)
+    Lead-->>Main: Arc<LeadNode>
+
+    opt cfg.join_uri is Some(join_uri)
+        Main->>Join: spawn join loop
+        loop retry until all vnodes have successors (up to 300s)
+            Join->>Lead: join(&join_uri)
+            Join->>Join: check if any vnode.successor == self
+        end
+        Join-->>Main: join complete
+    end
+
+    Main->>Maint: spawn_maintenance(lead)
+    Note over Maint: Loops: stabilize_all (2s), fix_fingers (5s), check_pred (10s), heartbeat (8s), maybe_retrain (5s)
+
+    Main->>Grpc: spawn tonic gRPC server on cfg.grpc_bind
+    Main->>Http: bind and serve axum router on cfg.http_bind

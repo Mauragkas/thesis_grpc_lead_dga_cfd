@@ -1,0 +1,25 @@
+sequenceDiagram
+    participant Coord as Transient Coordinator (Node A)
+    participant Neighbors as Neighbor Nodes
+    participant FedAvg as FederatedAveraging::fed_avg
+    participant Peers as All Cluster Peers
+
+    Note over Coord,Neighbors: 1. Heartbeat Quorum Consensus
+    Coord->>Neighbors: /lead.Lead/Heartbeat(ready, version)
+    Neighbors-->>Coord: BoolMsg { update_ready: true }
+    Coord->>Coord: >= 90% quorum reached + has local update
+
+    Note over Coord,Neighbors: 2. Model Gathering
+    Coord->>Neighbors: /lead.Lead/RequestModel(coordinator)
+    Neighbors-->>Coord: ModelParams { version, model_data }
+
+    Note over Coord,FedAvg: 3. Federated Model Averaging
+    Coord->>FedAvg: fed_avg(collected_models, next_version)
+    FedAvg-->>Coord: global_model
+
+    Note over Coord,Peers: 4. Global Broadcast & Activation
+    Coord->>Peers: /lead.Lead/PushModel(global_model)
+    Peers-->>Coord: BoolMsg { ok: true }
+    Coord->>Coord: activate(global_model)
+    Coord->>Coord: migrate_keys_for_new_model()
+    Coord->>Coord: reset_drift_state()

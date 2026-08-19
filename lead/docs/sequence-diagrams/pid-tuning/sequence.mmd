@@ -1,0 +1,20 @@
+sequenceDiagram
+    participant Node as LeadNode
+    participant Index as LearnedIndex
+    participant Tuner as PidTuner
+    participant Leaf as Leaf Model (Anchor & PidState)
+
+    Note over Node,Index: Key Insertions & Drift Trigger
+    loop during Put operations
+        Node->>Index: record_insert(key)
+    end
+    Index-->>Node: should_pid = true (every PID_ADJUST_INTERVAL)
+
+    Note over Node,Leaf: Online PID Error Compensation
+    Node->>Node: run_pid_adjustment()
+    loop for each leaf with sufficient samples (>= 20)
+        Node->>Tuner: adjust(&mut pid_state, &mut anchor, correct, outside)
+        Tuner->>Tuner: compute error = actual_ratio - 0.95
+        Tuner->>Tuner: update Proportional, Integral, Derivative states
+        Tuner->>Leaf: adjust anchor.scale (+/- 0.05) & anchor.offset (+/- 0.01)
+    end

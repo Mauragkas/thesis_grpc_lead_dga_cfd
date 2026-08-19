@@ -1,0 +1,350 @@
+classDiagram
+direction TB
+
+%% Configuration Subsystem
+class GaConfig {
+  +pop_size: usize
+  +genes_len: usize
+  +generations: usize
+  +mut_sigma: f64
+  +elite_frac: f64
+  +batch_size: usize
+  +seed: u64
+  +eval_endpoint: String
+}
+
+class TransportConfig {
+  +rpc_timeout: Duration
+  +max_attempts: usize
+  +retry_delay: Duration
+  +channel_ready_deadline: Duration
+  +connect_timeout: Duration
+  +request_timeout: Duration
+  +keep_alive_timeout: Duration
+  +tcp_keepalive: Option~Duration~
+}
+
+class GeneStoreConfig {
+  +max_age_generations: usize
+}
+
+class LeadConfig {
+  +endpoint: Option~String~
+}
+
+class RingConfig {
+  +bind_address: String
+  +self_address: String
+  +bootstrap_address: Option~String~
+  +stabilize_interval: Duration
+  +successor_list_size: usize
+}
+
+class MigrationConfig {
+  +interval_generations: usize
+  +migrant_count: usize
+}
+
+%% GA Driver & Operators
+class GaRunner {
+  +cfg: &GaConfig
+  +evaluator: &dyn Evaluator
+  +store: &dyn GeneStore
+  +neighbor_store: Option<&dyn NeighborStore>
+  +migration: Option<&dyn MigrationHook>
+  +run(rng) Result~f64~
+}
+
+class GAOperators {
+  +random_population(rng, cfg) Vec~Vec~f64~~
+  +select_survivors(pop, fitnesses, cfg) Vec~Vec~f64~~
+  +next_generation(survivors, cfg, rng, normal) Vec~Vec~f64~~
+}
+
+class NormalDistribution <<external>> {
+  +new(mean, sigma) Self
+  +sample(rng) f64
+}
+
+%% Evaluator Subsystem
+class Evaluator <<interface>> {
+  +evaluate_population(population) Result~Vec~f64~~
+}
+
+class GrpcEvaluator {
+  -client: EvaluatorClient
+  -cfg: TransportConfig
+  -batch_size: usize
+  +new(client, cfg, batch_size)
+  +evaluate_population(population) Result~Vec~f64~~
+}
+
+class EvaluatorClient <<external>>
+
+%% Local Exact Cache Subsystem
+class GeneStore <<interface>> {
+  +store(genes, fitness, generation)
+  +query_knn(query, k, current_generation) Vec~GeneRecord~
+  +lookup_exact(genes, current_generation) Option~f64~
+  +evict_expired(current_generation)
+}
+
+class InMemoryGeneStore {
+  -records: Mutex~Vec~GeneRecord~~
+  -metric: DistanceMetric
+  -eviction: EvictionPolicy
+  +new(metric, eviction)
+  +store(genes, fitness, generation)
+  +query_knn(query, k, current_generation) Vec~GeneRecord~
+  +lookup_exact(genes, current_generation) Option~f64~
+  +evict_expired(current_generation)
+}
+
+class DistanceMetric <<interface>> {
+  +distance(a, b) f64
+}
+
+class EuclideanDistance {
+  +distance(a, b) f64
+}
+
+class EvictionPolicy <<interface>> {
+  +should_evict(record, current_generation) bool
+}
+
+class GenerationEvictor {
+  +max_age: usize
+  +should_evict(record, current_generation) bool
+}
+
+class GeneRecord {
+  +genes: Vec~f64~
+  +fitness: f64
+  +generation: usize
+  +last_accessed_gen: usize
+}
+
+%% LEAD DHT & Neighbor Store Subsystem
+class LeadStore <<interface>> {
+  +store_gene(key, value) Result~()~
+  +get_gene(key) Result~Option~String~~
+  +range_query(start_key, count) Result~Vec~Tuple~String_String~~~
+}
+
+class GrpcLeadStore {
+  -client: LeadClient
+  +new(client)
+  +store_gene(key, value) Result~()~
+  +get_gene(key) Result~Option~String~~
+  +range_query(start_key, count) Result~Vec~Tuple~String_String~~~
+}
+
+class LeadClient <<external>>
+
+class GenePayload {
+  +genes: Vec~f64~
+  +fitness: f64
+  +generation: usize
+}
+
+class NeighborStore <<interface>> {
+  +store(genes, fitness, generation) Result~()~
+  +query_knn(query, k) Result~Vec~GenePayload~~
+}
+
+class HilbertNeighborStore {
+  -keygen: GeneKeyGenerator
+  -store: LeadStore
+  -metric: EuclideanDistance
+  +new(keygen, store)
+  +store(genes, fitness, generation) Result~()~
+  +query_knn(query, k) Result~Vec~GenePayload~~
+}
+
+class GeneKeyGenerator <<interface>> {
+  +keys_for(genes) Vec~String~
+  +parse_key(key) Option~Vec~f64~~
+}
+
+class HilbertKeyGenerator {
+  -encoder: HilbertEncoder
+  -hex_width: usize
+  +new(ndims)
+  +keys_for(genes) Vec~String~
+  +parse_key(key) Option~Vec~f64~~
+}
+
+class HilbertEncoder {
+  -ndims: usize
+  -bits: usize
+  -max_val: u64
+  -perms: Vec~Vec~usize~~
+  +new(ndims, bits)
+  +encode_hex(point, curve, hex_width) String
+}
+
+%% Ring & Chord Topology Subsystem
+class NodeInfo {
+  +id: u64
+  +address: String
+  +new(id, address)
+}
+
+class RingState {
+  +self_node: NodeInfo
+  +predecessor: Mutex~Option~NodeInfo~~
+  +successor: Mutex~Option~NodeInfo~~
+  +successor_list: Mutex~Vec~NodeInfo~~
+  +new(self_node)
+  +in_half_open(a, b, id)$ bool
+  +in_open(a, b, id)$ bool
+}
+
+class AddressHasher <<interface>> {
+  +hash(address) u64
+}
+
+class Sha256Hasher {
+  +hash(address) u64
+}
+
+class LocalRingMember {
+  -state: Arc~RingState~
+  +new(state)
+  +state() Arc~RingState~
+  +find_successor(id) NodeInfo
+  +get_predecessor() Option~NodeInfo~
+  +notify(other) bool
+  +get_successor_list() Vec~NodeInfo~
+  +set_successor(node)
+  +set_successor_list(list)
+}
+
+class RingClient <<interface>> {
+  +find_successor(addr, id) Result~NodeInfo~
+  +get_predecessor(addr) Result~Option~NodeInfo~~
+  +notify(addr, other) Result~bool~
+  +get_successor_list(addr) Result~Vec~NodeInfo~~
+  +ping(addr) Result~bool~
+}
+
+class GrpcRingClient {
+  -channels: Mutex~HashMap~String_Channel~~
+  +new()
+  +find_successor(addr, id) Result~NodeInfo~
+  +get_predecessor(addr) Result~Option~NodeInfo~~
+  +notify(addr, other) Result~bool~
+  +get_successor_list(addr) Result~Vec~NodeInfo~~
+  +ping(addr) Result~bool~
+}
+
+class RingServer {
+  -member: LocalRingMember
+  -migrant_buffer: Arc~MigrantBuffer~
+  +new(member, migrant_buffer)
+  +find_successor(req)
+  +get_predecessor(req)
+  +notify(req)
+  +get_successor_list(req)
+  +ping(req)
+  +migrate(req)
+}
+
+class Stabilizer {
+  -member: Arc~LocalRingMember~
+  -client: Arc~RingClient~
+  -interval: Duration
+  -successor_list_size: usize
+  +new(member, client, interval, successor_list_size)
+  +spawn()
+  +stabilize() Result~()~
+  +refresh_successor_list() Result~()~
+  +join(bootstrap_addr) Result~()~
+}
+
+%% Island-Model Migration Subsystem
+class MigrantIndividual {
+  +genes: Vec~f64~
+  +fitness: f64
+}
+
+class MigrantBuffer {
+  -queue: Mutex~VecDeque~MigrantIndividual~~
+  +new()
+  +push(migrants)
+  +drain() Vec~MigrantIndividual~
+}
+
+class MigrantSelector <<interface>> {
+  +select(population, fitnesses, count) Vec~MigrantIndividual~
+}
+
+class TopKSelector {
+  +select(population, fitnesses, count) Vec~MigrantIndividual~
+}
+
+class MigrationHook <<interface>> {
+  +maybe_emigrate(generation, population, fitnesses) Result~()~
+  +drain_immigrants() Vec~MigrantIndividual~
+}
+
+class LeadMigration {
+  -config: MigrationConfig
+  -member: Arc~LocalRingMember~
+  -selector: MigrantSelector
+  -buffer: Arc~MigrantBuffer~
+  -channels: Mutex~HashMap~String_Channel~~
+  +new(config, member, selector, buffer)
+  +maybe_emigrate(generation, population, fitnesses) Result~()~
+  +drain_immigrants() Vec~MigrantIndividual~
+}
+
+%% Relationships
+GaRunner --> GaConfig
+GaRunner --> Evaluator
+GaRunner --> GeneStore
+GaRunner --> NeighborStore : optional KNN store
+GaRunner --> MigrationHook : optional island migration
+GaRunner --> NormalDistribution : mutation sampling
+GaRunner --> GAOperators : generational operators
+
+GrpcEvaluator ..|> Evaluator
+GrpcEvaluator --> TransportConfig
+GrpcEvaluator --> EvaluatorClient
+
+InMemoryGeneStore ..|> GeneStore
+InMemoryGeneStore --> DistanceMetric
+InMemoryGeneStore --> EvictionPolicy
+InMemoryGeneStore *-- "0..*" GeneRecord
+EuclideanDistance ..|> DistanceMetric
+GenerationEvictor ..|> EvictionPolicy
+
+GrpcLeadStore ..|> LeadStore
+GrpcLeadStore --> LeadClient
+
+HilbertNeighborStore ..|> NeighborStore
+HilbertNeighborStore --> GeneKeyGenerator
+HilbertNeighborStore --> LeadStore
+HilbertNeighborStore --> EuclideanDistance
+HilbertNeighborStore ..> GenePayload : serializes / parses
+
+HilbertKeyGenerator ..|> GeneKeyGenerator
+HilbertKeyGenerator *-- HilbertEncoder
+
+LocalRingMember --> RingState
+RingState *-- "1..*" NodeInfo
+Sha256Hasher ..|> AddressHasher
+GrpcRingClient ..|> RingClient
+RingServer --> LocalRingMember
+RingServer --> MigrantBuffer
+Stabilizer --> LocalRingMember
+Stabilizer --> RingClient
+
+LeadMigration ..|> MigrationHook
+LeadMigration --> MigrationConfig
+LeadMigration --> LocalRingMember
+LeadMigration --> MigrantSelector
+LeadMigration --> MigrantBuffer
+LeadMigration *-- "0..*" MigrantIndividual
+TopKSelector ..|> MigrantSelector
+MigrantBuffer *-- "0..*" MigrantIndividual

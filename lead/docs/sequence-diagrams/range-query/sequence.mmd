@@ -1,0 +1,27 @@
+sequenceDiagram
+    participant Client as Client
+    participant Lead as LeadNode (Node A)
+    participant Index as LearnedIndex
+    participant Store as InMemoryStore (A)
+    participant Remote as GrpcRemote
+    participant Succ as Successor Node (Node B)
+
+    Client->>Lead: RangeQuery(start_key, count)
+    Lead->>Index: model.predict(start_key)
+    Index-->>Lead: predicted_id
+    Lead->>Lead: find_owning_vnode(predicted_id)
+
+    Lead->>Store: range_scan(start_key, count * 3)
+    Store-->>Lead: local_entries
+    Lead->>Lead: collect_owned(local_entries, model, count) -> payload
+
+    alt payload.len() >= count
+        Lead-->>Client: RangeResponse { entries: payload, complete: true }
+    else payload.len() < count
+        Lead->>Remote: range_forward(succ.address, last_key, remaining, payload)
+        Remote->>Succ: /lead.Lead/RangeForward(RangeForwardRequest)
+        Succ->>Succ: handle_range_forward(...)
+        Succ-->>Remote: RangeResponse { entries: full_payload, complete: true }
+        Remote-->>Lead: full_payload
+        Lead-->>Client: RangeResponse { entries: full_payload, complete: true }
+    end

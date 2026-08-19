@@ -1,0 +1,35 @@
+sequenceDiagram
+    participant Caller as Caller / GaRunner
+    participant NStore as HilbertNeighborStore
+    participant KeyGen as HilbertKeyGenerator
+    participant Lead as LeadStore (GrpcLeadStore)
+    participant Euclid as EuclideanDistance
+
+    Note over Caller,Lead: 1. Multi-Probe Store (3 rotated Hilbert curves)
+    Caller->>NStore: store(genes, fitness, generation)
+    NStore->>NStore: serde_json::to_string(&GenePayload)
+    NStore->>KeyGen: keys_for(genes)
+    KeyGen-->>NStore: keys (3 rotated Hilbert curve keys)
+    loop for each key in keys
+        NStore->>Lead: store_gene(key, value)
+        Lead-->>NStore: Ok(())
+    end
+    NStore-->>Caller: Ok(())
+
+    Note over Caller,Euclid: 2. Multi-Probe k-NN Query & Euclidean Re-ranking
+    Caller->>NStore: query_knn(query, k)
+    NStore->>KeyGen: keys_for(query)
+    KeyGen-->>NStore: probe_keys (3 probe keys)
+    loop for each probe_key in probe_keys
+        NStore->>Lead: range_query(probe_key, k)
+        Lead-->>NStore: Vec<(key, json_payload)>
+        NStore->>NStore: parse GenePayload & deduplicate into candidates map
+    end
+
+    loop for each candidate in candidates
+        NStore->>Euclid: distance(query, &candidate.genes)
+        Euclid-->>NStore: distance f64
+    end
+    NStore->>NStore: sort candidates ascending by Euclidean distance
+    NStore->>NStore: take top k candidates
+    NStore-->>Caller: Ok(Vec<GenePayload>)

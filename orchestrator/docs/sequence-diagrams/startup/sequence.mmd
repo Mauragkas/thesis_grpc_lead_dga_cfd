@@ -1,0 +1,56 @@
+sequenceDiagram
+    participant Main as main()
+    participant Tracing as tracing_subscriber
+    participant Config as config::config_from_env()
+    participant RingServer as RingServer / tonic::Server
+    participant Stabilizer as Stabilizer
+    participant RingClient as GrpcRingClient
+    participant Transport as transport::build_endpoint()
+    participant Wait as transport::wait_for_channel()
+    participant GrpcEval as GrpcEvaluator
+    participant Store as InMemoryGeneStore
+    participant NeighborStore as HilbertNeighborStore
+    participant Migration as LeadMigration
+    participant Runner as GaRunner
+
+    Main->>Tracing: init JSON logger
+    Main->>Config: config_from_env()
+    Config-->>Main: (GaConfig, TransportConfig, GeneStoreConfig, LeadConfig, RingConfig, MigrationConfig)
+
+    Main->>Main: Sha256Hasher::hash(ring_cfg.self_address)
+    Main->>Main: create RingState, LocalRingMember, MigrantBuffer
+    Main->>RingServer: spawn tonic Ring gRPC server on ring_cfg.bind_address
+
+    Main->>RingClient: GrpcRingClient::new()
+    Main->>Stabilizer: Stabilizer::new(member, ring_client, interval, succ_list_size)
+
+    alt ring_cfg.bootstrap_address is Some(bootstrap)
+        loop join retry (1..=10)
+            Main->>Stabilizer: join(bootstrap).await
+        end
+    else no bootstrap
+        Main->>Main: member.set_successor(self_node)
+    end
+    Main->>Stabilizer: spawn()
+
+    Main->>Transport: build_endpoint(ga_cfg.eval_endpoint, transport_cfg)
+    Transport-->>Main: Endpoint
+    Main->>Wait: wait_for_channel(endpoint, deadline)
+    Wait-->>Main: Channel
+    Main->>GrpcEval: GrpcEvaluator::new(EvaluatorClient::new(channel), cfg, batch_size)
+
+    Main->>Store: InMemoryGeneStore::new(EuclideanDistance, GenerationEvictor { max_age })
+
+    opt lead_cfg.endpoint is Some(ep)
+        Main->>Transport: build_endpoint(ep, transport_cfg)
+        Transport-->>Main: LeadEndpoint
+        Main->>Wait: wait_for_channel(lead_endpoint, deadline)
+        Wait-->>Main: LeadChannel
+        Main->>NeighborStore: HilbertNeighborStore::new(HilbertKeyGenerator, GrpcLeadStore)
+    end
+
+    Main->>Migration: LeadMigration::new(migration_cfg, member, TopKSelector, migrant_buffer)
+
+    Main->>Runner: GaRunner { cfg, evaluator, store, neighbor_store, migration }.run(&mut rng)
+    Runner-->>Main: Result<f64>
+

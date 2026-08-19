@@ -1,0 +1,25 @@
+sequenceDiagram
+    participant Client as Client (gRPC / HTTP)
+    participant Lead as LeadNode
+    participant Index as LearnedIndex / RmiModel
+    participant Store as InMemoryStore
+    participant Remote as GrpcRemote
+    participant Dest as Destination Node (/lead.Lead)
+
+    Client->>Lead: PutRouted(key, value)
+    Lead->>Index: learned_hash(key)
+    Index-->>Lead: NodeId (predicted hash)
+    Lead->>Lead: find_successor(id) via best local vnode
+    Lead-->>Lead: NodeAddr (responsible_node)
+
+    alt responsible_node is local
+        Lead->>Store: put(key, value)
+        Lead->>Index: record_insertion(key)
+        Lead-->>Client: BoolMsg { ok: true }
+    else responsible_node is remote
+        Lead->>Remote: put_local(dest.address, key, value)
+        Remote->>Dest: /lead.Lead/PutLocal(PutRequest { key, value })
+        Dest-->>Remote: BoolMsg { ok: true }
+        Remote-->>Lead: true
+        Lead-->>Client: BoolMsg { ok: true }
+    end

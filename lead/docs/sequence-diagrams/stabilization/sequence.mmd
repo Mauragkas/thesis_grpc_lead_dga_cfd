@@ -1,0 +1,36 @@
+sequenceDiagram
+    participant Lead as LeadNode
+    participant VNode as VirtualNode (v_i)
+    participant Remote as GrpcRemote
+    participant Succ as Successor Node (/lead.Lead)
+
+    Note over Lead,Succ: 1. Successor Health & Chain Repair
+    Lead->>VNode: successor()
+    VNode-->>Lead: succ
+    Lead->>Remote: ping(succ.address)
+    alt succ unreachable
+        Lead->>VNode: pop dead successor from successor_list
+        Lead->>VNode: update fingers[0] to next backup
+    end
+
+    Note over Lead,Succ: 2. Predecessor Reconciliation
+    Lead->>Remote: get_predecessor(succ.address, succ.id)
+    Remote->>Succ: /lead.Lead/GetPredecessor(vid)
+    Succ-->>Remote: OptionalNodeAddr (x)
+    Remote-->>Lead: Option<x>
+    opt x is Some and in_range(x.id, v_i.vid, succ.id, false)
+        Lead->>Remote: ping(x.address)
+        opt x is live
+            Lead->>VNode: prepend x to successor_list
+            Lead->>VNode: set fingers[0] = x
+        end
+    end
+
+    Note over Lead,Succ: 3. Notification and List Refresh
+    Lead->>Remote: notify(succ.address, succ.id, self_info)
+    Remote->>Succ: /lead.Lead/Notify(vid, self_info)
+    Succ-->>Remote: BoolMsg { ok: true }
+    Lead->>Remote: get_successor_list(succ.address, succ.id)
+    Remote->>Succ: /lead.Lead/GetSuccessorList(vid)
+    Succ-->>Remote: NodeAddrList
+    Lead->>VNode: update successor_list

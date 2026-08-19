@@ -1,0 +1,41 @@
+sequenceDiagram
+    participant Env as std::env
+    participant ConfigFn as Config::from_env()
+    participant Cfg as Config
+
+    ConfigFn->>Env: var("HTTP_BIND")
+    alt set
+        Env-->>ConfigFn: http_bind
+    else unset
+        ConfigFn->>ConfigFn: "0.0.0.0:8080"
+    end
+
+    ConfigFn->>Env: var("GRPC_BIND")
+    alt set
+        Env-->>ConfigFn: grpc_bind
+    else unset
+        ConfigFn->>ConfigFn: "0.0.0.0:50051"
+    end
+
+    ConfigFn->>Env: var("SELF_URI")
+    alt set
+        Env-->>ConfigFn: self_uri
+    else unset
+        ConfigFn->>ConfigFn: "http://127.0.0.1:50051"
+    end
+
+    ConfigFn->>Env: var("JOIN_URI")
+    alt set
+        Env-->>ConfigFn: Some(join_uri)
+    else unset
+        ConfigFn->>ConfigFn: None
+    end
+
+    ConfigFn->>Env: var("VIRTUAL_NODE_COUNT")
+    alt set and parses
+        Env-->>ConfigFn: count
+    else unset or invalid
+        ConfigFn->>ConfigFn: 10
+    end
+
+    ConfigFn-->>ConfigFn: return Config { http_bind, grpc_bind, self_uri, join_uri, virtual_node_count }
