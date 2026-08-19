@@ -22,7 +22,7 @@ import json
 import random
 from typing import Any
 
-# Bits per dimension. 12 dims x 16 bits = 192-bit index (48 hex digits).
+# Bits per dimension. 10 dims x 16 bits = 160-bit index (40 hex digits).
 BITS = 16
 
 # Number of Hilbert curves (differently rotated coordinate axes).

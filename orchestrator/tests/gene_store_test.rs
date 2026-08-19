@@ -12,20 +12,20 @@ use orchestrator::gene_store::{
 
 #[test]
 fn euclidean_distance_zero_for_identical_vectors() {
-    let m = EuclideanDistance::default();
+    let m = EuclideanDistance;
     assert!((m.distance(&[1.0, 2.0, 3.0], &[1.0, 2.0, 3.0])).abs() < 1e-12);
 }
 
 #[test]
 fn euclidean_distance_known_value() {
-    let m = EuclideanDistance::default();
+    let m = EuclideanDistance;
     // (3-0)^2 + (4-0)^2 = 25 => sqrt = 5
     assert!((m.distance(&[0.0, 0.0], &[3.0, 4.0]) - 5.0).abs() < 1e-12);
 }
 
 #[test]
 fn euclidean_distance_handles_empty_vectors() {
-    let m = EuclideanDistance::default();
+    let m = EuclideanDistance;
     assert!((m.distance(&[], &[])).abs() < 1e-12);
 }
 
@@ -92,7 +92,7 @@ fn custom_eviction_policy_can_be_substituted() {
 
 fn make_store() -> InMemoryGeneStore<EuclideanDistance, GenerationEvictor> {
     InMemoryGeneStore::new(
-        EuclideanDistance::default(),
+        EuclideanDistance,
         GenerationEvictor { max_age: 5 },
     )
 }

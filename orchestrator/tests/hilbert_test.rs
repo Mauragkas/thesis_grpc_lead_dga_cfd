@@ -9,7 +9,7 @@ fn leading_u64(key: &str) -> u64 {
 }
 
 fn hex_dist(a: &str, b: &str) -> u128 {
-    (leading_u64(a) as i128 - leading_u64(b) as i128).unsigned_abs() as u128
+    (leading_u64(a) as i128 - leading_u64(b) as i128).unsigned_abs()
 }
 
 fn euclid(a: &[f64], b: &[f64]) -> f64 {
@@ -30,7 +30,8 @@ fn keys_are_deterministic() {
 #[test]
 fn produces_one_key_per_curve_with_distinct_curve_ids() {
     let kg = HilbertKeyGenerator::new(10);
-    let keys = kg.keys_for(&vec![0.5; 10]);
+    let genes = [0.5; 10];
+    let keys = kg.keys_for(&genes);
     assert_eq!(keys.len(), NUM_CURVES);
     let mut curves: Vec<char> = keys.iter().map(|k| k.chars().next().unwrap()).collect();
     curves.sort();

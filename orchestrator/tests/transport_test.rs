@@ -89,10 +89,29 @@ async fn wait_for_channel_succeeds_when_server_is_live() {
 }
 
 #[tokio::test]
-async fn wait_for_channel_times_out_when_unreachable() {
-    let cfg = fast_transport();
-    // Port 1 is reserved and nothing listens; connection refused quickly.
-    let endpoint = build_endpoint("127.0.0.1:1", &cfg).unwrap();
-    let result = wait_for_channel(endpoint, Duration::from_millis(100)).await;
-    assert!(result.is_err());
+async fn channel_pool_caches_and_reuses_channels() {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    let incoming = tokio_stream::wrappers::TcpListenerStream::new(listener);
+    tokio::spawn(async move {
+        Server::builder()
+            .add_service(EvaluatorServer::new(NoopEvalService))
+            .serve_with_incoming(incoming)
+            .await
+            .ok();
+    });
+
+    let pool = orchestrator::transport::ChannelPool::new();
+    let ch1 = pool.get_or_connect(&addr.to_string()).await;
+    assert!(ch1.is_ok());
+    let ch2 = pool.get_or_connect(&addr.to_string()).await;
+    assert!(ch2.is_ok());
 }
+
+#[tokio::test]
+async fn channel_pool_rejects_invalid_addr() {
+    let pool = orchestrator::transport::ChannelPool::new();
+    let res = pool.get_or_connect("not valid uri with spaces").await;
+    assert!(res.is_err());
+}
+

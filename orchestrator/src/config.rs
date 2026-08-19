@@ -1,6 +1,6 @@
 use std::time::Duration;
 use tracing::{info, warn};
-use crate::migration::config::{MigrationConfig, RingConfig};
+pub use crate::migration::config::{MigrationConfig, RingConfig};
 
 #[derive(Debug, Clone, Default)]
 pub struct LeadConfig {
@@ -71,15 +71,144 @@ impl Default for TransportConfig {
     }
 }
 
+use crate::gene_store::eviction::DEFAULT_MAX_AGE_GENERATIONS;
+use std::collections::HashMap;
+
 impl Default for GeneStoreConfig {
     fn default() -> Self {
         Self {
-            max_age_generations: 5,
+            max_age_generations: DEFAULT_MAX_AGE_GENERATIONS,
         }
     }
 }
 
-/// Reads overrides from environment. SRP: parsing env, nothing else.
+/// Reads overrides from an iterator of key-value pairs (e.g. environment variables or a map).
+/// SRP: pure config parsing without hidden global state.
+pub fn config_from_vars<I, K, V>(
+    vars: I,
+) -> (
+    GaConfig,
+    TransportConfig,
+    GeneStoreConfig,
+    LeadConfig,
+    RingConfig,
+    MigrationConfig,
+)
+where
+    I: IntoIterator<Item = (K, V)>,
+    K: AsRef<str>,
+    V: AsRef<str>,
+{
+    let env_map: HashMap<String, String> = vars
+        .into_iter()
+        .map(|(k, v)| (k.as_ref().to_string(), v.as_ref().to_string()))
+        .collect();
+
+    let mut ga = GaConfig::default();
+
+    if let Some(endpoint) = env_map.get("EVAL_ENDPOINT") {
+        info!("EVAL_ENDPOINT override: {endpoint}");
+        ga.eval_endpoint = endpoint.clone();
+    } else {
+        info!(
+            "EVAL_ENDPOINT not set; using default '{}'",
+            ga.eval_endpoint
+        );
+    }
+
+    if let Some(raw) = env_map.get("GA_SEED") {
+        match raw.parse::<u64>() {
+            Ok(seed) => {
+                info!("GA_SEED override: {seed}");
+                ga.seed = seed;
+            }
+            Err(_) => warn!("Ignoring invalid GA_SEED '{raw}': not a valid u64"),
+        }
+    } else {
+        info!("GA_SEED not set; using default {}", ga.seed);
+    }
+
+    let mut store = GeneStoreConfig::default();
+    if let Some(raw) = env_map.get("GENE_STORE_MAX_AGE") {
+        match raw.parse::<usize>() {
+            Ok(max_age) => {
+                info!("GENE_STORE_MAX_AGE override: {max_age}");
+                store.max_age_generations = max_age;
+            }
+            Err(_) => warn!("Ignoring invalid GENE_STORE_MAX_AGE '{raw}': not a valid usize"),
+        }
+    } else {
+        info!(
+            "GENE_STORE_MAX_AGE not set; using default {}",
+            store.max_age_generations
+        );
+    }
+
+    let mut lead = LeadConfig::default();
+    if let Some(ep) = env_map.get("LEAD_ENDPOINT") {
+        info!("LEAD_ENDPOINT override: {ep}");
+        lead.endpoint = Some(ep.clone());
+    } else {
+        info!("LEAD_ENDPOINT not set; LEAD persistence disabled");
+    }
+
+    let mut ring = RingConfig::default();
+    if let Some(addr) = env_map.get("RING_BIND") {
+        info!("RING_BIND override: {addr}");
+        ring.bind_address = addr.clone();
+    } else {
+        info!("RING_BIND not set; using default '{}'", ring.bind_address);
+    }
+    if let Some(addr) = env_map.get("RING_SELF_ADDRESS") {
+        info!("RING_SELF_ADDRESS override: {addr}");
+        ring.self_address = addr.clone();
+    } else {
+        info!(
+            "RING_SELF_ADDRESS not set; using default '{}'",
+            ring.self_address
+        );
+    }
+    if let Some(addr) = env_map.get("RING_BOOTSTRAP") {
+        info!("RING_BOOTSTRAP override: {addr}");
+        ring.bootstrap_address = Some(addr.clone());
+    } else {
+        info!("RING_BOOTSTRAP not set; joining as first node");
+    }
+
+    let mut migration = MigrationConfig::default();
+    if let Some(raw) = env_map.get("MIGRATION_INTERVAL") {
+        match raw.parse::<usize>() {
+            Ok(n) => {
+                info!("MIGRATION_INTERVAL override: {n}");
+                migration.interval_generations = n;
+            }
+            Err(_) => warn!("Ignoring invalid MIGRATION_INTERVAL '{raw}'"),
+        }
+    } else {
+        info!(
+            "MIGRATION_INTERVAL not set; using default {}",
+            migration.interval_generations
+        );
+    }
+    if let Some(raw) = env_map.get("MIGRATION_COUNT") {
+        match raw.parse::<usize>() {
+            Ok(n) => {
+                info!("MIGRATION_COUNT override: {n}");
+                migration.migrant_count = n;
+            }
+            Err(_) => warn!("Ignoring invalid MIGRATION_COUNT '{raw}'"),
+        }
+    } else {
+        info!(
+            "MIGRATION_COUNT not set; using default {}",
+            migration.migrant_count
+        );
+    }
+
+    (ga, TransportConfig::default(), store, lead, ring, migration)
+}
+
+/// Reads overrides from process environment. Convenience wrapper around `config_from_vars`.
 pub fn config_from_env() -> (
     GaConfig,
     TransportConfig,
@@ -88,109 +217,7 @@ pub fn config_from_env() -> (
     RingConfig,
     MigrationConfig,
 ) {
-    let mut ga = GaConfig::default();
-
-    match std::env::var("EVAL_ENDPOINT") {
-        Ok(endpoint) => {
-            info!("EVAL_ENDPOINT override: {endpoint}");
-            ga.eval_endpoint = endpoint;
-        }
-        Err(_) => info!(
-            "EVAL_ENDPOINT not set; using default '{}'",
-            ga.eval_endpoint
-        ),
-    }
-
-    match std::env::var("GA_SEED") {
-        Ok(raw) => match raw.parse::<u64>() {
-            Ok(seed) => {
-                info!("GA_SEED override: {seed}");
-                ga.seed = seed;
-            }
-            Err(_) => warn!("Ignoring invalid GA_SEED '{raw}': not a valid u64"),
-        },
-        Err(_) => info!("GA_SEED not set; using default {}", ga.seed),
-    }
-
-    let mut store = GeneStoreConfig::default();
-    match std::env::var("GENE_STORE_MAX_AGE") {
-        Ok(raw) => match raw.parse::<usize>() {
-            Ok(max_age) => {
-                info!("GENE_STORE_MAX_AGE override: {max_age}");
-                store.max_age_generations = max_age;
-            }
-            Err(_) => warn!("Ignoring invalid GENE_STORE_MAX_AGE '{raw}': not a valid usize"),
-        },
-        Err(_) => info!(
-            "GENE_STORE_MAX_AGE not set; using default {}",
-            store.max_age_generations
-        ),
-    }
-
-    let mut lead = LeadConfig::default();
-    match std::env::var("LEAD_ENDPOINT") {
-        Ok(ep) => {
-            info!("LEAD_ENDPOINT override: {ep}");
-            lead.endpoint = Some(ep);
-        }
-        Err(_) => info!("LEAD_ENDPOINT not set; LEAD persistence disabled"),
-    }
-
-    let mut ring = RingConfig::default();
-    match std::env::var("RING_BIND") {
-        Ok(addr) => {
-            info!("RING_BIND override: {addr}");
-            ring.bind_address = addr;
-        }
-        Err(_) => info!("RING_BIND not set; using default '{}'", ring.bind_address),
-    }
-    match std::env::var("RING_SELF_ADDRESS") {
-        Ok(addr) => {
-            info!("RING_SELF_ADDRESS override: {addr}");
-            ring.self_address = addr;
-        }
-        Err(_) => info!(
-            "RING_SELF_ADDRESS not set; using default '{}'",
-            ring.self_address
-        ),
-    }
-    match std::env::var("RING_BOOTSTRAP") {
-        Ok(addr) => {
-            info!("RING_BOOTSTRAP override: {addr}");
-            ring.bootstrap_address = Some(addr);
-        }
-        Err(_) => info!("RING_BOOTSTRAP not set; joining as first node"),
-    }
-
-    let mut migration = MigrationConfig::default();
-    match std::env::var("MIGRATION_INTERVAL") {
-        Ok(raw) => match raw.parse::<usize>() {
-            Ok(n) => {
-                info!("MIGRATION_INTERVAL override: {n}");
-                migration.interval_generations = n;
-            }
-            Err(_) => warn!("Ignoring invalid MIGRATION_INTERVAL '{raw}'"),
-        },
-        Err(_) => info!(
-            "MIGRATION_INTERVAL not set; using default {}",
-            migration.interval_generations
-        ),
-    }
-    match std::env::var("MIGRATION_COUNT") {
-        Ok(raw) => match raw.parse::<usize>() {
-            Ok(n) => {
-                info!("MIGRATION_COUNT override: {n}");
-                migration.migrant_count = n;
-            }
-            Err(_) => warn!("Ignoring invalid MIGRATION_COUNT '{raw}'"),
-        },
-        Err(_) => info!(
-            "MIGRATION_COUNT not set; using default {}",
-            migration.migrant_count
-        ),
-    }
-
-    (ga, TransportConfig::default(), store, lead, ring, migration)
+    config_from_vars(std::env::vars())
 }
 
 /// Clips a gene into the normalized [0,1] range. Pure helper.

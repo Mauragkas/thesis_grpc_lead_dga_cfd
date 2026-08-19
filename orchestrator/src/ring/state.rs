@@ -72,3 +72,21 @@ impl RingState {
         }
     }
 }
+
+impl From<&NodeInfo> for crate::proto::ring::NodeInfo {
+    fn from(n: &NodeInfo) -> Self {
+        Self {
+            id: n.id,
+            address: n.address.clone(),
+        }
+    }
+}
+
+impl From<crate::proto::ring::NodeInfo> for NodeInfo {
+    fn from(n: crate::proto::ring::NodeInfo) -> Self {
+        Self {
+            id: n.id,
+            address: n.address,
+        }
+    }
+}

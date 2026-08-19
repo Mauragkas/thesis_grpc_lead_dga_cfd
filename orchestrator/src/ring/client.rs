@@ -21,4 +21,12 @@ pub trait RingClient: Send + Sync {
 
     /// Liveness check.
     async fn ping(&self, addr: &str) -> Result<bool, Status>;
+
+    /// Send migrating individuals to the node at `addr`.
+    async fn migrate(
+        &self,
+        addr: &str,
+        sender: &str,
+        migrants: &[crate::migration::MigrantIndividual],
+    ) -> Result<bool, Status>;
 }
