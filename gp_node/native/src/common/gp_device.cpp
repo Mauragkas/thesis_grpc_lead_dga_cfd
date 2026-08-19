@@ -1,6 +1,6 @@
-#include "../incl/gp_device.h"
-#include "../incl/gp_cuda.h"
-#include "../incl/gp_rocm.h"
+#include "gp_device.h"
+#include "gp_cuda.h"
+#include "gp_rocm.h"
 #include <cstring>
 #include <cstdio>
 

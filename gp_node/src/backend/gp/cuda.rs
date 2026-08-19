@@ -1,17 +1,19 @@
 use super::ffi::*;
 use super::traits::ComputeBackend;
+use crate::backend::common::{BackendError, GpDeviceType};
 use crate::domain::{GpHyperparameters, KernelType};
 use std::sync::atomic::{AtomicPtr, Ordering};
 
-pub struct CpuOpenMpBackend {
+pub struct CudaBackend {
     handle: AtomicPtr<GpBackendHandle>,
     name: String,
+    device_id: i32,
 }
 
-impl CpuOpenMpBackend {
-    pub fn new() -> Result<Self, BackendError> {
+impl CudaBackend {
+    pub fn new(device_id: i32) -> Result<Self, BackendError> {
         let mut handle_ptr: *mut GpBackendHandle = std::ptr::null_mut();
-        let status = unsafe { gp_backend_create(GpDeviceType::Cpu, 0, &mut handle_ptr) };
+        let status = unsafe { gp_backend_create(GpDeviceType::Cuda, device_id, &mut handle_ptr) };
         status.to_result()?;
         if handle_ptr.is_null() {
             return Err(BackendError::NullPointer);
@@ -19,16 +21,21 @@ impl CpuOpenMpBackend {
 
         Ok(Self {
             handle: AtomicPtr::new(handle_ptr),
-            name: "Host CPU (OpenMP Parallel)".to_string(),
+            name: format!("NVIDIA CUDA GPU #{}", device_id),
+            device_id,
         })
     }
 
     fn get_raw_handle(&self) -> *mut GpBackendHandle {
         self.handle.load(Ordering::Relaxed)
     }
+
+    pub fn device_id(&self) -> i32 {
+        self.device_id
+    }
 }
 
-impl Drop for CpuOpenMpBackend {
+impl Drop for CudaBackend {
     fn drop(&mut self) {
         let handle = self.handle.swap(std::ptr::null_mut(), Ordering::SeqCst);
         if !handle.is_null() {
@@ -37,9 +44,9 @@ impl Drop for CpuOpenMpBackend {
     }
 }
 
-impl ComputeBackend for CpuOpenMpBackend {
+impl ComputeBackend for CudaBackend {
     fn device_type(&self) -> GpDeviceType {
-        GpDeviceType::Cpu
+        GpDeviceType::Cuda
     }
 
     fn device_name(&self) -> &str {

@@ -1,8 +1,9 @@
-use crate::backend::traits::ComputeBackend;
-use crate::backend::ffi::BackendError;
+use super::optimizer::HyperparameterOptimizer;
+use crate::backend::common::BackendError;
+use crate::backend::gp::traits::ComputeBackend;
 use crate::data::scaler::{StandardScaler, TargetScaler};
 use crate::domain::{EvaluationMetrics, GpHyperparameters, KernelType};
-use super::optimizer::HyperparameterOptimizer;
+use crate::model::traits::SurrogateModel;
 
 pub struct GaussianProcessSurrogate {
     backend: Box<dyn ComputeBackend>,
@@ -35,6 +36,10 @@ impl GaussianProcessSurrogate {
 
     pub fn backend(&self) -> &dyn ComputeBackend {
         self.backend.as_ref()
+    }
+
+    pub fn device_name(&self) -> &str {
+        self.backend.device_name()
     }
 
     pub fn hyperparameters(&self) -> &GpHyperparameters {
@@ -144,5 +149,15 @@ impl GaussianProcessSurrogate {
     pub fn evaluate(&self, x_test: &[f64], y_test: &[f64]) -> Result<EvaluationMetrics, BackendError> {
         let (y_pred, _) = self.predict(x_test)?;
         Ok(EvaluationMetrics::compute(y_test, &y_pred))
+    }
+}
+
+impl SurrogateModel for GaussianProcessSurrogate {
+    fn device_name(&self) -> &str {
+        self.backend.device_name()
+    }
+
+    fn evaluate(&self, x_test_raw: &[f64], y_test: &[f64]) -> Result<EvaluationMetrics, BackendError> {
+        self.evaluate(x_test_raw, y_test)
     }
 }

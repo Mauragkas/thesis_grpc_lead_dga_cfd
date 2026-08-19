@@ -1,4 +1,4 @@
-use super::ffi::{BackendError, GpDeviceType};
+use crate::backend::common::{BackendError, GpDeviceType};
 use crate::domain::GpHyperparameters;
 
 /// Abstract hardware compute backend for Gaussian Process linear algebra & kernel operations.

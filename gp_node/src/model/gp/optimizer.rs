@@ -1,4 +1,4 @@
-use crate::backend::traits::ComputeBackend;
+use crate::backend::gp::traits::ComputeBackend;
 use crate::domain::{GpHyperparameters, KernelType};
 
 pub struct HyperparameterOptimizer;

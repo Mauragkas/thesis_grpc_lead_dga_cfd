@@ -1,5 +1,6 @@
 use super::ffi::*;
 use super::traits::ComputeBackend;
+use crate::backend::common::{BackendError, GpDeviceType};
 use crate::domain::{GpHyperparameters, KernelType};
 use std::sync::atomic::{AtomicPtr, Ordering};
 
