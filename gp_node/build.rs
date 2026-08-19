@@ -16,6 +16,7 @@ fn main() {
         .include("native/incl/gp")
         .include("native/incl/knn")
         .include("native/incl/rf")
+        .include("native/incl/mlp")
         // Common
         .file("native/src/common/gp_device.cpp")
         .file("native/src/common/gp_dispatcher.cpp")
@@ -28,6 +29,9 @@ fn main() {
         // Random Forest
         .file("native/src/rf/rf_cpu.cpp")
         .file("native/src/rf/rf_rocm.cpp")
+        // Multi-Layer Perceptron (Neural Network)
+        .file("native/src/mlp/mlp_cpu.cpp")
+        .file("native/src/mlp/mlp_rocm.cpp")
         .flag_if_supported("-fopenmp")
         .flag_if_supported("/openmp");
 
@@ -55,10 +59,12 @@ fn main() {
             .include("native/incl/gp")
             .include("native/incl/knn")
             .include("native/incl/rf")
+            .include("native/incl/mlp")
             .include(format!("{}/include", cuda_path))
             .file("native/src/gp/gp_cuda.cu")
             .file("native/src/knn/knn_cuda.cu")
             .file("native/src/rf/rf_cuda.cu")
+            .file("native/src/mlp/mlp_cuda.cu")
             .flag("-O3")
             .flag("-DENABLE_CUDA");
 

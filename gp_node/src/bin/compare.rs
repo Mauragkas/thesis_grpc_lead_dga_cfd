@@ -1,6 +1,6 @@
 use gp_node::{
     BackendFactory, DatasetLoader, DatasetSplitter, GaussianProcessSurrogate,
-    KernelType, KnnSurrogate,
+    KernelType, KnnSurrogate, MlpConfig, MlpSurrogate,
     RfConfig, RfSurrogate, ACTIVE_FEATURE_NAMES,
 };
 use serde::{Deserialize, Serialize};
@@ -13,7 +13,7 @@ use std::time::Instant;
 // JSON output schema
 // ─────────────────────────────────────────────────────────────────────────────
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 struct ModelReport {
     name: String,
     device: String,
@@ -38,7 +38,7 @@ struct ModelReport {
     learning_curve: Vec<(usize, f64)>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 struct ComparisonReport {
     dataset_n_total: usize,
     n_train: usize,
@@ -62,9 +62,11 @@ fn median_ms(mut samples: Vec<f64>) -> f64 {
     samples[mid]
 }
 
-fn resolve_dataset_path(arg: Option<&str>) -> Option<String> {
-    if let Some(p) = arg {
-        if Path::new(p).exists() { return Some(p.to_string()); }
+fn resolve_dataset_path(args: &[String]) -> Option<String> {
+    for arg in args {
+        if !arg.starts_with("--") && Path::new(arg).exists() {
+            return Some(arg.clone());
+        }
     }
     for c in &["tests/configs_and_scores.json", "../tests/configs_and_scores.json", "../../tests/configs_and_scores.json"] {
         if Path::new(c).exists() { return Some(c.to_string()); }
@@ -256,13 +258,70 @@ fn bench_rf(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
+fn bench_mlp(
+    x_train: &[f64], y_train: &[f64], n_train: usize, dim: usize,
+    x_val: &[f64], y_val: &[f64],
+    x_test: &[f64], y_test: &[f64],
+    config: MlpConfig,
+) -> ModelReport {
+    println!("  [MLP] Training Neural Network ({} hidden layers: {:?}, epochs={}) ...",
+        config.hidden_layers.len(), config.hidden_layers, config.epochs);
+
+    let mut train_times = Vec::with_capacity(N_TIMING_REPS);
+    let mut device_name = String::new();
+    for _ in 0..N_TIMING_REPS {
+        let t0 = Instant::now();
+        let s = MlpSurrogate::fit(x_train, y_train, n_train, dim, config.clone()).expect("MLP fit");
+        train_times.push(t0.elapsed().as_secs_f64() * 1000.0);
+        if device_name.is_empty() { device_name = s.device_name().to_string(); }
+    }
+
+    let surrogate = MlpSurrogate::fit(x_train, y_train, n_train, dim, config.clone()).expect("MLP fit");
+
+    let val_m = surrogate.evaluate(x_val, y_val).expect("MLP val eval");
+    let test_m = surrogate.evaluate(x_test, y_test).expect("MLP test eval");
+    let y_pred = surrogate.predict(x_test).expect("MLP predict");
+
+    let x_test_1k: Vec<f64> = x_test.iter().cloned().cycle().take(1000 * dim).collect();
+    let mut inf_times = Vec::with_capacity(10);
+    for _ in 0..10 {
+        let t0 = Instant::now();
+        let _ = surrogate.predict(&x_test_1k).expect("MLP infer");
+        inf_times.push(t0.elapsed().as_secs_f64() * 1000.0);
+    }
+    let infer_ms = median_ms(inf_times);
+
+    let mut learning_curve = Vec::new();
+    for &sz in LEARNING_CURVE_SIZES.iter().filter(|&&s| s <= n_train) {
+        let s2 = MlpSurrogate::fit(&x_train[..sz*dim], &y_train[..sz], sz, dim, config.clone()).expect("MLP lc fit");
+        let m = s2.evaluate(x_test, y_test).expect("MLP lc eval");
+        learning_curve.push((sz, m.r2_score));
+    }
+
+    ModelReport {
+        name: format!("Neural Network MLP ({:?})", config.hidden_layers),
+        device: device_name,
+        train_ms: median_ms(train_times),
+        infer_ms_per_1k: infer_ms,
+        throughput_evals_per_sec: 1000.0 / (infer_ms / 1000.0),
+        val_r2: val_m.r2_score, val_rmse: val_m.rmse, val_mae: val_m.mae,
+        test_r2: test_m.r2_score, test_rmse: test_m.rmse, test_mae: test_m.mae,
+        test_max_residual: test_m.max_residual,
+        y_test: y_test.to_vec(), y_pred,
+        learning_curve,
+    }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Entry point
 // ─────────────────────────────────────────────────────────────────────────────
 
 fn main() {
     let args: Vec<String> = env::args().collect();
-    let data_path = match resolve_dataset_path(args.get(1).map(|s| s.as_str())) {
+    let force_rerun = args.iter().any(|a| a == "--force" || a == "--rerun" || a == "-f");
+
+    let data_path = match resolve_dataset_path(&args[1..]) {
         Some(p) => p,
         None => {
             eprintln!("Error: Dataset not found. Pass path as first argument or run from repo root.");
@@ -270,8 +329,19 @@ fn main() {
         }
     };
 
+    let out_path = resolve_output_path();
+
+    // Load cached report if present
+    let cached_report: Option<ComparisonReport> = if !force_rerun && Path::new(&out_path).exists() {
+        fs::read_to_string(&out_path)
+            .ok()
+            .and_then(|content| serde_json::from_str::<ComparisonReport>(&content).ok())
+    } else {
+        None
+    };
+
     println!("================================================================");
-    println!("  SURROGATE MODEL COMPARISON: GP vs. k-NN vs. Random Forest    ");
+    println!("  SURROGATE MODEL COMPARISON: GP vs. k-NN vs. RF vs. MLP       ");
     println!("================================================================");
 
     println!("\n[1] Loading dataset '{}'...", data_path);
@@ -289,33 +359,58 @@ fn main() {
 
     println!("\n[3] Benchmarking surrogates ({} timing repetitions each)...", N_TIMING_REPS);
 
-    let gp_report = bench_gp(
-        &split.train.x, &split.train.y, n_train, dim,
-        &split.validation.x, &split.validation.y,
-        &split.test.x, &split.test.y,
-        &x_raw, &y_raw,
-    );
+    let find_cached = |name_substr: &str| -> Option<ModelReport> {
+        if let Some(ref cr) = cached_report {
+            if let Some(m) = cr.models.iter().find(|m| m.name.to_lowercase().contains(&name_substr.to_lowercase())) {
+                println!("  [Cached] Skipping {} (reused from '{}')", m.name, out_path);
+                return Some(m.clone());
+            }
+        }
+        None
+    };
 
-    let knn_report = bench_knn(
-        &split.train.x, &split.train.y, n_train, dim,
-        &split.validation.x, &split.validation.y,
-        &split.test.x, &split.test.y,
-        7,
-    );
+    let gp_report = find_cached("gaussian").unwrap_or_else(|| {
+        bench_gp(
+            &split.train.x, &split.train.y, n_train, dim,
+            &split.validation.x, &split.validation.y,
+            &split.test.x, &split.test.y,
+            &x_raw, &y_raw,
+        )
+    });
 
-    let rf_report = bench_rf(
-        &split.train.x, &split.train.y, n_train, dim,
-        &split.validation.x, &split.validation.y,
-        &split.test.x, &split.test.y,
-        RfConfig::default(),
-    );
+    let knn_report = find_cached("k-nearest").unwrap_or_else(|| {
+        bench_knn(
+            &split.train.x, &split.train.y, n_train, dim,
+            &split.validation.x, &split.validation.y,
+            &split.test.x, &split.test.y,
+            7,
+        )
+    });
+
+    let rf_report = find_cached("random forest").unwrap_or_else(|| {
+        bench_rf(
+            &split.train.x, &split.train.y, n_train, dim,
+            &split.validation.x, &split.validation.y,
+            &split.test.x, &split.test.y,
+            RfConfig::default(),
+        )
+    });
+
+    let mlp_report = find_cached("neural network").or_else(|| find_cached("mlp")).unwrap_or_else(|| {
+        bench_mlp(
+            &split.train.x, &split.train.y, n_train, dim,
+            &split.validation.x, &split.validation.y,
+            &split.test.x, &split.test.y,
+            MlpConfig::default(),
+        )
+    });
 
     let report = ComparisonReport {
         dataset_n_total: n_total,
         n_train, n_val, n_test,
         n_features: dim,
         feature_names: ACTIVE_FEATURE_NAMES.iter().map(|s| s.to_string()).collect(),
-        models: vec![gp_report, knn_report, rf_report],
+        models: vec![gp_report, knn_report, rf_report, mlp_report],
     };
 
     // Print summary table
@@ -332,7 +427,6 @@ fn main() {
     println!("{:=<80}", "");
 
     // Write JSON report
-    let out_path = resolve_output_path();
     let json = serde_json::to_string_pretty(&report).expect("Failed to serialise report");
     fs::write(&out_path, &json).expect("Failed to write JSON report");
     println!("\n[4] Wrote comparison report → '{}'", out_path);
