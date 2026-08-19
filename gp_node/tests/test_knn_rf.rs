@@ -1,7 +1,7 @@
-use gp_node::{DatasetLoader, DatasetSplitter, KnnSurrogate, RfConfig, RfSurrogate};
+use gp_node::{DatasetLoader, DatasetSplitter, KnnSurrogate, MlpConfig, MlpSurrogate, RfConfig, RfSurrogate};
 
 #[test]
-fn test_knn_and_rf_surrogates() {
+fn test_knn_rf_and_mlp_surrogates() {
     let candidates = [
         "tests/configs_and_scores.json",
         "../tests/configs_and_scores.json",
@@ -41,4 +41,20 @@ fn test_knn_and_rf_surrogates() {
     println!("RF Test Metrics: {:?}", rf_metrics);
     assert!(rf_metrics.r2_score > 0.55, "RF R^2 should be > 0.55, got {}", rf_metrics.r2_score);
     assert!(rf_metrics.rmse < 2.0, "RF RMSE should be < 2.0, got {}", rf_metrics.rmse);
+
+    // 3. Test Neural Network (MLP) Surrogate
+    let mlp_config = MlpConfig::default();
+    let mlp = MlpSurrogate::fit(
+        &split.train.x,
+        &split.train.y,
+        split.train.num_samples,
+        dim,
+        mlp_config,
+    ).expect("MLP fit failed");
+
+    let mlp_metrics = mlp.evaluate(&split.test.x, &split.test.y).expect("MLP eval");
+    println!("MLP Test Metrics: {:?}", mlp_metrics);
+    assert!(mlp_metrics.r2_score > 0.50, "MLP R^2 should be > 0.50, got {}", mlp_metrics.r2_score);
+    assert!(mlp_metrics.rmse < 2.0, "MLP RMSE should be < 2.0, got {}", mlp_metrics.rmse);
 }
+

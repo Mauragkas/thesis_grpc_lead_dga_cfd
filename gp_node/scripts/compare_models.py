@@ -21,6 +21,8 @@ COLORS = {
     "Gaussian Process": "#2563eb",     # Blue
     "k-Nearest Neighbours": "#10b981", # Emerald
     "Random Forest": "#f59e0b",        # Amber
+    "Neural Network": "#8b5cf6",       # Purple
+    "MLP": "#8b5cf6",
 }
 
 def model_color(name: str) -> str:
@@ -43,6 +45,8 @@ def short_name(full_name: str) -> str:
         return "k-NN"
     if "random forest" in full_name.lower() or "rf" in full_name.lower():
         return "Random Forest"
+    if "neural network" in full_name.lower() or "mlp" in full_name.lower():
+        return "Neural Net (MLP)"
     return full_name.split("(")[0].strip()
 
 
@@ -82,11 +86,13 @@ def main():
     ax1.set_xticks(x_pos); ax1.set_xticklabels(snames, fontsize=11, fontweight="bold")
     ax1.set_ylabel("Score / Error", fontsize=11)
     ax1.set_title("Accuracy on Holdout Test Set", fontsize=13, fontweight="bold")
-    ax1.set_ylim(0.0, 1.30)
-    ax1.legend(fontsize=10); ax1.grid(axis="y", linestyle=":", alpha=0.6)
+    max_acc_val = max(max(r2s), max(rmses))
+    ax1.set_ylim(0.0, max_acc_val * 1.25)
+    ax1.legend(fontsize=10, loc="upper right")
+    ax1.grid(axis="y", linestyle=":", alpha=0.6)
     for rect in list(b1) + list(b2):
         h = rect.get_height()
-        ax1.text(rect.get_x() + rect.get_width()/2, h + 0.01, f"{h:.3f}",
+        ax1.text(rect.get_x() + rect.get_width()/2, h + 0.02, f"{h:.3f}",
                  ha="center", va="bottom", fontsize=9, fontweight="bold")
 
     # ── Panel 2: Computational latency (log scale) ────────────────────────── #

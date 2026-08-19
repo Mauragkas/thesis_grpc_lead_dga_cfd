@@ -6,6 +6,7 @@ pub mod model;
 pub use backend::{
     BackendFactory, ComputeBackend, CpuOpenMpBackend, CudaBackend, GpDeviceType,
     KnnBackend, KnnBackendFactory, KnnCpuBackend, KnnCudaBackend, KnnRocmBackend,
+    MlpBackend, MlpBackendFactory, MlpCpuBackend, MlpCudaBackend, MlpRocmBackend,
     RfBackend, RfBackendFactory, RfCpuBackend, RfCudaBackend, RfHyperparamsFFI, RfRocmBackend,
     RocmBackend,
 };
@@ -15,6 +16,7 @@ pub use domain::{
     GpHyperparameters, KernelType, ACTIVE_FEATURE_NAMES,
 };
 pub use model::{
-    GaussianProcessSurrogate, HyperparameterOptimizer, KnnSurrogate, ReferenceKernel,
-    RfConfig, RfSurrogate, SurrogateModel,
+    GaussianProcessSurrogate, HyperparameterOptimizer, KnnSurrogate, MlpActivation,
+    MlpConfig, MlpSurrogate, ReferenceKernel, RfConfig, RfSurrogate, SurrogateModel,
 };
+
