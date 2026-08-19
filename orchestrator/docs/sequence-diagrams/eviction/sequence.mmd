@@ -1,0 +1,22 @@
+sequenceDiagram
+    participant Runner as GaRunner
+    participant Store as InMemoryGeneStore
+    participant Mutex as tokio::sync::Mutex<Vec<GeneRecord>>
+    participant Policy as GenerationEvictor
+
+    Runner->>Store: evict_expired(current_generation)
+    Store->>Mutex: lock().await
+    Mutex-->>Store: Vec<GeneRecord>
+
+    loop for each GeneRecord in records
+        Store->>Policy: should_evict(record, current_generation)
+        Policy->>Policy: current_generation.saturating_sub(record.last_accessed_gen) > max_age
+        alt should evict
+            Policy-->>Store: true
+            Store->>Store: retain drops record
+        else keep
+            Policy-->>Store: false
+        end
+    end
+
+    Store-->>Runner: ()

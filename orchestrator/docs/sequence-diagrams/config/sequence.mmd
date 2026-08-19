@@ -1,0 +1,73 @@
+sequenceDiagram
+    participant Env as std::env
+    participant ConfigFn as config::config_from_env()
+    participant GaCfg as GaConfig
+    participant TransportCfg as TransportConfig
+    participant StoreCfg as GeneStoreConfig
+    participant LeadCfg as LeadConfig
+    participant RingCfg as RingConfig
+    participant MigCfg as MigrationConfig
+
+    ConfigFn->>GaCfg: GaConfig::default()
+    ConfigFn->>TransportCfg: TransportConfig::default()
+    ConfigFn->>StoreCfg: GeneStoreConfig::default()
+    ConfigFn->>LeadCfg: LeadConfig::default()
+    ConfigFn->>RingCfg: RingConfig::default()
+    ConfigFn->>MigCfg: MigrationConfig::default()
+
+    opt EVAL_ENDPOINT is set
+        ConfigFn->>Env: var("EVAL_ENDPOINT")
+        Env-->>ConfigFn: endpoint
+        ConfigFn->>GaCfg: ga.eval_endpoint = endpoint
+    end
+
+    opt GA_SEED is set and parses as u64
+        ConfigFn->>Env: var("GA_SEED")
+        Env-->>ConfigFn: seed string
+        ConfigFn->>GaCfg: ga.seed = parsed_seed
+    end
+
+    opt GENE_STORE_MAX_AGE is set and parses as usize
+        ConfigFn->>Env: var("GENE_STORE_MAX_AGE")
+        Env-->>ConfigFn: age string
+        ConfigFn->>StoreCfg: store.max_age_generations = parsed_age
+    end
+
+    opt LEAD_ENDPOINT is set
+        ConfigFn->>Env: var("LEAD_ENDPOINT")
+        Env-->>ConfigFn: endpoint
+        ConfigFn->>LeadCfg: lead.endpoint = Some(endpoint)
+    end
+
+    opt RING_BIND is set
+        ConfigFn->>Env: var("RING_BIND")
+        Env-->>ConfigFn: addr
+        ConfigFn->>RingCfg: ring.bind_address = addr
+    end
+
+    opt RING_SELF_ADDRESS is set
+        ConfigFn->>Env: var("RING_SELF_ADDRESS")
+        Env-->>ConfigFn: addr
+        ConfigFn->>RingCfg: ring.self_address = addr
+    end
+
+    opt RING_BOOTSTRAP is set
+        ConfigFn->>Env: var("RING_BOOTSTRAP")
+        Env-->>ConfigFn: addr
+        ConfigFn->>RingCfg: ring.bootstrap_address = Some(addr)
+    end
+
+    opt MIGRATION_INTERVAL is set and parses as usize
+        ConfigFn->>Env: var("MIGRATION_INTERVAL")
+        Env-->>ConfigFn: interval string
+        ConfigFn->>MigCfg: migration.interval_generations = parsed_interval
+    end
+
+    opt MIGRATION_COUNT is set and parses as usize
+        ConfigFn->>Env: var("MIGRATION_COUNT")
+        Env-->>ConfigFn: count string
+        ConfigFn->>MigCfg: migration.migrant_count = parsed_count
+    end
+
+    ConfigFn-->>ConfigFn: return (GaConfig, TransportConfig, GeneStoreConfig, LeadConfig, RingConfig, MigrationConfig)
+

@@ -1,0 +1,23 @@
+sequenceDiagram
+    participant Lead as LeadNode
+    participant VNode as VirtualNode (v_i)
+    participant Remote as GrpcRemote
+    participant Bootstrap as Bootstrap Node (/lead.Lead)
+
+    Lead->>Lead: join(known_uri)
+
+    loop for each local vnode v_i in vnodes
+        Lead->>Remote: find_successor(known_uri, v_i.vid, v_i.vid)
+        Remote->>Bootstrap: /lead.Lead/FindSuccessor(vid, id)
+        Bootstrap-->>Remote: NodeAddr (succ)
+        Remote-->>Lead: succ
+
+        Lead->>Remote: get_successor_list(succ.address, succ.id)
+        Remote->>Bootstrap: /lead.Lead/GetSuccessorList(succ.id)
+        Bootstrap-->>Remote: NodeAddrList (remote_list)
+        Remote-->>Lead: remote_list
+
+        Lead->>VNode: set successor_list = [succ, ...remote_list]
+        Lead->>VNode: set fingers[0] = succ
+        Lead->>VNode: mark_active()
+    end

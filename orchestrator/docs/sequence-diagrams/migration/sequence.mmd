@@ -1,0 +1,37 @@
+sequenceDiagram
+    participant Pred as Predecessor Orchestrator
+    participant RingServer as Local RingServer
+    participant Buffer as MigrantBuffer
+    participant Runner as Local GaRunner
+    participant Migration as LeadMigration
+    participant Selector as TopKSelector
+    participant Member as LocalRingMember
+    participant Client as GrpcRingClientProto
+    participant Succ as Successor /orchestrator_ring.Ring
+
+    Note over Pred,Buffer: 1. Inbound Migration (Immigration RPC)
+    Pred->>RingServer: /orchestrator_ring.Ring/Migrate(MigrateRequest { individuals, sender })
+    RingServer->>Buffer: push(migrants)
+    RingServer-->>Pred: MigrateResponse { accepted: true }
+
+    Note over Runner,Buffer: 2. Immigrant Integration at Generation Start
+    Runner->>Migration: drain_immigrants()
+    Migration->>Buffer: drain()
+    Buffer-->>Migration: Vec<MigrantIndividual>
+    Migration-->>Runner: immigrants
+    alt immigrants not empty
+        Runner->>Runner: append immigrants & truncate population to pop_size
+    end
+
+    Note over Runner,Succ: 3. Emigration at Migration Interval
+    Runner->>Migration: maybe_emigrate(gen, population, fitnesses)
+    opt gen % interval == 0
+        Migration->>Selector: select(population, fitnesses, migrant_count)
+        Selector-->>Migration: top-k MigrantIndividuals
+        Migration->>Member: get successor
+        Member-->>Migration: succ NodeInfo
+        Migration->>Client: channel_for(succ.address)
+        Migration->>Client: migrate(MigrateRequest { individuals, sender: self.address })
+        Client->>Succ: /orchestrator_ring.Ring/Migrate
+        Succ-->>Client: MigrateResponse { accepted: true }
+    end

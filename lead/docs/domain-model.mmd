@@ -1,0 +1,228 @@
+classDiagram
+direction TB
+
+%% Configuration Subsystem
+class Config {
+  +http_bind: String
+  +grpc_bind: String
+  +self_uri: String
+  +join_uri: Option~String~
+  +virtual_node_count: usize
+  +from_env()$ Config
+}
+
+%% Ring Topology & Virtual Node Subsystem
+class NodeAddr {
+  +id: u64
+  +address: String
+}
+
+class VirtualNode {
+  +vid: u64
+  +predecessor: RwLock~Option~NodeAddr~~
+  +fingers: RwLock~Vec~Option~NodeAddr~~~
+  +successor_list: RwLock~Vec~NodeAddr~~
+  +request_count: AtomicU64
+  +error_count: AtomicU64
+  +last_active: RwLock~Instant~
+  +pruned: AtomicU64
+  +successor() NodeAddr
+  +error_rate() f64
+  +record_request()
+  +record_error()
+  +mark_active()
+}
+
+class RingMath <<utility>> {
+  +peer_hash(val)$ u64
+  +finger_start(id, i)$ u64
+  +in_range(val, start, end, inclusive_end)$ bool
+}
+
+%% Central Node Coordinator
+class LeadNode {
+  +self_uri: String
+  +vnodes: Vec~VirtualNode~
+  +self_info: NodeAddr
+  -storage: Arc~KeyStore~
+  -remote: Arc~RemoteNode~
+  -learning: LearnedIndex
+  +new(self_uri, k, storage, remote)
+  +join(known_uri)
+  +stabilize_all()
+  +fix_fingers_all()
+  +check_predecessor_all()
+  +handle_range_query(start_key, count, caller, version) RangeResult
+  +handle_range_forward(from_key, count, caller, origin_vid, version, payload) RangeResult
+  +learned_hash(key) u64
+  +maybe_retrain()
+  +heartbeat_round()
+  +push_model(version, data) bool
+  +request_model() Tuple~u64_bytes~
+}
+
+%% Storage Subsystem
+class KeyStore <<interface>> {
+  +get(key) Option~String~
+  +put(key, val)
+  +remove(key) Option~String~
+  +range_scan(start_key, count) Vec~Tuple~String_String~~~
+  +range_scan_after(after_key, count) Vec~Tuple~String_String~~~
+  +snapshot() Vec~Tuple~String_String~~~
+  +len() usize
+  +is_empty() bool
+}
+
+class InMemoryStore {
+  -data: RwLock~BTreeMap~String_String~~
+  +new()
+  +get(key) Option~String~
+  +put(key, val)
+  +remove(key) Option~String~
+  +range_scan(start_key, count) Vec~Tuple~String_String~~~
+  +range_scan_after(after_key, count) Vec~Tuple~String_String~~~
+  +snapshot() Vec~Tuple~String_String~~~
+  +len() usize
+  +is_empty() bool
+}
+
+%% Transport & Remote Communication
+class RangeResult {
+  +entries: Vec~Tuple~String_String~~~
+  +complete: bool
+  +next_address: String
+}
+
+class RingClient <<interface>> {
+  +find_successor(addr, vid, id) Option~NodeAddr~
+  +get_predecessor(addr, vid) Option~NodeAddr~
+  +get_successor(addr, vid) Option~NodeAddr~
+  +get_successor_list(addr, vid) Vec~NodeAddr~
+  +notify(addr, vid, self_info) bool
+  +ping(addr) bool
+}
+
+class KvClient <<interface>> {
+  +get_local(addr, key) Option~String~
+  +put_local(addr, key, val) bool
+  +delete_local(addr, key) bool
+  +get_keys(addr) Option~Vec~String~~
+}
+
+class RangeClient <<interface>> {
+  +range_query(addr, start_key, count, caller, model_version) Option~RangeResult~
+  +range_forward(addr, from_key, count, caller, origin_vid, model_version, payload) Option~RangeResult~
+}
+
+class ModelClient <<interface>> {
+  +push_model(addr, version, data) bool
+  +request_model(addr, coordinator) Option~Tuple~u64_bytes~~
+  +heartbeat(addr, sender, update_ready, model_version) Option~bool~
+}
+
+class RemoteNode <<interface>>
+
+class GrpcRemote {
+  -channels: Mutex~HashMap~String_Channel~~
+  +new()
+}
+
+%% RMI & Learned Index Subsystem
+class LearnedIndex {
+  -state: RwLock~RmiState~
+  -pending: RwLock~Option~RmiModel~~
+  -drift_new: AtomicUsize
+  -keys_total: AtomicUsize
+  +new()
+  +predict(key) u64
+  +record_insert(key, grace_secs, min_keys, threshold) bool
+  +active_model() RmiModel
+  +set_pending_model(model)
+  +activate(model)
+  +is_update_ready() bool
+  +accept_pushed_model(version, data) bool
+  +reset_drift(n)
+}
+
+class RmiModel {
+  +stage0_bins: usize
+  +leaves: Vec~LeafKind~
+  +n: usize
+  +version: u64
+  +pid_state: Vec~PidState~
+  +predict(key) u64
+  +train_auto(keys, version)$ RmiModel
+}
+
+class LeafKind <<enumeration>> {
+  Linear
+  RadixSpline
+}
+
+class LinearLeaf {
+  +weight: f64
+  +bias: f64
+  +anchor: Anchor
+  +predict(f) f64
+}
+
+class RadixSplineLeaf {
+  +anchor: Anchor
+  +predict(f) f64
+}
+
+class Anchor {
+  +offset: f64
+  +scale: f64
+  +apply(pred) f64
+}
+
+class PidState {
+  +proportional: u8
+  +integral: u8
+  +derivative_sign: bool
+  +derivative_mag: u8
+}
+
+class PidTuner {
+  +target_ratio: f64
+  +scale_step: f64
+  +centering_step: f64
+  +upper_threshold: f64
+  +mid_threshold: f64
+  +min_samples: usize
+  +adjust(state, anchor, correct, outside)
+}
+
+class FederatedAveraging <<utility>> {
+  +fed_avg(models, version)$ RmiModel
+}
+
+%% Relationships
+LeadNode --> Config
+LeadNode *-- "1..*" VirtualNode
+LeadNode --> KeyStore
+LeadNode --> RemoteNode
+LeadNode *-- LearnedIndex
+
+VirtualNode *-- "1..*" NodeAddr
+
+InMemoryStore ..|> KeyStore
+
+RemoteNode --|> RingClient
+RemoteNode --|> KvClient
+RemoteNode --|> RangeClient
+RemoteNode --|> ModelClient
+
+GrpcRemote ..|> RemoteNode
+RangeClient ..> RangeResult
+
+LearnedIndex *-- RmiModel
+RmiModel *-- "1..*" LeafKind
+RmiModel *-- "0..*" PidState
+LeafKind *-- Anchor
+LeafKind <|-- LinearLeaf
+LeafKind <|-- RadixSplineLeaf
+
+LeadNode ..> PidTuner : adjusts leaf anchors on drift
+LeadNode ..> FederatedAveraging : aggregates models during transient coordinator round

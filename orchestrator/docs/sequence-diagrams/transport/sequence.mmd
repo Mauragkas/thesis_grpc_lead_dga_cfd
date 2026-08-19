@@ -1,0 +1,34 @@
+sequenceDiagram
+    participant Caller as caller
+    participant Build as transport::build_endpoint()
+    participant Tonic as tonic::transport::Channel::from_shared()
+    participant Wait as transport::wait_for_channel()
+    participant Endpoint as tonic::transport::Endpoint
+    participant Channel as tonic::transport::Channel
+
+    Caller->>Build: build_endpoint(target, cfg)
+    alt target has no http/https scheme
+        Build->>Build: uri = format!("http://{target}")
+    else target already has scheme
+        Build->>Build: uri = target.to_string()
+    end
+    Build->>Tonic: from_shared(uri)
+    Tonic-->>Build: Endpoint
+    Build->>Endpoint: keep_alive_while_idle(true)
+    Build->>Endpoint: keep_alive_timeout(cfg.keep_alive_timeout)
+    Build->>Endpoint: tcp_keepalive(cfg.tcp_keepalive)
+    Build->>Endpoint: connect_timeout(cfg.connect_timeout)
+    Build->>Endpoint: timeout(cfg.request_timeout)
+    Build-->>Caller: Endpoint
+
+    Caller->>Wait: wait_for_channel(endpoint, deadline)
+    loop until Instant::now() >= stop
+        Wait->>Endpoint: clone().connect().await
+        alt connect succeeds
+            Endpoint-->>Wait: Channel
+            Wait-->>Caller: Channel
+        else connect fails
+            Wait->>Wait: tokio::time::sleep(2s)
+        end
+    end
+    Wait-->>Caller: Status::unavailable if deadline exceeded

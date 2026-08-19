@@ -1,0 +1,45 @@
+sequenceDiagram
+    participant Caller as Caller (HilbertNeighborStore / GaRunner)
+    participant Lead as GrpcLeadStore
+    participant Client as LeadClient<Channel>
+    participant Remote as lead.Lead service
+
+    Note over Caller,Remote: 1. Store Gene (PutRouted)
+    Caller->>Lead: store_gene(key, value)
+    Lead->>Client: clone()
+    Lead->>Client: put_routed(PutRoutedRequest { key, value })
+    Client->>Remote: /lead.Lead/PutRouted
+    alt success
+        Remote-->>Client: BoolMsg { ok: true }
+        Client-->>Lead: Ok(())
+        Lead-->>Caller: Ok(())
+    else failure
+        Remote-->>Client: Status error
+        Client-->>Lead: Err(Status)
+        Lead-->>Caller: Err(Status)
+    end
+
+    Note over Caller,Remote: 2. Get Gene (GetRouted)
+    Caller->>Lead: get_gene(key)
+    Lead->>Client: clone()
+    Lead->>Client: get_routed(KeyMsg { key })
+    Client->>Remote: /lead.Lead/GetRouted
+    alt found
+        Remote-->>Client: ValMsg { value }
+        Client-->>Lead: Ok(Some(value))
+        Lead-->>Caller: Ok(Some(value))
+    else NotFound
+        Remote-->>Client: Status::NotFound
+        Client-->>Lead: Ok(None)
+        Lead-->>Caller: Ok(None)
+    end
+
+    Note over Caller,Remote: 3. Range Query (RangeQuery)
+    Caller->>Lead: range_query(start_key, count)
+    Lead->>Client: clone()
+    Lead->>Client: range_query(RangeRequest { start_key, count, caller_address })
+    Client->>Remote: /lead.Lead/RangeQuery
+    Remote-->>Client: RangeResponse { entries }
+    Client-->>Lead: Ok(entries)
+    Lead-->>Caller: Ok(Vec<(String, String)>)
+

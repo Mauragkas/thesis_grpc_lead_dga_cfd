@@ -1,0 +1,31 @@
+sequenceDiagram
+    participant Runner as GaRunner
+    participant Store as InMemoryGeneStore
+    participant Mutex as tokio::sync::Mutex<Vec<GeneRecord>>
+
+    loop for each gene vector in population
+        Runner->>Store: lookup_exact(genes, current_generation)
+        Store->>Mutex: lock().await
+        Mutex-->>Store: Vec<GeneRecord>
+
+        loop scan records
+            Store->>Store: compare r.genes == genes
+            alt exact match found
+                Store->>Store: r.last_accessed_gen = current_generation
+                Store-->>Runner: Some(fitness)
+            else no match yet
+            end
+        end
+
+        alt no exact match found
+            Store-->>Runner: None
+        end
+    end
+
+    loop after evaluation of misses
+        Runner->>Store: store(genes, fitness, generation)
+        Store->>Mutex: lock().await
+        Mutex-->>Store: Vec<GeneRecord>
+        Store->>Store: push(GeneRecord { genes, fitness, generation, last_accessed_gen: generation })
+        Store-->>Runner: stored
+    end

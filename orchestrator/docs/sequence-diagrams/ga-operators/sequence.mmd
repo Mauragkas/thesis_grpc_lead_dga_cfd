@@ -1,0 +1,26 @@
+sequenceDiagram
+    participant Runner as GaRunner
+    participant Ops as ga::operators
+    participant RNG as Rng
+    participant Clip as config::clip()
+    participant Normal as rand_distr::Normal
+
+    Runner->>Ops: random_population(rng, cfg)
+    loop pop_size times
+        Ops->>RNG: gen::<f64>()
+    end
+    Ops-->>Runner: Vec<Vec<f64>> population
+
+    Runner->>Ops: select_survivors(population, fitnesses, cfg)
+    Ops->>Ops: sort indices by fitness descending
+    Ops->>Ops: take max(2, pop_size * elite_frac)
+    Ops-->>Runner: survivors
+
+    Runner->>Ops: next_generation(survivors, cfg, rng, &normal)
+    loop until next.len() == cfg.pop_size
+        Ops->>RNG: gen_range(0..survivors.len())
+        Ops->>Normal: sample(rng)
+        Ops->>Clip: clip(parent_gene + mutation)
+        Clip-->>Ops: bounded gene in [0,1]
+    end
+    Ops-->>Runner: next population
