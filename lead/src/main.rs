@@ -34,16 +34,17 @@ async fn main() {
     let storage = Arc::new(InMemoryStore::new());
     let remote = Arc::new(GrpcRemote::new());
     let lead = Arc::new(LeadNode::new(
-        cfg.self_uri.clone(),
-        cfg.virtual_node_count.max(1),
+        cfg.clone(),
         storage,
         remote,
     ));
 
     let join_handle = if let Some(ju) = cfg.join_uri.clone() {
         let c = lead.clone();
+        let retry_count = c.config.join_retry_count;
+        let retry_delay = Duration::from_secs(c.config.join_retry_delay_secs);
         Some(tokio::spawn(async move {
-            for _ in 0..300 {
+            for _ in 0..retry_count {
                 c.join(&ju).await;
                 let mut pending = 0;
                 for v in &c.vnodes {
@@ -56,7 +57,7 @@ async fn main() {
                     break;
                 }
                 info!("join: {pending} vnode(s) still alone, retrying");
-                tokio::time::sleep(Duration::from_secs(1)).await;
+                tokio::time::sleep(retry_delay).await;
             }
         }))
     } else {
@@ -92,56 +93,52 @@ where
 {
     {
         let c = c.clone();
+        let interval = Duration::from_secs(c.config.stabilize_interval_secs);
         tokio::spawn(async move {
             loop {
                 c.stabilize_all().await;
-                tokio::time::sleep(Duration::from_secs(2)).await;
+                tokio::time::sleep(interval).await;
             }
         });
     }
     {
         let c = c.clone();
+        let interval = Duration::from_secs(c.config.fix_fingers_interval_secs);
         tokio::spawn(async move {
             loop {
                 c.fix_fingers_all().await;
-                tokio::time::sleep(Duration::from_secs(5)).await;
+                tokio::time::sleep(interval).await;
             }
         });
     }
     {
         let c = c.clone();
+        let interval = Duration::from_secs(c.config.check_predecessor_interval_secs);
         tokio::spawn(async move {
             loop {
                 c.check_predecessor_all().await;
-                tokio::time::sleep(Duration::from_secs(10)).await;
+                tokio::time::sleep(interval).await;
             }
         });
     }
     {
         let c = c.clone();
+        let interval = Duration::from_secs(c.config.heartbeat_interval_secs);
         tokio::spawn(async move {
             loop {
                 c.heartbeat_round().await;
-                tokio::time::sleep(Duration::from_secs(8)).await;
+                tokio::time::sleep(interval).await;
             }
         });
     }
     {
         let c = c.clone();
+        let interval = Duration::from_secs(c.config.maybe_retrain_interval_secs);
         tokio::spawn(async move {
             loop {
                 c.maybe_retrain().await;
-                tokio::time::sleep(Duration::from_secs(5)).await;
+                tokio::time::sleep(interval).await;
             }
         });
     }
-    // {
-    //     let c = c.clone();
-    //     tokio::spawn(async move {
-    //         loop {
-    //             c.prune_low_throughput_vnodes().await;
-    //             tokio::time::sleep(Duration::from_secs(30)).await;
-    //         }
-    //     });
-    // }
 }

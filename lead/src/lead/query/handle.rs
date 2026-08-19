@@ -49,7 +49,9 @@ where
             None => self.best_vnode_for(id),
         };
 
-        let overscan = need.saturating_mul(3).max(need);
+        let overscan = need
+            .saturating_mul(self.config.range_overscan_multiplier)
+            .max(need);
         let local = self.storage.range_scan(start_key, overscan).await;
         let payload = self.collect_owned(local, &model, need).await;
         self.complete_or_forward(payload, need, start_key, vnode, vnode.vid, caller, model_version)
@@ -80,7 +82,9 @@ where
             }
         };
 
-        let overscan = need.saturating_mul(3).max(need);
+        let overscan = need
+            .saturating_mul(self.config.range_overscan_multiplier)
+            .max(need);
         let local = self.storage.range_scan_after(from_key, overscan).await;
         let filtered = self.collect_owned(local, &model, need).await;
         payload.extend(filtered);

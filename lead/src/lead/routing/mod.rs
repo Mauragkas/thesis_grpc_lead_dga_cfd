@@ -11,7 +11,6 @@ use crate::transport::RemoteNode;
 
 use super::node::LeadNode;
 use super::vnode::VirtualNode;
-use super::R;
 
 impl<S, R> LeadNode<S, R>
 where

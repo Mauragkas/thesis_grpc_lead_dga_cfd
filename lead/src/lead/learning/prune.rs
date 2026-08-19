@@ -4,7 +4,7 @@ use tracing::warn;
 use crate::storage::KeyStore;
 use crate::transport::RemoteNode;
 
-use super::super::{LeadNode, PRUNE_ERROR_RATE, PRUNE_INACTIVE_SECS};
+use super::super::LeadNode;
 
 impl<S, R> LeadNode<S, R>
 where
@@ -22,7 +22,7 @@ where
             }
             let err_rate = v.error_rate();
             let inactive = v.last_active.read().await.elapsed().as_secs();
-            if err_rate > PRUNE_ERROR_RATE || inactive > PRUNE_INACTIVE_SECS {
+            if err_rate > self.config.prune_error_rate || inactive > self.config.prune_inactive_secs {
                 to_prune.push(v.vid);
             }
         }

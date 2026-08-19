@@ -6,9 +6,7 @@ mod training;
 
 use tracing::{info, warn};
 
-use super::{
-    LeadNode, DRIFT_THRESHOLD, FRM_GRACE_PERIOD_SECS, MIN_KEYS_FOR_DRIFT,
-};
+use super::LeadNode;
 use crate::rmi::RmiModel;
 use crate::storage::KeyStore;
 use crate::transport::RemoteNode;
@@ -28,7 +26,13 @@ where
     pub async fn record_insertion(&self, key: &str) {
         let should_pid = self
             .learning
-            .record_insert(key, FRM_GRACE_PERIOD_SECS, MIN_KEYS_FOR_DRIFT, DRIFT_THRESHOLD)
+            .record_insert(
+                key,
+                self.config.frm_grace_period_secs,
+                self.config.min_keys_for_drift,
+                self.config.drift_threshold,
+                self.config.pid_adjust_interval,
+            )
             .await;
         if should_pid {
             self.run_pid_adjustment().await;
@@ -39,7 +43,7 @@ where
     // Step 5.3: Retrain + maybe coordinator trigger
     // ------------------------------------------------------------------
     pub async fn maybe_retrain(&self) {
-        if self.learning.in_grace(FRM_GRACE_PERIOD_SECS) {
+        if self.learning.in_grace(self.config.frm_grace_period_secs) {
             return;
         }
 
@@ -69,7 +73,7 @@ where
     }
 
     // ------------------------------------------------------------------
-    // Step 5.2-5.3: Heartbeat with 90% neighbor quorum coordinator
+    // Step 5.2-5.3: Heartbeat with neighbor quorum coordinator
     // ------------------------------------------------------------------
     pub async fn heartbeat_round(&self) {
         let (ready, has_update) = self.learning.status().await;
@@ -106,14 +110,15 @@ where
             "FRM: heartbeat round"
         );
 
-        // LEAD Step 5.3: become Transient Coordinator if ≥90% of
-        // immediate successor + predecessor neighbors have update_ready.
+        // LEAD Step 5.3: become Transient Coordinator if neighbor quorum reached
         if total > 0 {
             let ratio = peers_ready as f64 / total as f64;
-            if ratio >= 0.90 && has_update {
+            if ratio >= self.config.frm_quorum_threshold && has_update {
                 info!(
-                    "FRM: 90% neighbor quorum ({} / {}), becoming Transient Coordinator",
-                    peers_ready, total
+                    "FRM: {:.0}% neighbor quorum ({} / {}), becoming Transient Coordinator",
+                    self.config.frm_quorum_threshold * 100.0,
+                    peers_ready,
+                    total
                 );
                 self.run_global_training_round().await;
             }

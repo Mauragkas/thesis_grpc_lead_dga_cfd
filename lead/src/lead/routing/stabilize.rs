@@ -6,7 +6,6 @@ use crate::transport::RemoteNode;
 
 use super::super::node::LeadNode;
 use super::super::vnode::VirtualNode;
-use super::R;
 
 impl<S, R> LeadNode<S, R>
 where
@@ -83,7 +82,7 @@ where
             {
                 let mut list = vnode.successor_list.write().await;
                 list.insert(0, x);
-                list.truncate(R);
+                list.truncate(self.config.successor_list_len);
                 vnode.fingers.write().await[0] = list.first().cloned();
             }
         }
@@ -102,7 +101,8 @@ where
         let _ = self.remote.notify(&cur.address, cur.id, &self_node).await;
         let remote_list = self.remote.get_successor_list(&cur.address, cur.id).await;
         let mut new_list = vec![cur.clone()];
-        for n in remote_list.into_iter().take(R - 1) {
+        let max_extra = self.config.successor_list_len.saturating_sub(1);
+        for n in remote_list.into_iter().take(max_extra) {
             if n.id != vnode.vid && n.id != cur.id && !new_list.iter().any(|m| m.id == n.id) {
                 new_list.push(n);
             }
