@@ -1,4 +1,4 @@
-use gp_node::{
+use surrogate_node::{
     BackendFactory, DatasetLoader, DatasetSplitter, GaussianProcessSurrogate,
     KernelType, ACTIVE_FEATURE_NAMES,
 };

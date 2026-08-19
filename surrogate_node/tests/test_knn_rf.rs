@@ -1,4 +1,4 @@
-use gp_node::{DatasetLoader, DatasetSplitter, KnnSurrogate, MlpConfig, MlpSurrogate, RfConfig, RfSurrogate};
+use surrogate_node::{DatasetLoader, DatasetSplitter, KnnSurrogate, MlpConfig, MlpSurrogate, RfConfig, RfSurrogate};
 
 #[test]
 fn test_knn_rf_and_mlp_surrogates() {

@@ -1,4 +1,4 @@
-use gp_node::{DatasetLoader, DatasetSplitter, StandardScaler, TargetScaler};
+use surrogate_node::{DatasetLoader, DatasetSplitter, StandardScaler, TargetScaler};
 use std::collections::HashSet;
 use std::path::Path;
 

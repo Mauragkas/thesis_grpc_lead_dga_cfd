@@ -1,5 +1,6 @@
-use gp_node::{
-    BackendFactory, ComputeBackend, CpuOpenMpBackend, GpHyperparameters, KernelType, ReferenceKernel,
+use surrogate_node::{
+    BackendFactory, ComputeBackend, CpuOpenMpBackend, GpHyperparameters, KernelType,
+    ReferenceKernel,
 };
 
 #[test]

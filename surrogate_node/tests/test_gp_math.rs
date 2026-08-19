@@ -1,4 +1,4 @@
-use gp_node::{BackendFactory, GpHyperparameters, KernelType, ReferenceKernel};
+use surrogate_node::{BackendFactory, GpHyperparameters, KernelType, ReferenceKernel};
 
 #[test]
 fn test_matern52_kernel_reference() {

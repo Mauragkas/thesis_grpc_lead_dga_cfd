@@ -1,4 +1,4 @@
-use gp_node::{
+use surrogate_node::{
     BackendFactory, DatasetLoader, DatasetSplitter, GaussianProcessSurrogate,
     KernelType, KnnSurrogate, MlpConfig, MlpSurrogate,
     RfConfig, RfSurrogate, ACTIVE_FEATURE_NAMES,
@@ -76,7 +76,7 @@ fn resolve_dataset_path(args: &[String]) -> Option<String> {
 
 fn resolve_output_path() -> String {
     // Emit next to this binary's workspace root
-    for dir in &["scripts", "../scripts", "gp_node/scripts"] {
+    for dir in &["scripts", "../scripts", "surrogate_node/scripts", "gp_node/scripts"] {
         if Path::new(dir).exists() {
             return format!("{}/compare_results.json", dir);
         }

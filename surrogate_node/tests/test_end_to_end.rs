@@ -1,4 +1,4 @@
-use gp_node::{
+use surrogate_node::{
     BackendFactory, DatasetLoader, DatasetSplitter, GaussianProcessSurrogate, KernelType,
 };
 use std::path::Path;
