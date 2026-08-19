@@ -4,6 +4,7 @@ WORKDIR /app
 COPY Cargo.toml Cargo.lock ./
 COPY build.rs ./
 COPY proto ./proto
+COPY benches ./benches
 COPY src ./src
 RUN cargo build
 
