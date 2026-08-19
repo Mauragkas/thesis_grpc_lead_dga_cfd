@@ -1,66 +1,47 @@
 //! SRP: orchestrates migration using the ring successor as the
-//! migration target. Depends on `RingClient` (DIP), `MigrantSelector`
+//! migration target. Depends on `RingMember` and `RingClient` (DIP), `MigrantSelector`
 //! (OCP), and `MigrantBuffer` for incoming individuals.
 
 use crate::migration::buffer::MigrantBuffer;
 use crate::migration::config::MigrationConfig;
 use crate::migration::selector::MigrantSelector;
 use crate::migration::{MigrantIndividual, MigrationHook};
-use crate::proto::ring::ring_client::RingClient as GrpcRingClientProto;
-use crate::proto::ring::{MigrantIndividual as ProtoMigrant, MigrateRequest};
-use crate::ring::member::LocalRingMember;
+use crate::ring::client::RingClient;
+use crate::ring::member::RingMember;
 use std::sync::Arc;
-use tonic::transport::Channel;
 use tonic::Status;
 use tracing::{debug, info, warn};
 
-pub struct LeadMigration<S: MigrantSelector> {
+pub struct LeadMigration<S: MigrantSelector, M: RingMember, C: RingClient> {
     config: MigrationConfig,
-    member: Arc<LocalRingMember>,
+    member: Arc<M>,
+    client: Arc<C>,
     selector: S,
     buffer: Arc<MigrantBuffer>,
-    /// Channel cache for sending migrants to successors.
-    channels: tokio::sync::Mutex<std::collections::HashMap<String, Channel>>,
 }
 
-impl<S: MigrantSelector> LeadMigration<S> {
+impl<S: MigrantSelector, M: RingMember, C: RingClient> LeadMigration<S, M, C> {
     pub fn new(
         config: MigrationConfig,
-        member: Arc<LocalRingMember>,
+        member: Arc<M>,
+        client: Arc<C>,
         selector: S,
         buffer: Arc<MigrantBuffer>,
     ) -> Self {
         Self {
             config,
             member,
+            client,
             selector,
             buffer,
-            channels: tokio::sync::Mutex::new(std::collections::HashMap::new()),
         }
-    }
-
-    async fn channel_for(&self, addr: &str) -> Result<Channel, Status> {
-        let mut cache = self.channels.lock().await;
-        if let Some(ch) = cache.get(addr) {
-            return Ok(ch.clone());
-        }
-        let uri = if addr.starts_with("http://") || addr.starts_with("https://") {
-            addr.to_string()
-        } else {
-            format!("http://{addr}")
-        };
-        let ch = Channel::from_shared(uri)
-            .map_err(|e| Status::invalid_argument(format!("bad uri '{addr}': {e}")))?
-            .connect()
-            .await
-            .map_err(|e| Status::unavailable(format!("connect '{addr}': {e}")))?;
-        cache.insert(addr.to_string(), ch.clone());
-        Ok(ch)
     }
 }
 
 #[async_trait::async_trait]
-impl<S: MigrantSelector> MigrationHook for LeadMigration<S> {
+impl<S: MigrantSelector, M: RingMember, C: RingClient> MigrationHook
+    for LeadMigration<S, M, C>
+{
     async fn maybe_emigrate(
         &self,
         generation: usize,
@@ -79,41 +60,30 @@ impl<S: MigrantSelector> MigrationHook for LeadMigration<S> {
             return Ok(());
         }
 
-        let succ = self.member.state().successor.lock().await.clone();
+        let self_node = self.member.self_node();
+        let succ = self.member.get_successor().await;
         let succ = match succ {
-            Some(s) if s.id != self.member.state().self_node.id => s,
+            Some(s) if s.id != self_node.id => s,
             _ => {
                 debug!("No distinct successor; skipping migration at gen {generation}");
                 return Ok(());
             }
         };
 
-        let proto_migrants: Vec<ProtoMigrant> = migrants
-            .iter()
-            .map(|m| ProtoMigrant {
-                genes: m.genes.clone(),
-                fitness: m.fitness,
-            })
-            .collect();
-
         info!(
             "Migrating {} individuals to successor {} ({}) at gen {generation}",
-            proto_migrants.len(),
+            migrants.len(),
             succ.id,
             succ.address
         );
 
-        let ch = self.channel_for(&succ.address).await?;
-        let mut client = GrpcRingClientProto::new(ch);
-        match client
-            .migrate(MigrateRequest {
-                individuals: proto_migrants,
-                sender: self.member.state().self_node.address.clone(),
-            })
+        match self
+            .client
+            .migrate(&succ.address, &self_node.address, &migrants)
             .await
         {
-            Ok(resp) => {
-                if resp.into_inner().accepted {
+            Ok(accepted) => {
+                if accepted {
                     debug!("Migration accepted by {}", succ.address);
                 } else {
                     warn!("Migration rejected by {}", succ.address);

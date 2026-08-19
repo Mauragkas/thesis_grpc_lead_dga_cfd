@@ -44,7 +44,7 @@ fn select_survivors_picks_top_by_fitness() {
     assert_eq!(survivors.len(), n_expected);
     // highest-fitness individuals should be the last indices
     for s in &survivors {
-        assert_eq!(s[0] as usize >= cfg.pop_size - n_expected, true);
+        assert!(s[0] as usize >= cfg.pop_size - n_expected);
     }
 }
 

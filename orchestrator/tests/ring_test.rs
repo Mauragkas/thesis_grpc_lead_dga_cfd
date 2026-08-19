@@ -62,3 +62,15 @@ async fn notify_accepts_closer_predecessor() {
     assert!(member.notify(NodeInfo::new(80, "node80")).await);
     assert_eq!(member.get_predecessor().await.unwrap().id, 80);
 }
+
+#[test]
+fn node_info_proto_conversion_roundtrip() {
+    let node = NodeInfo::new(12345, "localhost:50060");
+    let proto = orchestrator::proto::ring::NodeInfo::from(&node);
+    assert_eq!(proto.id, 12345);
+    assert_eq!(proto.address, "localhost:50060");
+
+    let back = NodeInfo::from(proto);
+    assert_eq!(back.id, 12345);
+    assert_eq!(back.address, "localhost:50060");
+}

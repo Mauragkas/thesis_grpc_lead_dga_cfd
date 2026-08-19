@@ -23,3 +23,21 @@ pub struct MigrantIndividual {
     pub genes: Vec<f64>,
     pub fitness: f64,
 }
+
+impl From<&MigrantIndividual> for crate::proto::ring::MigrantIndividual {
+    fn from(m: &MigrantIndividual) -> Self {
+        Self {
+            genes: m.genes.clone(),
+            fitness: m.fitness,
+        }
+    }
+}
+
+impl From<crate::proto::ring::MigrantIndividual> for MigrantIndividual {
+    fn from(m: crate::proto::ring::MigrantIndividual) -> Self {
+        Self {
+            genes: m.genes,
+            fitness: m.fitness,
+        }
+    }
+}

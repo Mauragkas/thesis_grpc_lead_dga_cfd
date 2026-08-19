@@ -4,6 +4,20 @@
 use crate::ring::state::{NodeInfo, RingState};
 use std::sync::Arc;
 
+/// ISP: the abstract contract for local ring member operations.
+/// DIP: modules (such as LeadMigration and RingServer) depend on this abstraction.
+#[async_trait::async_trait]
+pub trait RingMember: Send + Sync {
+    async fn find_successor(&self, id: u64) -> NodeInfo;
+    async fn get_predecessor(&self) -> Option<NodeInfo>;
+    async fn get_successor(&self) -> Option<NodeInfo>;
+    fn self_node(&self) -> NodeInfo;
+    async fn notify(&self, other: NodeInfo) -> bool;
+    async fn get_successor_list(&self) -> Vec<NodeInfo>;
+    async fn set_successor(&self, node: NodeInfo);
+    async fn set_successor_list(&self, list: Vec<NodeInfo>);
+}
+
 pub struct LocalRingMember {
     state: Arc<RingState>,
 }
@@ -15,6 +29,14 @@ impl LocalRingMember {
 
     pub fn state(&self) -> &Arc<RingState> {
         &self.state
+    }
+
+    pub fn self_node(&self) -> NodeInfo {
+        self.state.self_node.clone()
+    }
+
+    pub async fn get_successor(&self) -> Option<NodeInfo> {
+        self.state.successor.lock().await.clone()
     }
 
     /// Find the successor of `id` from this node's perspective.
@@ -73,5 +95,40 @@ impl LocalRingMember {
 
     pub async fn set_successor_list(&self, list: Vec<NodeInfo>) {
         *self.state.successor_list.lock().await = list;
+    }
+}
+
+#[async_trait::async_trait]
+impl RingMember for LocalRingMember {
+    async fn find_successor(&self, id: u64) -> NodeInfo {
+        self.find_successor(id).await
+    }
+
+    async fn get_predecessor(&self) -> Option<NodeInfo> {
+        self.get_predecessor().await
+    }
+
+    async fn get_successor(&self) -> Option<NodeInfo> {
+        self.get_successor().await
+    }
+
+    fn self_node(&self) -> NodeInfo {
+        self.self_node()
+    }
+
+    async fn notify(&self, other: NodeInfo) -> bool {
+        self.notify(other).await
+    }
+
+    async fn get_successor_list(&self) -> Vec<NodeInfo> {
+        self.get_successor_list().await
+    }
+
+    async fn set_successor(&self, node: NodeInfo) {
+        self.set_successor(node).await
+    }
+
+    async fn set_successor_list(&self, list: Vec<NodeInfo>) {
+        self.set_successor_list(list).await
     }
 }

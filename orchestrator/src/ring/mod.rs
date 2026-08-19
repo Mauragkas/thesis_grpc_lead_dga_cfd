@@ -16,6 +16,6 @@ pub use client::RingClient;
 pub use grpc_client::GrpcRingClient;
 pub use grpc_server::RingServer;
 pub use hash::{AddressHasher, Sha256Hasher};
-pub use member::LocalRingMember;
+pub use member::{LocalRingMember, RingMember};
 pub use stabilization::Stabilizer;
 pub use state::{NodeInfo, RingState};

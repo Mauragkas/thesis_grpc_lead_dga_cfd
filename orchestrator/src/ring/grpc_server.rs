@@ -1,25 +1,27 @@
 //! SRP: gRPC server adapter. Translates proto messages into
-//! `LocalRingMember` calls and the `MigrantBuffer` push. Holds no
+//! `RingMember` calls and the `MigrantBuffer` push. Holds no
 //! business logic — pure wiring.
 
 use crate::migration::buffer::MigrantBuffer;
+use crate::migration::MigrantIndividual;
 use crate::proto::ring::ring_server::Ring as RingTrait;
 use crate::proto::ring::{
     BoolMsg, Empty, FindSuccRequest, MigrateRequest, MigrateResponse, NodeInfo as ProtoNodeInfo,
     NodeInfoList, NotifyRequest, OptionalNodeInfo,
 };
-use crate::ring::member::LocalRingMember;
+use crate::ring::member::RingMember;
+use crate::ring::state::NodeInfo;
 use std::sync::Arc;
 use tonic::{Request, Response, Status};
 use tracing::debug;
 
-pub struct RingServer {
-    member: LocalRingMember,
+pub struct RingServer<M: RingMember> {
+    member: M,
     migrant_buffer: Arc<MigrantBuffer>,
 }
 
-impl RingServer {
-    pub fn new(member: LocalRingMember, migrant_buffer: Arc<MigrantBuffer>) -> Self {
+impl<M: RingMember> RingServer<M> {
+    pub fn new(member: M, migrant_buffer: Arc<MigrantBuffer>) -> Self {
         Self {
             member,
             migrant_buffer,
@@ -27,29 +29,15 @@ impl RingServer {
     }
 }
 
-fn to_proto(n: &crate::ring::state::NodeInfo) -> ProtoNodeInfo {
-    ProtoNodeInfo {
-        id: n.id,
-        address: n.address.clone(),
-    }
-}
-
-fn from_proto(n: ProtoNodeInfo) -> crate::ring::state::NodeInfo {
-    crate::ring::state::NodeInfo {
-        id: n.id,
-        address: n.address,
-    }
-}
-
 #[tonic::async_trait]
-impl RingTrait for RingServer {
+impl<M: RingMember + 'static> RingTrait for RingServer<M> {
     async fn find_successor(
         &self,
         req: Request<FindSuccRequest>,
     ) -> Result<Response<ProtoNodeInfo>, Status> {
         let id = req.into_inner().id;
         let succ = self.member.find_successor(id).await;
-        Ok(Response::new(to_proto(&succ)))
+        Ok(Response::new(ProtoNodeInfo::from(&succ)))
     }
 
     async fn get_predecessor(
@@ -58,7 +46,7 @@ impl RingTrait for RingServer {
     ) -> Result<Response<OptionalNodeInfo>, Status> {
         let pred = self.member.get_predecessor().await;
         Ok(Response::new(OptionalNodeInfo {
-            node: pred.map(|p| to_proto(&p)),
+            node: pred.map(|p| ProtoNodeInfo::from(&p)),
         }))
     }
 
@@ -67,7 +55,7 @@ impl RingTrait for RingServer {
             .into_inner()
             .other
             .ok_or_else(|| Status::invalid_argument("notify requires `other`"))?;
-        let accepted = self.member.notify(from_proto(other)).await;
+        let accepted = self.member.notify(NodeInfo::from(other)).await;
         Ok(Response::new(BoolMsg { ok: accepted }))
     }
 
@@ -77,7 +65,7 @@ impl RingTrait for RingServer {
     ) -> Result<Response<NodeInfoList>, Status> {
         let list = self.member.get_successor_list().await;
         Ok(Response::new(NodeInfoList {
-            nodes: list.iter().map(to_proto).collect(),
+            nodes: list.iter().map(ProtoNodeInfo::from).collect(),
         }))
     }
 
@@ -98,10 +86,7 @@ impl RingTrait for RingServer {
         let migrants: Vec<_> = inner
             .individuals
             .into_iter()
-            .map(|m| crate::migration::MigrantIndividual {
-                genes: m.genes,
-                fitness: m.fitness,
-            })
+            .map(MigrantIndividual::from)
             .collect();
         self.migrant_buffer.push(migrants).await;
         Ok(Response::new(MigrateResponse { accepted: true }))

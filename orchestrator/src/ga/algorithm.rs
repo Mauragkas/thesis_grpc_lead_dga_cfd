@@ -40,101 +40,138 @@ impl<'a> GaRunner<'a> {
         for gen in 1..=self.cfg.generations {
             info!("Evaluating generation {gen}/{}...", self.cfg.generations);
 
-            // --- Drain immigrants and integrate before evaluation ---
-            if let Some(mig) = self.migration {
-                let immigrants = mig.drain_immigrants().await;
-                if !immigrants.is_empty() {
-                    info!(
-                        "Gen {gen}: integrating {} immigrants into population",
-                        immigrants.len()
-                    );
-                    // Replace the worst individuals with immigrants.
-                    let indexed: Vec<usize> = (0..population.len()).collect();
-                    // Sort ascending by current best-known fitness (we don't
-                    // have fitnesses yet this gen, so just replace from the
-                    // back — the last slots are arbitrary in a fresh pop).
-                    // A smarter approach: evaluate first, then replace worst.
-                    // For simplicity, append immigrants and trim to pop_size.
-                    for im in immigrants {
-                        population.push(im.genes);
-                    }
-                    population.truncate(self.cfg.pop_size);
-                    let _ = indexed;
-                }
-            }
+            self.integrate_immigrants(&mut population, gen).await;
 
-            let mut fitnesses = vec![f64::NEG_INFINITY; population.len()];
-            let mut uncached_idx: Vec<usize> = Vec::new();
-            let mut uncached: Vec<Vec<f64>> = Vec::new();
+            let (fitnesses, hits) = self.evaluate_generation(&population, gen).await?;
 
-            for (i, genes) in population.iter().enumerate() {
-                match self.store.lookup_exact(genes, gen).await {
-                    Some(fit) => fitnesses[i] = fit,
-                    None => {
-                        uncached_idx.push(i);
-                        uncached.push(genes.clone());
-                    }
-                }
-            }
-
-            let hits = population.len() - uncached.len();
-            if hits > 0 {
-                info!(
-                    "Gen {gen}: {hits} exact cache hits, {} sent to evaluator",
-                    uncached.len()
-                );
-            }
-
-            // Only RPC the individuals we genuinely need to evaluate.
-            if !uncached.is_empty() {
-                let fresh = self
-                    .evaluator
-                    .evaluate_population(&uncached)
-                    .await
-                    .map_err(|e| {
-                        error!("Evaluator failed at generation {gen}: {e}");
-                        e
-                    })?;
-                for ((&i, g), f) in uncached_idx.iter().zip(uncached.iter()).zip(fresh.iter()) {
-                    fitnesses[i] = *f;
-                    self.store.store(g.clone(), *f, gen).await;
-
-                    if let Some(ns) = self.neighbor_store {
-                        if let Err(e) = ns.store(g, *f, gen).await {
-                            warn!("neighbor store failed (gen {gen}): {e}");
-                        }
-                    }
-                }
-            }
-
-            // Drop records not retrieved within the TTL window.
             self.store.evict_expired(gen).await;
 
-            let best = fitnesses.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
-            let avg = fitnesses.iter().sum::<f64>() / fitnesses.len() as f64;
-            best_ever = best_ever.max(best);
-            println!(
-                "Gen {}/{} | Best: {:.4} | Avg: {:.4} | BestEver: {:.4} | Cache hits: {}",
-                gen, self.cfg.generations, best, avg, best_ever, hits
-            );
-            info!(
-                "Gen {gen}: best={best:.4}, avg={avg:.4}, best_ever={best_ever:.4}, cache_hits={hits}"
-            );
+            self.record_generation_stats(gen, &fitnesses, hits, &mut best_ever);
 
-            // --- Emigrate after evaluation ---
-            if let Some(mig) = self.migration {
-                if let Err(e) = mig.maybe_emigrate(gen, &population, &fitnesses).await {
-                    warn!("Migration (emigrate) failed at gen {gen}: {e}");
-                }
-            }
+            self.handle_emigration(gen, &population, &fitnesses).await;
 
-            let survivors = select_survivors(&population, &fitnesses, self.cfg);
-            population = next_generation(&survivors, self.cfg, rng, &normal);
+            population = self.advance_population(&population, &fitnesses, rng, &normal);
         }
 
         let elapsed = start.elapsed().as_secs_f64();
         info!("GA run finished in {elapsed:.2}s; best fitness: {best_ever:.4}");
         println!("Finished GA run in {elapsed:.2}s. Best fitness: {best_ever:.4}");
         Ok(best_ever)
+    }
+
+    /// Drains incoming immigrants and replaces the tail of the population.
+    async fn integrate_immigrants(&self, population: &mut Vec<Vec<f64>>, gen: usize) {
+        if let Some(mig) = self.migration {
+            let immigrants = mig.drain_immigrants().await;
+            if !immigrants.is_empty() {
+                info!(
+                    "Gen {gen}: integrating {} immigrants into population",
+                    immigrants.len()
+                );
+                for im in immigrants {
+                    population.push(im.genes);
+                }
+                population.truncate(self.cfg.pop_size);
+            }
+        }
+    }
+
+    /// Evaluates population members, leveraging exact store cache and remote evaluator.
+    async fn evaluate_generation(
+        &self,
+        population: &[Vec<f64>],
+        gen: usize,
+    ) -> Result<(Vec<f64>, usize), Status> {
+        let mut fitnesses = vec![f64::NEG_INFINITY; population.len()];
+        let mut uncached_idx: Vec<usize> = Vec::new();
+        let mut uncached: Vec<Vec<f64>> = Vec::new();
+
+        for (i, genes) in population.iter().enumerate() {
+            match self.store.lookup_exact(genes, gen).await {
+                Some(fit) => fitnesses[i] = fit,
+                None => {
+                    uncached_idx.push(i);
+                    uncached.push(genes.clone());
+                }
+            }
+        }
+
+        let hits = population.len() - uncached.len();
+        if hits > 0 {
+            info!(
+                "Gen {gen}: {hits} exact cache hits, {} sent to evaluator",
+                uncached.len()
+            );
+        }
+
+        if !uncached.is_empty() {
+            let fresh = self
+                .evaluator
+                .evaluate_population(&uncached)
+                .await
+                .map_err(|e| {
+                    error!("Evaluator failed at generation {gen}: {e}");
+                    e
+                })?;
+            for ((&i, g), f) in uncached_idx.iter().zip(uncached.iter()).zip(fresh.iter()) {
+                fitnesses[i] = *f;
+                self.store.store(g.clone(), *f, gen).await;
+
+                if let Some(ns) = self.neighbor_store {
+                    if let Err(e) = ns.store(g, *f, gen).await {
+                        warn!("neighbor store failed (gen {gen}): {e}");
+                    }
+                }
+            }
+        }
+
+        Ok((fitnesses, hits))
+    }
+
+    /// Records generation fitness metrics to stdout and logs.
+    fn record_generation_stats(
+        &self,
+        gen: usize,
+        fitnesses: &[f64],
+        hits: usize,
+        best_ever: &mut f64,
+    ) {
+        let best = fitnesses.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+        let avg = fitnesses.iter().sum::<f64>() / fitnesses.len() as f64;
+        *best_ever = (*best_ever).max(best);
+        println!(
+            "Gen {}/{} | Best: {:.4} | Avg: {:.4} | BestEver: {:.4} | Cache hits: {}",
+            gen, self.cfg.generations, best, avg, *best_ever, hits
+        );
+        info!(
+            "Gen {gen}: best={best:.4}, avg={avg:.4}, best_ever={:.4}, cache_hits={hits}",
+            *best_ever
+        );
+    }
+
+    /// Emigrates individuals to ring successor if due.
+    async fn handle_emigration(
+        &self,
+        gen: usize,
+        population: &[Vec<f64>],
+        fitnesses: &[f64],
+    ) {
+        if let Some(mig) = self.migration {
+            if let Err(e) = mig.maybe_emigrate(gen, population, fitnesses).await {
+                warn!("Migration (emigrate) failed at gen {gen}: {e}");
+            }
+        }
+    }
+
+    /// Selects survivors and reproduces the next generation.
+    fn advance_population(
+        &self,
+        population: &[Vec<f64>],
+        fitnesses: &[f64],
+        rng: &mut StdRng,
+        normal: &Normal<f64>,
+    ) -> Vec<Vec<f64>> {
+        let survivors = select_survivors(population, fitnesses, self.cfg);
+        next_generation(&survivors, self.cfg, rng, normal)
     }
 }
