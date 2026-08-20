@@ -9,3 +9,7 @@ pub mod lead {
 pub mod ring {
     tonic::include_proto!("orchestrator_ring");
 }
+
+pub mod surrogate {
+    tonic::include_proto!("surrogate");
+}

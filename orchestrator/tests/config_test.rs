@@ -3,7 +3,7 @@
 mod common;
 
 use orchestrator::config::{
-    clip, config_from_vars, GaConfig, GeneStoreConfig, TransportConfig,
+    clip, config_from_vars, GaConfig, GeneStoreConfig, TierConfig, TransportConfig,
 };
 use std::time::Duration;
 
@@ -23,6 +23,11 @@ fn defaults_are_sane() {
 
     let s = GeneStoreConfig::default();
     assert!(s.max_age_generations > 0);
+
+    let tier = TierConfig::default();
+    assert!(tier.epsilon_exact > 0.0);
+    assert!(tier.radius_r > tier.epsilon_exact);
+    assert!(tier.k_neighbors > 0);
 }
 
 #[test]
@@ -43,11 +48,15 @@ fn clip_is_idempotent_at_bounds() {
 #[test]
 fn config_from_vars_uses_defaults_when_empty() {
     let empty_vars: [(&str, &str); 0] = [];
-    let (ga, _t, store, lead, ring, migration) = config_from_vars(empty_vars);
+    let (ga, _t, store, lead, surrogate, tier, ring, migration) = config_from_vars(empty_vars);
     assert_eq!(ga.eval_endpoint, "load-balancer:50051");
     assert_eq!(ga.seed, 42);
     assert_eq!(store.max_age_generations, 5);
     assert!(lead.endpoint.is_none());
+    assert!(surrogate.endpoint.is_none());
+    assert_eq!(tier.epsilon_exact, 0.005);
+    assert_eq!(tier.radius_r, 0.15);
+    assert_eq!(tier.k_neighbors, 15);
     assert_eq!(ring.bind_address, "0.0.0.0:50060");
     assert_eq!(ring.self_address, "orchestrator:50060");
     assert!(ring.bootstrap_address.is_none());
@@ -62,6 +71,10 @@ fn config_from_vars_reads_overrides() {
         ("GA_SEED", "123"),
         ("GENE_STORE_MAX_AGE", "17"),
         ("LEAD_ENDPOINT", "lead-1:2001"),
+        ("SURROGATE_ENDPOINT", "surrogate-1:50054"),
+        ("TIER_EPSILON_EXACT", "0.01"),
+        ("TIER_RADIUS_R", "0.25"),
+        ("TIER_K_NEIGHBORS", "20"),
         ("RING_BIND", "0.0.0.0:60000"),
         ("RING_SELF_ADDRESS", "orch-1:60000"),
         ("RING_BOOTSTRAP", "orch-0:60000"),
@@ -69,11 +82,15 @@ fn config_from_vars_reads_overrides() {
         ("MIGRATION_COUNT", "4"),
     ];
 
-    let (ga, _t, store, lead, ring, migration) = config_from_vars(vars);
+    let (ga, _t, store, lead, surrogate, tier, ring, migration) = config_from_vars(vars);
     assert_eq!(ga.eval_endpoint, "worker:9999");
     assert_eq!(ga.seed, 123);
     assert_eq!(store.max_age_generations, 17);
     assert_eq!(lead.endpoint.as_deref(), Some("lead-1:2001"));
+    assert_eq!(surrogate.endpoint.as_deref(), Some("surrogate-1:50054"));
+    assert_eq!(tier.epsilon_exact, 0.01);
+    assert_eq!(tier.radius_r, 0.25);
+    assert_eq!(tier.k_neighbors, 20);
     assert_eq!(ring.bind_address, "0.0.0.0:60000");
     assert_eq!(ring.self_address, "orch-1:60000");
     assert_eq!(ring.bootstrap_address.as_deref(), Some("orch-0:60000"));
@@ -89,7 +106,7 @@ fn config_from_vars_ignores_invalid_numerical_values() {
         ("MIGRATION_INTERVAL", "bad"),
         ("MIGRATION_COUNT", "also-bad"),
     ];
-    let (ga, _, store, _, _, migration) = config_from_vars(vars);
+    let (ga, _, store, _, _, _, _, migration) = config_from_vars(vars);
     assert_eq!(ga.seed, 42); // falls back to default
     assert_eq!(store.max_age_generations, 5);
     assert_eq!(migration.interval_generations, 5);

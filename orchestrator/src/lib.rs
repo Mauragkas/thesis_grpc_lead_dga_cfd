@@ -14,5 +14,6 @@ pub mod migration;
 pub mod neighbor_store;
 pub mod proto;
 pub mod ring;
+pub mod surrogate_client;
 pub mod transport;
 

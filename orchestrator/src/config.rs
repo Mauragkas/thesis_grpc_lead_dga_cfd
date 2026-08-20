@@ -7,6 +7,31 @@ pub struct LeadConfig {
     pub endpoint: Option<String>,
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct SurrogateClientConfig {
+    pub endpoint: Option<String>,
+}
+
+/// Configuration for the Multi-Tier (ε-Bypass) evaluation pipeline.
+#[derive(Debug, Clone)]
+pub struct TierConfig {
+    pub epsilon_exact: f64,
+    pub radius_r: f64,
+    pub k_neighbors: usize,
+    pub min_neighbors: usize,
+}
+
+impl Default for TierConfig {
+    fn default() -> Self {
+        Self {
+            epsilon_exact: 0.005,
+            radius_r: 0.15,
+            k_neighbors: 15,
+            min_neighbors: 1,
+        }
+    }
+}
+
 /// Single source of truth for tunable GA + transport parameters.
 /// SRP: holds configuration only; no behaviour.
 #[derive(Debug, Clone)]
@@ -91,6 +116,8 @@ pub fn config_from_vars<I, K, V>(
     TransportConfig,
     GeneStoreConfig,
     LeadConfig,
+    SurrogateClientConfig,
+    TierConfig,
     RingConfig,
     MigrationConfig,
 )
@@ -152,6 +179,31 @@ where
         info!("LEAD_ENDPOINT not set; LEAD persistence disabled");
     }
 
+    let mut surrogate = SurrogateClientConfig::default();
+    if let Some(ep) = env_map.get("SURROGATE_ENDPOINT") {
+        info!("SURROGATE_ENDPOINT override: {ep}");
+        surrogate.endpoint = Some(ep.clone());
+    } else {
+        info!("SURROGATE_ENDPOINT not set; surrogate tier disabled");
+    }
+
+    let mut tier = TierConfig::default();
+    if let Some(raw) = env_map.get("TIER_EPSILON_EXACT") {
+        if let Ok(eps) = raw.parse::<f64>() {
+            tier.epsilon_exact = eps;
+        }
+    }
+    if let Some(raw) = env_map.get("TIER_RADIUS_R") {
+        if let Ok(r) = raw.parse::<f64>() {
+            tier.radius_r = r;
+        }
+    }
+    if let Some(raw) = env_map.get("TIER_K_NEIGHBORS") {
+        if let Ok(k) = raw.parse::<usize>() {
+            tier.k_neighbors = k;
+        }
+    }
+
     let mut ring = RingConfig::default();
     if let Some(addr) = env_map.get("RING_BIND") {
         info!("RING_BIND override: {addr}");
@@ -205,7 +257,7 @@ where
         );
     }
 
-    (ga, TransportConfig::default(), store, lead, ring, migration)
+    (ga, TransportConfig::default(), store, lead, surrogate, tier, ring, migration)
 }
 
 /// Reads overrides from process environment. Convenience wrapper around `config_from_vars`.
@@ -214,6 +266,8 @@ pub fn config_from_env() -> (
     TransportConfig,
     GeneStoreConfig,
     LeadConfig,
+    SurrogateClientConfig,
+    TierConfig,
     RingConfig,
     MigrationConfig,
 ) {
