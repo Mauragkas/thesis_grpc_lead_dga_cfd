@@ -79,12 +79,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("cargo:rustc-link-lib=cudart");
             // Tell the C++ build that CUDA is available so stubs get elided.
             cpp_build.define("ENABLE_CUDA", "1");
+        } else {
+            // nvcc present but compilation failed (e.g. no GPU headers) — fall
+            // through to the CPU-stub path below.
+            add_cuda_stubs(&mut cpp_build)?;
         }
-        // If try_compile fails we fall through: the CPU stubs already defined
-        // knn_predict_cuda / rf_predict_cuda in the .cpp files.
-        // We do NOT add .cu files to the C++ build — they contain CUDA syntax.
+    } else {
+        // nvcc absent: compile the .cu files as plain C++ by copying them to .cpp stubs.
+        // The #else branches inside each file define CPU no-op stubs for every cuda_* symbol.
+        add_cuda_stubs(&mut cpp_build)?;
     }
-    // When nvcc is absent: same outcome — CPU stubs provide all symbols.
 
     cpp_build.compile("gp_native");
 
@@ -93,5 +97,26 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("cargo:rustc-link-lib=gomp");
     }
 
+    Ok(())
+}
+
+fn add_cuda_stubs(cpp_build: &mut cc::Build) -> Result<(), Box<dyn std::error::Error>> {
+    let out_dir = env::var("OUT_DIR")?;
+    let cu_files = [
+        "native/src/gp/gp_cuda.cu",
+        "native/src/knn/knn_cuda.cu",
+        "native/src/rf/rf_cuda.cu",
+        "native/src/mlp/mlp_cuda.cu",
+    ];
+    for cu_file in &cu_files {
+        let stem = std::path::Path::new(cu_file)
+            .file_stem()
+            .ok_or("Invalid file name")?
+            .to_str()
+            .ok_or("Invalid UTF-8")?;
+        let dst = std::path::Path::new(&out_dir).join(format!("{}_stub.cpp", stem));
+        std::fs::copy(cu_file, &dst)?;
+        cpp_build.file(dst);
+    }
     Ok(())
 }

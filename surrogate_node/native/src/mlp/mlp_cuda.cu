@@ -151,4 +151,17 @@ extern "C" MlpStatusCode mlp_predict_cuda(
 
     return MLP_SUCCESS;
 }
+
+#else /* !ENABLE_CUDA — CPU stub */
+
+extern "C" MlpStatusCode mlp_predict_cuda(
+    const MlpModelHandle* handle,
+    const double*         X_test,
+    size_t                n_test,
+    double*               out_pred
+) {
+    /* No CUDA at build time — delegate to CPU implementation. */
+    return mlp_predict(handle, X_test, n_test, out_pred);
+}
+
 #endif
