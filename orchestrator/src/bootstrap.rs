@@ -1,10 +1,13 @@
 //! Composition root for the orchestrator service.
 //!
-//! Assembles all subsystems (ring, evaluator, gene store, LEAD neighbor store,
-//! migration) and executes the distributed GA run.
+//! Assembles all subsystems (ring, simulator, gene store, LEAD neighbor store,
+//! surrogate node, migration, multi-tier evaluator) and executes the distributed GA run.
 
-use crate::config::{config_from_env, GaConfig, LeadConfig, RingConfig, TransportConfig};
-use crate::evaluator::GrpcEvaluator;
+use crate::config::{
+    config_from_env, GaConfig, LeadConfig, RingConfig, SurrogateClientConfig,
+    TransportConfig,
+};
+use crate::evaluator::{GrpcEvaluator, MultiTierEvaluator};
 use crate::ga::algorithm::GaRunner;
 use crate::gene_store::{EuclideanDistance, GenerationEvictor, InMemoryGeneStore};
 use crate::hilbert::HilbertKeyGenerator;
@@ -17,6 +20,7 @@ use crate::ring::{
     AddressHasher, GrpcRingClient, LocalRingMember, NodeInfo, RingServer, RingState, Sha256Hasher,
     Stabilizer,
 };
+use crate::surrogate_client::{GrpcSurrogateClient, SurrogateClient};
 use crate::transport::channel::{build_endpoint, wait_for_channel};
 use rand::rngs::StdRng;
 use rand::SeedableRng;
@@ -100,7 +104,7 @@ pub async fn setup_ring(
     Ok((member, ring_client))
 }
 
-/// Connects to the evaluation worker service and creates the gRPC evaluator.
+/// Connects to the evaluation worker service and creates the gRPC simulator.
 pub async fn setup_evaluator(
     ga_cfg: &GaConfig,
     transport_cfg: &TransportConfig,
@@ -128,12 +132,42 @@ pub async fn setup_evaluator(
     Ok(GrpcEvaluator::new(client, transport_cfg.clone(), ga_cfg.batch_size))
 }
 
+/// Connects to the surrogate node microservice if configured.
+pub async fn setup_surrogate_client(
+    surrogate_cfg: &SurrogateClientConfig,
+    transport_cfg: &TransportConfig,
+) -> Result<Option<Arc<dyn SurrogateClient>>, Box<Status>> {
+    if let Some(ep) = &surrogate_cfg.endpoint {
+        let surrogate_endpoint = build_endpoint(ep, transport_cfg).map_err(|e| {
+            error!("Failed to build surrogate endpoint '{ep}': {e}");
+            e
+        })?;
+        info!("Waiting for surrogate node endpoint '{ep}' to be ready...");
+        let channel = wait_for_channel(surrogate_endpoint, transport_cfg.channel_ready_deadline)
+            .await
+            .map_err(|e| {
+                error!(
+                    "Surrogate channel not ready within {:?}: {e}",
+                    transport_cfg.channel_ready_deadline
+                );
+                Box::new(e)
+            })?;
+        info!("Surrogate node ready at {ep}");
+        let client = crate::proto::surrogate::surrogate_service_client::SurrogateServiceClient::new(channel);
+        let grpc_client = GrpcSurrogateClient::new(client, transport_cfg.clone());
+        Ok(Some(Arc::new(grpc_client)))
+    } else {
+        info!("SURROGATE_ENDPOINT not set; surrogate tier disabled");
+        Ok(None)
+    }
+}
+
 /// Connects to the LEAD DHT node if configured and returns the neighbor store.
 pub async fn setup_neighbor_store(
     lead_cfg: &LeadConfig,
     ga_cfg: &GaConfig,
     transport_cfg: &TransportConfig,
-) -> Result<Option<HilbertNeighborStore<HilbertKeyGenerator, GrpcLeadStore>>, Box<Status>> {
+) -> Result<Option<Arc<HilbertNeighborStore<HilbertKeyGenerator, GrpcLeadStore>>>, Box<Status>> {
     if let Some(ep) = &lead_cfg.endpoint {
         let lead_endpoint = build_endpoint(ep, transport_cfg).map_err(|e| {
             error!("Failed to build LEAD endpoint '{ep}': {e}");
@@ -153,7 +187,7 @@ pub async fn setup_neighbor_store(
         let lead_client = crate::proto::lead::lead_client::LeadClient::new(lead_channel);
         let grpc_lead = GrpcLeadStore::new(lead_client);
         let keygen = HilbertKeyGenerator::new(ga_cfg.genes_len);
-        Ok(Some(HilbertNeighborStore::new(keygen, grpc_lead)))
+        Ok(Some(Arc::new(HilbertNeighborStore::new(keygen, grpc_lead))))
     } else {
         info!("LEAD_ENDPOINT not set; LEAD persistence disabled");
         Ok(None)
@@ -164,7 +198,9 @@ pub async fn setup_neighbor_store(
 pub async fn run() -> Result<(), Box<Status>> {
     init_logging();
 
-    let (ga_cfg, transport_cfg, store_cfg, lead_cfg, ring_cfg, migration_cfg) = config_from_env();
+    let (ga_cfg, transport_cfg, store_cfg, lead_cfg, surrogate_cfg, tier_cfg, ring_cfg, migration_cfg) =
+        config_from_env();
+
     info!(
         "GA config: pop_size={}, genes_len={}, generations={}, mut_sigma={}, elite_frac={}, batch_size={}, seed={}",
         ga_cfg.pop_size,
@@ -177,6 +213,10 @@ pub async fn run() -> Result<(), Box<Status>> {
     );
     info!("Evaluator endpoint: {}", ga_cfg.eval_endpoint);
     info!(
+        "Tier config: ε_exact={}, R={}, k_neighbors={}",
+        tier_cfg.epsilon_exact, tier_cfg.radius_r, tier_cfg.k_neighbors
+    );
+    info!(
         "Ring config: bind={}, self={}, bootstrap={:?}",
         ring_cfg.bind_address, ring_cfg.self_address, ring_cfg.bootstrap_address
     );
@@ -188,14 +228,23 @@ pub async fn run() -> Result<(), Box<Status>> {
     let migrant_buffer = Arc::new(MigrantBuffer::new());
     let (member, ring_client) = setup_ring(&ring_cfg, migrant_buffer.clone()).await?;
 
-    let evaluator = setup_evaluator(&ga_cfg, &transport_cfg).await?;
+    let raw_simulator = Arc::new(setup_evaluator(&ga_cfg, &transport_cfg).await?);
 
     let evictor = GenerationEvictor {
         max_age: store_cfg.max_age_generations,
     };
-    let store = InMemoryGeneStore::new(EuclideanDistance, evictor);
+    let store = Arc::new(InMemoryGeneStore::new(EuclideanDistance, evictor));
 
     let neighbor_store = setup_neighbor_store(&lead_cfg, &ga_cfg, &transport_cfg).await?;
+    let surrogate_client = setup_surrogate_client(&surrogate_cfg, &transport_cfg).await?;
+
+    let multi_tier_evaluator = MultiTierEvaluator::new(
+        raw_simulator.clone(),
+        store.clone(),
+        neighbor_store.clone().map(|ns| ns as Arc<dyn NeighborStore>),
+        surrogate_client,
+        tier_cfg,
+    );
 
     let migration = LeadMigration::new(
         migration_cfg,
@@ -208,9 +257,9 @@ pub async fn run() -> Result<(), Box<Status>> {
     let mut rng = StdRng::seed_from_u64(ga_cfg.seed);
     let runner = GaRunner {
         cfg: &ga_cfg,
-        evaluator: &evaluator,
-        store: &store,
-        neighbor_store: neighbor_store.as_ref().map(|s| s as &dyn NeighborStore),
+        evaluator: &multi_tier_evaluator,
+        store: store.as_ref(),
+        neighbor_store: neighbor_store.as_ref().map(|s| s.as_ref() as &dyn NeighborStore),
         migration: Some(&migration),
     };
 

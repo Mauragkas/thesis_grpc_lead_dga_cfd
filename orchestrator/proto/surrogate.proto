@@ -1,0 +1,69 @@
+syntax = "proto3";
+
+package surrogate;
+
+service SurrogateService {
+  rpc Predict (PredictRequest) returns (PredictResponse);
+  rpc PredictBatch (BatchPredictRequest) returns (BatchPredictResponse);
+  rpc IngestSamples (IngestSamplesRequest) returns (IngestSamplesResponse);
+  rpc Train (TrainRequest) returns (TrainResponse);
+  rpc GetStatus (StatusRequest) returns (StatusResponse);
+}
+
+message Individual {
+  repeated double genes = 1;
+}
+
+message PredictRequest {
+  repeated double genes = 1;
+}
+
+message PredictResponse {
+  double fitness = 1;
+  bool ready = 2;
+}
+
+message BatchPredictRequest {
+  repeated Individual individuals = 1;
+}
+
+message BatchPredictResponse {
+  repeated double fitnesses = 1;
+  bool ready = 2;
+}
+
+message Sample {
+  repeated double genes = 1;
+  double fitness = 2;
+}
+
+message IngestSamplesRequest {
+  repeated Sample samples = 1;
+  bool trigger_training = 2;
+}
+
+message IngestSamplesResponse {
+  uint64 current_window_size = 1;
+  bool training_started = 2;
+}
+
+message TrainRequest {
+  bool force = 1;
+}
+
+message TrainResponse {
+  bool success = 1;
+  uint64 samples_trained = 2;
+  double r2_score = 3;
+  double rmse = 4;
+}
+
+message StatusRequest {}
+
+message StatusResponse {
+  bool ready = 1;
+  uint64 window_size = 2;
+  uint64 max_window_size = 3;
+  uint64 model_version = 4;
+  string device_name = 5;
+}

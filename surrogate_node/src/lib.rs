@@ -2,6 +2,10 @@ pub mod backend;
 pub mod data;
 pub mod domain;
 pub mod model;
+pub mod proto;
+pub mod service;
+
+pub use service::{SlidingWindowBuffer, SurrogateConfig, SurrogateServer, SurrogateState, SurrogateTrainer};
 
 pub use backend::{
     BackendFactory, ComputeBackend, CpuOpenMpBackend, CudaBackend, GpDeviceType,

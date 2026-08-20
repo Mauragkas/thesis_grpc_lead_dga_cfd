@@ -4,9 +4,13 @@
 mod common;
 
 use common::{small_config, MockEvaluator, MockGeneStore};
+use orchestrator::config::TierConfig;
+use orchestrator::evaluator::MultiTierEvaluator;
 use orchestrator::ga::algorithm::GaRunner;
+use orchestrator::surrogate_client::MockSurrogateClient;
 use rand::rngs::StdRng;
 use rand::SeedableRng;
+use std::sync::Arc;
 use tonic::Status;
 
 fn seeded_rng(cfg: &orchestrator::config::GaConfig) -> StdRng {
@@ -56,33 +60,41 @@ async fn runner_propagates_evaluator_errors() {
 }
 
 #[tokio::test]
-async fn runner_skips_evaluator_for_cached_individuals() {
+async fn runner_with_multi_tier_evaluator_exact_cache_hits() {
     let cfg = small_config();
     let mut rng = seeded_rng(&cfg);
-    // Build the initial population deterministically so we can seed hits.
     let pop = orchestrator::ga::operators::random_population(&mut rng, &cfg);
 
-    // Seed the store with exact hits for the first half of the population.
-    let store = MockGeneStore::empty();
+    let store = Arc::new(MockGeneStore::empty());
     let half = pop.len() / 2;
     for g in pop.iter().take(half) {
         store.seed_exact(g, 100.0);
     }
 
-    // Evaluator returns distinct values so we can confirm it ran.
-    let evaluator = MockEvaluator::new((0..pop.len()).map(|i| i as f64).collect());
+    let sim = Arc::new(MockEvaluator::new((0..pop.len()).map(|i| i as f64).collect()));
+    let surrogate = Arc::new(MockSurrogateClient::new(true, 50.0));
+    let tier_cfg = TierConfig::default();
+
+    let multi_tier = MultiTierEvaluator::new(
+        sim,
+        store.clone(),
+        None,
+        Some(surrogate),
+        tier_cfg,
+    );
 
     let mut rng = StdRng::seed_from_u64(cfg.seed);
     let runner = GaRunner {
         cfg: &cfg,
-        evaluator: &evaluator,
-        store: &store,
+        evaluator: &multi_tier,
+        store: store.as_ref(),
         neighbor_store: None,
         migration: None,
     };
     let best = runner.run(&mut rng).await.unwrap();
-    // At least one generation ran; cached individuals returned fitness 100.0
     assert!(best >= 100.0);
+    let snap = multi_tier.metrics.snapshot();
+    assert!(snap.tier1_exact_hits > 0);
 }
 
 #[tokio::test]
@@ -107,20 +119,29 @@ async fn runner_invokes_eviction_each_generation() {
 }
 
 #[tokio::test]
-async fn runner_stores_each_newly_evaluated_individual() {
+async fn runner_with_multi_tier_stores_newly_evaluated_individuals() {
     let cfg = small_config();
-    let evaluator = MockEvaluator::new((0..cfg.pop_size).map(|i| i as f64).collect());
-    let store = MockGeneStore::empty();
+    let store = Arc::new(MockGeneStore::empty());
+    let sim = Arc::new(MockEvaluator::new((0..cfg.pop_size).map(|i| i as f64).collect()));
+    let tier_cfg = TierConfig::default();
+
+    let multi_tier = MultiTierEvaluator::new(
+        sim,
+        store.clone(),
+        None,
+        None,
+        tier_cfg,
+    );
 
     let mut rng = seeded_rng(&cfg);
     let runner = GaRunner {
         cfg: &cfg,
-        evaluator: &evaluator,
-        store: &store,
+        evaluator: &multi_tier,
+        store: store.as_ref(),
         neighbor_store: None,
         migration: None,
     };
     runner.run(&mut rng).await.unwrap();
-    // At minimum, generation 1 evaluates the full initial population uncached.
+    // At minimum, generation 1 evaluates initial population uncached and stores them.
     assert!(store.store_calls.load(std::sync::atomic::Ordering::SeqCst) >= cfg.pop_size);
 }

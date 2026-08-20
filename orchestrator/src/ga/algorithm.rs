@@ -42,11 +42,11 @@ impl<'a> GaRunner<'a> {
 
             self.integrate_immigrants(&mut population, gen).await;
 
-            let (fitnesses, hits) = self.evaluate_generation(&population, gen).await?;
+            let fitnesses = self.evaluate_generation(&population, gen).await?;
 
             self.store.evict_expired(gen).await;
 
-            self.record_generation_stats(gen, &fitnesses, hits, &mut best_ever);
+            self.record_generation_stats(gen, &fitnesses, &mut best_ever);
 
             self.handle_emigration(gen, &population, &fitnesses).await;
 
@@ -76,56 +76,19 @@ impl<'a> GaRunner<'a> {
         }
     }
 
-    /// Evaluates population members, leveraging exact store cache and remote evaluator.
+    /// Evaluates population members via the injected Evaluator abstraction.
     async fn evaluate_generation(
         &self,
         population: &[Vec<f64>],
         gen: usize,
-    ) -> Result<(Vec<f64>, usize), Status> {
-        let mut fitnesses = vec![f64::NEG_INFINITY; population.len()];
-        let mut uncached_idx: Vec<usize> = Vec::new();
-        let mut uncached: Vec<Vec<f64>> = Vec::new();
-
-        for (i, genes) in population.iter().enumerate() {
-            match self.store.lookup_exact(genes, gen).await {
-                Some(fit) => fitnesses[i] = fit,
-                None => {
-                    uncached_idx.push(i);
-                    uncached.push(genes.clone());
-                }
-            }
-        }
-
-        let hits = population.len() - uncached.len();
-        if hits > 0 {
-            info!(
-                "Gen {gen}: {hits} exact cache hits, {} sent to evaluator",
-                uncached.len()
-            );
-        }
-
-        if !uncached.is_empty() {
-            let fresh = self
-                .evaluator
-                .evaluate_population(&uncached)
-                .await
-                .map_err(|e| {
-                    error!("Evaluator failed at generation {gen}: {e}");
-                    e
-                })?;
-            for ((&i, g), f) in uncached_idx.iter().zip(uncached.iter()).zip(fresh.iter()) {
-                fitnesses[i] = *f;
-                self.store.store(g.clone(), *f, gen).await;
-
-                if let Some(ns) = self.neighbor_store {
-                    if let Err(e) = ns.store(g, *f, gen).await {
-                        warn!("neighbor store failed (gen {gen}): {e}");
-                    }
-                }
-            }
-        }
-
-        Ok((fitnesses, hits))
+    ) -> Result<Vec<f64>, Status> {
+        self.evaluator
+            .evaluate_population(population)
+            .await
+            .map_err(|e| {
+                error!("Evaluator failed at generation {gen}: {e}");
+                e
+            })
     }
 
     /// Records generation fitness metrics to stdout and logs.
@@ -133,18 +96,17 @@ impl<'a> GaRunner<'a> {
         &self,
         gen: usize,
         fitnesses: &[f64],
-        hits: usize,
         best_ever: &mut f64,
     ) {
         let best = fitnesses.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
         let avg = fitnesses.iter().sum::<f64>() / fitnesses.len() as f64;
         *best_ever = (*best_ever).max(best);
         println!(
-            "Gen {}/{} | Best: {:.4} | Avg: {:.4} | BestEver: {:.4} | Cache hits: {}",
-            gen, self.cfg.generations, best, avg, *best_ever, hits
+            "Gen {}/{} | Best: {:.4} | Avg: {:.4} | BestEver: {:.4}",
+            gen, self.cfg.generations, best, avg, *best_ever
         );
         info!(
-            "Gen {gen}: best={best:.4}, avg={avg:.4}, best_ever={:.4}, cache_hits={hits}",
+            "Gen {gen}: best={best:.4}, avg={avg:.4}, best_ever={:.4}",
             *best_ever
         );
     }

@@ -1,9 +1,15 @@
 use std::env;
 use std::process::Command;
 
-fn main() {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("cargo:rerun-if-changed=native/incl");
     println!("cargo:rerun-if-changed=native/src");
+    println!("cargo:rerun-if-changed=proto/surrogate.proto");
+
+    tonic_build::configure()
+        .build_server(true)
+        .build_client(true)
+        .compile(&["proto/surrogate.proto"], &["proto"])?;
 
     // ── Base C++ build (CPU OpenMP + ROCm stubs) ─────────────────────── //
     let mut cpp_build = cc::Build::new();
@@ -86,4 +92,6 @@ fn main() {
     {
         println!("cargo:rustc-link-lib=gomp");
     }
+
+    Ok(())
 }
