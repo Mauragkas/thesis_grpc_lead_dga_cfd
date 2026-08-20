@@ -1,19 +1,20 @@
 # Orchestrator Use Cases
 
-This folder documents the runtime use cases implemented by the `orchestrator` crate.
+Detailed functional use-case specifications describing interactions, invariants, and failure semantics across all subsystems.
 
-## Covered use cases
+## Index of Use Cases
 
-- [01. Start orchestrator run](01-startup.md)
-- [02. Load configuration from environment](02-configuration.md)
-- [03. Build transport endpoint and wait for readiness](03-transport.md)
-- [04. Run the genetic algorithm loop](04-ga-run.md)
-- [05. Evaluate a population through gRPC](05-evaluation.md)
-- [06. Short-circuit evaluation with exact gene cache](06-gene-cache.md)
-- [07. Persist evaluated genes to LEAD DHT](07-lead-store.md)
-- [08. Evict expired gene records](08-eviction.md)
-- [09. GA operators (population, selection, breeding)](09-ga-operators.md)
-- [10. Manage ring topology and Chord stabilization](10-ring-membership.md)
-- [11. Island-model migration (emigration and immigrant integration)](11-migration.md)
-- [12. Multi-probe Hilbert neighbor store (store and k-NN query)](12-neighbor-store.md)
-
+1. **[`01-startup.md`](01-startup.md)**: Bootstrapping and subsystem wiring.
+2. **[`02-configuration.md`](02-configuration.md)**: Runtime configuration loading and environment overrides.
+3. **[`03-transport.md`](03-transport.md)**: Channel initialization, readiness polling, and pooling.
+4. **[`04-ga-run.md`](04-ga-run.md)**: Generational evolutionary optimization loop.
+5. **[`05-evaluation.md`](05-evaluation.md)**: Worker simulator batch evaluation over gRPC.
+6. **[`06-gene-cache.md`](06-gene-cache.md)**: In-memory exact caching and distance calculations.
+7. **[`07-lead-store.md`](07-lead-store.md)**: Storing and retrieving genes via the LEAD Chord DHT.
+8. **[`08-eviction.md`](08-eviction.md)**: Evicting stale gene records across generation boundaries.
+9. **[`09-ga-operators.md`](09-ga-operators.md)**: Population initialization, elite survivor selection, and mutation.
+10. **[`10-ring-membership.md`](10-ring-membership.md)**: Chord stabilization, join protocol, and successor maintenance.
+11. **[`11-migration.md`](11-migration.md)**: Island-model migrant exchange across the ring.
+12. **[`12-neighbor-store.md`](12-neighbor-store.md)**: Multi-probe Hilbert curve nearest neighbor search.
+13. **[`13-surrogate-client.md`](13-surrogate-client.md)**: Querying and feeding the external surrogate service.
+14. **[`14-multi-tier-evaluation.md`](14-multi-tier-evaluation.md)**: Multi-Tier ($\epsilon$-Bypass) hierarchical evaluation pipeline.

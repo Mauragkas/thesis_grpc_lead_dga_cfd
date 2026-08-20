@@ -1,0 +1,45 @@
+sequenceDiagram
+    autonumber
+    participant Client as Orchestrator (MultiTierEvaluator)
+    participant Srv as SurrogateServer
+    participant State as SurrogateState
+    participant Buf as SlidingWindowBuffer (FIFO)
+    participant Worker as tokio::task::spawn_blocking
+    participant Trainer as SurrogateTrainer
+    participant ModelLock as active_model (RwLock)
+
+    Client-)Srv: IngestSamples(IngestSamplesRequest { samples })
+    Srv->>State: ingest_samples(samples, trigger_training)
+
+    State->>Buf: lock() & push_batch(samples)
+    Note over Buf: If len > capacity, pop oldest sample
+    Buf-->>State: (window_len, count_ingested)
+
+    State->>State: samples_since_retrain += count_ingested
+
+    alt Threshold Met (samples_since >= RETRAIN_INTERVAL and window_len >= MIN_TRAIN_SAMPLES)
+        State->>State: is_training.compare_exchange(false, true)
+        State->>Buf: extract_dataset()
+        Buf-->>State: (x_data, y_data, n_samples, dim)
+
+        State->>Worker: spawn_blocking(move || { ... })
+        State-->>Srv: (window_len, training_started = true)
+        Srv-->>Client: IngestSamplesResponse { current_window_size, training_started: true }
+
+        activate Worker
+        Worker->>Trainer: train_mlp(x_data, y_data, n_samples, dim, config)
+        Trainer->>Trainer: DatasetSplitter::split_60_20_20
+        Trainer->>Trainer: MlpSurrogate::fit (native C++/OpenMP/CUDA)
+        Trainer->>Trainer: evaluate holdout validation (R2, RMSE)
+        Trainer-->>Worker: (new_surrogate, metrics)
+
+        Worker->>ModelLock: write()
+        ModelLock-->>Worker: guard
+        Worker->>ModelLock: *active = Some(Arc::new(new_surrogate))
+        Note over ModelLock: Atomic zero-downtime swap!
+        Worker->>State: model_version += 1, samples_since_retrain = 0, is_training = false
+        deactivate Worker
+    else Below Threshold
+        State-->>Srv: (window_len, training_started = false)
+        Srv-->>Client: IngestSamplesResponse { current_window_size, training_started: false }
+    end

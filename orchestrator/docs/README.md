@@ -1,11 +1,16 @@
 # Orchestrator Documentation
 
-Architecture documentation, domain model class diagram, sequence diagrams, and use-case specifications for the `orchestrator` crate.
+Comprehensive functional and architectural documentation for the `orchestrator` crate.
 
-## Contents
+## Documentation Structure
 
-- **`domain-model.mmd` / `domain-model.png`**: Complete class diagram showing all orchestrator subsystems, interfaces, and relationships.
-- **`use-cases/`**: 12 detailed use-case documents specifying the runtime behaviors of the orchestrator.
-- **`sequence-diagrams/`**: 12 sequence diagrams illustrating message flows between orchestrator components and remote services.
-- **`render-mermaid.sh`**: Helper script to render Mermaid `.mmd` diagrams to dark-mode `.png` images using `mmdc`.
-- **`puppeteer-config.json`**: Headless Chromium configuration for Mermaid diagram rendering.
+- [`use-cases/`](use-cases/README.md): Step-by-step operational workflows and failure handling across all 14 use cases.
+- [`sequence-diagrams/`](sequence-diagrams/README.md): Mermaid sequence diagrams modeling execution flows between orchestrator modules and remote microservices.
+- [`domain-model.mmd`](domain-model.mmd): Domain object model illustrating relationships between entities, value objects, ports, and adapters.
+
+## Key Subsystems
+
+1. **Evolutionary Optimization**: Island-model Genetic Algorithm with (μ + λ) survivor selection, Gaussian mutation, and migration across a Chord-like ring.
+2. **Multi-Tier Evaluation ($\epsilon$-Bypass)**: Hierarchical evaluation strategy combining 0-FLOP exact cache hits, fast external MLP surrogate predictions, and true AeroSandbox aerodynamic simulations.
+3. **Distributed Spatial Persistence**: Order-preserving multi-probe Hilbert space-filling curve embedding indexing individuals into the LEAD DHT.
+4. **Surrogate Coordination**: Asynchronous integration with the `surrogate_node` microservice for online sliding window sample training.

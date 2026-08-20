@@ -1,0 +1,36 @@
+sequenceDiagram
+    autonumber
+    participant Caller as MultiTierEvaluator
+    participant Client as GrpcSurrogateClient
+    participant Tonic as SurrogateServiceClient<Channel>
+    participant Remote as surrogate.SurrogateService
+
+    rect rgb(30, 30, 40)
+    Note over Caller, Remote: PredictBatch Flow
+    Caller->>Client: predict_batch(individuals)
+    Client->>Client: build BatchPredictRequest
+    Client->>Tonic: predict_batch(Request)
+    Tonic->>Remote: /surrogate.SurrogateService/PredictBatch
+    alt Success & Model Ready
+        Remote-->>Tonic: BatchPredictResponse { fitnesses, ready: true }
+        Tonic-->>Client: Ok(Response)
+        Client-->>Caller: Ok(Some(fitnesses))
+    else Model In Cold-Start
+        Remote-->>Tonic: BatchPredictResponse { ready: false }
+        Tonic-->>Client: Ok(Response)
+        Client-->>Caller: Ok(None)
+    else Timeout / Error
+        Tonic-->>Client: Err(Status)
+        Client-->>Caller: Err(Status)
+    end
+    end
+
+    rect rgb(40, 30, 30)
+    Note over Caller, Remote: IngestSamples Flow (Async Background)
+    Caller-)Client: ingest_samples(samples)
+    Client->>Client: build IngestSamplesRequest
+    Client->>Tonic: ingest_samples(Request)
+    Tonic->>Remote: /surrogate.SurrogateService/IngestSamples
+    Remote-->>Tonic: IngestSamplesResponse { current_window_size, training_started }
+    Tonic-->>Client: Ok(Response)
+    end
