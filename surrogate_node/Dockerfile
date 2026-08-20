@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-FROM rust:1.80-slim AS builder
+FROM rust:1.97-slim AS builder
 WORKDIR /app
 
 # protoc is required by tonic-build; g++ and OpenMP are required by cc
