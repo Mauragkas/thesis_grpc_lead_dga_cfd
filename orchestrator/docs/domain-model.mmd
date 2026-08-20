@@ -79,6 +79,43 @@ class GrpcEvaluator {
   +evaluate_population(population) Result~Vec~f64~~
 }
 
+class MultiTierEvaluator {
+  -simulator: Arc~dyn Evaluator~
+  -store: Arc~dyn GeneStore~
+  -neighbor_store: Option~Arc~dyn NeighborStore~~
+  -surrogate: Option~Arc~dyn SurrogateClient~~
+  -tier_cfg: TierConfig
+  +metrics: TierMetricsTracker
+  +new(sim, store, neighbor_store, surrogate, tier_cfg)
+  +evaluate_population(population) Result~Vec~f64~~
+}
+
+class TierMetricsTracker {
+  -tier1_exact_hits: AtomicUsize
+  -tier2_surrogate_hits: AtomicUsize
+  -tier3_simulator_evals: AtomicUsize
+  -total_evaluations: AtomicUsize
+  +record_tier1_hit(count)
+  +record_tier2_hit(count)
+  +record_tier3_eval(count)
+  +snapshot() TierMetricsSnapshot
+}
+
+class SurrogateClient <<interface>> {
+  +predict_batch(individuals) Result~Option~Vec~f64~~~
+  +ingest_samples(samples) Result~()~
+  +is_ready() bool
+}
+
+class GrpcSurrogateClient {
+  -client: SurrogateServiceClient
+  -ready_cached: AtomicBool
+  +new(client)
+  +predict_batch(individuals) Result~Option~Vec~f64~~~
+  +ingest_samples(samples) Result~()~
+  +is_ready() bool
+}
+
 class EvaluatorClient <<external>>
 
 %% Local Exact Cache Subsystem
@@ -311,6 +348,14 @@ GaRunner --> GAOperators : generational operators
 GrpcEvaluator ..|> Evaluator
 GrpcEvaluator --> TransportConfig
 GrpcEvaluator --> EvaluatorClient
+
+MultiTierEvaluator ..|> Evaluator
+MultiTierEvaluator --> Evaluator : simulator
+MultiTierEvaluator --> GeneStore : local exact cache
+MultiTierEvaluator --> NeighborStore : LEAD DHT
+MultiTierEvaluator --> SurrogateClient : surrogate node
+MultiTierEvaluator *-- TierMetricsTracker
+GrpcSurrogateClient ..|> SurrogateClient
 
 InMemoryGeneStore ..|> GeneStore
 InMemoryGeneStore --> DistanceMetric

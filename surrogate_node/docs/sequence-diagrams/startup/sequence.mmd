@@ -1,0 +1,23 @@
+sequenceDiagram
+    autonumber
+    participant Main as surrogate_node::main
+    participant Cfg as SurrogateConfig::from_env()
+    participant State as SurrogateState::new()
+    participant Buf as SlidingWindowBuffer::new()
+    participant Srv as SurrogateServer::new()
+    participant Tonic as Server::builder()
+
+    Main->>Cfg: from_env()
+    Cfg-->>Main: config { bind, window_size, retrain_interval, mlp_epochs, ... }
+
+    Main->>State: new(config)
+    State->>Buf: new(window_size)
+    Buf-->>State: buffer allocated (FIFO capacity)
+    State-->>Main: Arc<SurrogateState> (active_model = None)
+
+    Main->>Srv: new(state)
+    Srv-->>Main: SurrogateServer
+
+    Main->>Tonic: add_service(SurrogateServiceServer::new(server))
+    Main->>Tonic: serve(socket_addr)
+    Note over Tonic: Listening on 0.0.0.0:50054

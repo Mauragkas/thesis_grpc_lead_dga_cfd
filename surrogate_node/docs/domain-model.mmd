@@ -1,0 +1,145 @@
+classDiagram
+direction TB
+
+%% Service Subsystem
+class SurrogateConfig {
+  +grpc_bind: String
+  +window_size: usize
+  +retrain_interval: usize
+  +min_train_samples: usize
+  +mlp_epochs: usize
+  +mlp_lr: f64
+  +mlp_batch_size: usize
+  +mlp_hidden_layers: Vec~usize~
+  +from_env()$ Self
+}
+
+class SlidingWindowBuffer {
+  -buffer: VecDeque~DatasetRecord~
+  -capacity: usize
+  -dimension: Option~usize~
+  +new(capacity)
+  +push(genes, fitness) Result~()~
+  +push_batch(samples) Result~usize~
+  +len() usize
+  +is_empty() bool
+  +extract_dataset() Tuple~Vec_Vec_usize_usize~
+}
+
+class SurrogateTrainer {
+  +train_mlp(x_data, y_data, n_samples, dim, config)$ Result~Tuple~MlpSurrogate_EvaluationMetrics~~~
+}
+
+class SurrogateState {
+  +config: SurrogateConfig
+  -buffer: Mutex~SlidingWindowBuffer~
+  -active_model: RwLock~Option~Arc~MlpSurrogate~~~
+  -is_training: AtomicBool
+  -model_version: AtomicU64
+  -samples_since_retrain: AtomicUsize
+  +new(config)
+  +predict_batch(individuals) Result~Vec~f64~~~
+  +ingest_samples(samples, trigger) Result~Tuple~usize_bool~~~
+  +trigger_train_async(self)
+}
+
+class SurrogateServer {
+  -state: Arc~SurrogateState~
+  +new(state)
+  +predict(req)
+  +predict_batch(req)
+  +ingest_samples(req)
+  +train(req)
+  +get_status(req)
+}
+
+%% Models Subsystem
+class SurrogateModel <<interface>> {
+  +fit(x, y, n_samples, dim)
+  +predict(x) Vec~f64~
+  +evaluate(x, y) EvaluationMetrics
+}
+
+class MlpSurrogate {
+  -config: MlpConfig
+  -input_scaler: StandardScaler
+  -target_scaler: TargetScaler
+  -input_dim: usize
+  -output_dim: usize
+  +fit(x, y, n_samples, dim, config)$ Result~Self~
+  +predict(x) Result~Vec~f64~~~
+  +evaluate(x, y) Result~EvaluationMetrics~
+}
+
+class GaussianProcessSurrogate {
+  -backend: Arc~dyn GpBackend~
+  -kernel_type: KernelType
+  -noise_variance: f64
+  -hyperparams: GpHyperparameters
+  +fit(x, y, n_samples, dim)$ Result~Self~
+  +predict(x) Result~Vec~f64~~~
+  +evaluate(x, y) Result~EvaluationMetrics~
+}
+
+class RfSurrogate {
+  -n_trees: usize
+  -max_depth: usize
+  +fit(x, y, n_samples, dim)$ Result~Self~
+  +predict(x) Result~Vec~f64~~~
+  +evaluate(x, y) Result~EvaluationMetrics~
+}
+
+class KnnSurrogate {
+  -k: usize
+  -metric: EuclideanDistance
+  +fit(x, y, n_samples, dim)$ Result~Self~
+  +predict(x) Result~Vec~f64~~~
+  +evaluate(x, y) Result~EvaluationMetrics~
+}
+
+%% Data & Domain
+class DatasetRecord {
+  +genes: Vec~f64~
+  +fitness: f64
+}
+
+class EvaluationMetrics {
+  +mse: f64
+  +rmse: f64
+  +mae: f64
+  +r2_score: f64
+  +max_error: f64
+}
+
+class StandardScaler {
+  -means: Vec~f64~
+  -stds: Vec~f64~
+  +fit(x, n, dim)$ Self
+  +transform(x) Vec~f64~
+}
+
+class TargetScaler {
+  -mean: f64
+  -std: f64
+  +fit(y)$ Self
+  +transform(y) Vec~f64~
+  +inverse_transform(y_norm) Vec~f64~
+}
+
+%% Relationships
+SurrogateServer --> SurrogateState
+SurrogateState --> SurrogateConfig
+SurrogateState *-- SlidingWindowBuffer
+SurrogateState --> SurrogateTrainer
+SurrogateState o-- MlpSurrogate
+SlidingWindowBuffer *-- "0..*" DatasetRecord
+
+MlpSurrogate ..|> SurrogateModel
+GaussianProcessSurrogate ..|> SurrogateModel
+RfSurrogate ..|> SurrogateModel
+KnnSurrogate ..|> SurrogateModel
+
+MlpSurrogate *-- StandardScaler
+MlpSurrogate *-- TargetScaler
+SurrogateTrainer ..> MlpSurrogate : trains & evaluates
+SurrogateTrainer ..> EvaluationMetrics : produces

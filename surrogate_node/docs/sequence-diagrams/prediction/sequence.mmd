@@ -1,0 +1,29 @@
+sequenceDiagram
+    autonumber
+    participant Client as Orchestrator (GrpcSurrogateClient)
+    participant Srv as SurrogateServer
+    participant State as SurrogateState
+    participant ModelLock as active_model (RwLock)
+    participant MLP as MlpSurrogate (Active Instance)
+    participant Native as C++/OpenMP/CUDA Engine
+
+    Client->>Srv: PredictBatch(BatchPredictRequest { individuals })
+    Srv->>State: predict_batch(&individuals)
+    State->>ModelLock: read()
+
+    alt Active Model Exists
+        ModelLock-->>State: Some(Arc<MlpSurrogate>)
+        State->>State: flatten individuals into row-major array
+        State->>MLP: predict(x_flat)
+        MLP->>MLP: StandardScaler.transform(x_flat)
+        MLP->>Native: mlp_predict_cpu / mlp_predict_cuda
+        Native-->>MLP: y_pred_scaled
+        MLP->>MLP: TargetScaler.inverse_transform(y_pred_scaled)
+        MLP-->>State: Ok(fitnesses)
+        State-->>Srv: Ok(fitnesses)
+        Srv-->>Client: BatchPredictResponse { fitnesses, ready: true }
+    else Cold-Start (No Active Model Yet)
+        ModelLock-->>State: None
+        State-->>Srv: Err("Model is not ready")
+        Srv-->>Client: BatchPredictResponse { fitnesses: [], ready: false }
+    end

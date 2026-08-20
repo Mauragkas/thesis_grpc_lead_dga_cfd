@@ -1,0 +1,33 @@
+sequenceDiagram
+    autonumber
+    participant CLI as surrogate_node (CLI Mode / compare.rs)
+    participant Loader as DatasetLoader
+    participant Splitter as DatasetSplitter
+    participant GP as GaussianProcessSurrogate
+    participant MLP as MlpSurrogate
+    participant RF as RfSurrogate
+    participant KNN as KnnSurrogate
+
+    CLI->>Loader: load_from_json("configs_and_scores.json")
+    Loader-->>CLI: valid aerodynamic records
+    CLI->>Loader: extract_active_features(records)
+    Loader-->>CLI: (x_raw, y_raw, num_samples, dim=11)
+
+    CLI->>Splitter: split_60_20_20(x, y, N, dim, seed)
+    Splitter-->>CLI: DatasetSplit { train, validation, test }
+
+    par Train & Evaluate Models
+        CLI->>GP: fit(train) & evaluate(test)
+        GP-->>CLI: GP Metrics (R2, RMSE, MAE)
+    and
+        CLI->>MLP: fit(train) & evaluate(test)
+        MLP-->>CLI: MLP Metrics (R2, RMSE, MAE)
+    and
+        CLI->>RF: fit(train) & evaluate(test)
+        RF-->>CLI: RF Metrics (R2, RMSE, MAE)
+    and
+        CLI->>KNN: fit(train) & evaluate(test)
+        KNN-->>CLI: k-NN Metrics (R2, RMSE, MAE)
+    end
+
+    CLI->>CLI: print comparative summary table

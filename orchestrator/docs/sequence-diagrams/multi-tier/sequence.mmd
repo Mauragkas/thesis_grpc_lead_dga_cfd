@@ -1,0 +1,68 @@
+sequenceDiagram
+    autonumber
+    participant GA as GaRunner
+    participant MTE as MultiTierEvaluator
+    participant Store as InMemoryGeneStore
+    participant Neighbor as HilbertNeighborStore (LEAD)
+    participant Surr as GrpcSurrogateClient (surrogate-node)
+    participant Sim as GrpcEvaluator (Worker Pool)
+    participant Metrics as TierMetricsTracker
+
+    GA->>MTE: evaluate_population(population)
+
+    loop For each individual x*
+        MTE->>Store: lookup_exact(x*)
+        alt Exact Cache Hit
+            Store-->>MTE: Some(fitness)
+            MTE->>Metrics: record_tier1_hit(1)
+        else Exact Cache Miss
+            Store-->>MTE: None
+            MTE->>Store: query_knn(x*, 1)
+            alt In Local Store
+                Store-->>MTE: [closest_record]
+            else Check LEAD DHT
+                MTE->>Neighbor: query_knn(x*, 1)
+                Neighbor-->>MTE: [closest_payload]
+            end
+
+            MTE->>MTE: compute d_min = dist(x*, x_NN)
+
+            alt d_min < ε_exact (Tier 1: Cache Hit)
+                MTE->>MTE: fitness = y_NN (0 FLOPs)
+                MTE->>Metrics: record_tier1_hit(1)
+            else ε_exact <= d_min <= R (Tier 2 Candidate)
+                MTE->>MTE: queue in tier2_indices
+            else d_min > R (Tier 3: Void Region)
+                MTE->>MTE: queue in tier3_indices
+            end
+        end
+    end
+
+    opt Has Tier 2 Candidates
+        MTE->>Surr: predict_batch(tier2_individuals)
+        alt Surrogate Ready
+            Surr-->>MTE: Ok(Some(predictions))
+            MTE->>Metrics: record_tier2_hit(N_tier2)
+        else Cold Start / Surrogate Error
+            Surr-->>MTE: Ok(None) / Err
+            MTE->>MTE: append tier2_indices to tier3_indices (Fallback)
+        end
+    end
+
+    opt Has Tier 3 Candidates
+        MTE->>Sim: evaluate_population(tier3_individuals)
+        Sim-->>MTE: Ok(fresh_fitnesses)
+        MTE->>Metrics: record_tier3_eval(N_tier3)
+
+        loop For each newly evaluated point (x*, y_true)
+            MTE->>Store: store(x*, y_true)
+            MTE->>Neighbor: store(x*, y_true)
+        end
+
+        par Async Ingestion to Surrogate Window
+            MTE->>Surr: ingest_samples(valid_samples)
+        end
+    end
+
+    MTE->>Metrics: snapshot()
+    MTE-->>GA: return population fitnesses
