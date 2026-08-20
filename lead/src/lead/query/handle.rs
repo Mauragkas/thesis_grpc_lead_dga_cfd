@@ -54,7 +54,12 @@ where
             .max(need);
         let local = self.storage.range_scan(start_key, overscan).await;
         let payload = self.collect_owned(local, &model, need).await;
-        self.complete_or_forward(payload, need, start_key, vnode, vnode.vid, caller, model_version)
+        let caller_addr = if caller.is_empty() {
+            self.self_uri.clone()
+        } else {
+            caller.to_string()
+        };
+        self.complete_or_forward(payload, need, start_key, vnode, vnode.vid, &caller_addr, model_version)
             .await
     }
 
@@ -68,18 +73,27 @@ where
         mut payload: Vec<(String, String)>,
     ) -> RangeResult {
         let need = count as usize;
+        let already_visited = caller.split(',').any(|addr| addr.trim() == self.self_uri);
+        if payload.len() >= need
+            || already_visited
+            || self.find_vnode(origin_vid).is_some()
+        {
+            return RangeResult {
+                entries: payload,
+                complete: true,
+                next_address: String::new(),
+            };
+        }
+
         let model = self.get_model_for_version(model_version).await;
         let from_id = model.predict(from_key);
 
         let vnode = match self.find_next_vnode(from_id).await {
             Some((v, _, _)) => v,
-            None => {
-                return RangeResult {
-                    entries: payload,
-                    complete: true,
-                    next_address: String::new(),
-                };
-            }
+            None => match self.find_owning_vnode(from_id).await {
+                Some((v, _, _)) => v,
+                None => self.best_vnode_for(from_id),
+            },
         };
 
         let overscan = need
@@ -88,7 +102,16 @@ where
         let local = self.storage.range_scan_after(from_key, overscan).await;
         let filtered = self.collect_owned(local, &model, need).await;
         payload.extend(filtered);
-        self.complete_or_forward(payload, need, from_key, vnode, origin_vid, caller, model_version)
+
+        let caller_chain = if caller.is_empty() {
+            self.self_uri.clone()
+        } else if !already_visited {
+            format!("{caller},{}", self.self_uri)
+        } else {
+            caller.to_string()
+        };
+
+        self.complete_or_forward(payload, need, from_key, vnode, origin_vid, &caller_chain, model_version)
             .await
     }
 
@@ -116,7 +139,8 @@ where
 
     /// Shared tail for both range paths: if we have enough entries, return
     /// complete; otherwise forward the remaining request to our successor,
-    /// stopping when the ring wraps back to `origin_vid`.
+    /// stopping when the ring wraps back to `origin_vid` or the caller node.
+    #[allow(clippy::too_many_arguments)]
     async fn complete_or_forward(
         &self,
         payload: Vec<(String, String)>,
@@ -142,7 +166,13 @@ where
             .unwrap_or_else(|| start_key.to_string());
 
         let succ = vnode.successor().await;
-        if succ.id == vnode.vid || succ.id == origin_vid {
+        let succ_visited = caller.split(',').any(|addr| addr.trim() == succ.address);
+
+        if succ.id == vnode.vid
+            || succ.id == origin_vid
+            || succ.address == self.self_uri
+            || succ_visited
+        {
             return RangeResult {
                 entries: payload,
                 complete: true,
