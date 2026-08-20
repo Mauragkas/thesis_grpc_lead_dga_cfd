@@ -89,5 +89,5 @@ services:
 
 networks:
   default:
-    # external: true
+    external: true
     name: simulated-lan
