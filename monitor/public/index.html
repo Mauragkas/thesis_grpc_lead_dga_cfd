@@ -5,343 +5,884 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>loadbalanceGA Monitor</title>
   <style>
+    /* ── Design tokens ───────────────────────────────────────────── */
     :root {
-      --bg: #0f172a;
-      --panel: #1e293b;
-      --text: #e2e8f0;
-      --muted: #94a3b8;
-      --accent: #38bdf8;
-      --info: #60a5fa;
-      --warn: #fbbf24;
-      --error: #f87171;
-      --debug: #a78bfa;
-      --border: #334155;
+      --bg:         #0f172a;
+      --panel:      #1e293b;
+      --panel2:     #162032;
+      --text:       #e2e8f0;
+      --muted:      #64748b;
+      --muted2:     #94a3b8;
+      --border:     #1e3a5f;
+      --accent:     #38bdf8;
+
+      /* log levels */
+      --info:   #60a5fa;
+      --warn:   #fbbf24;
+      --error:  #f87171;
+      --debug:  #a78bfa;
+
+      /* per-source colours (left border + tab accent) */
+      --src-lead:         #38bdf8;   /* sky blue  */
+      --src-orchestrator: #a78bfa;   /* violet    */
+      --src-worker:       #4ade80;   /* green     */
+      --src-surrogate:    #fb923c;   /* amber     */
+      --src-unknown:      #94a3b8;   /* slate     */
+
+      --tab-h: 36px;
+      --hdr-h: 52px;
+      --ctrl-h: 46px;
     }
-    * { box-sizing: border-box; }
+
+    /* ── Reset ───────────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      margin: 0;
       font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
       background: var(--bg);
       color: var(--text);
-      font-size: 13px;
+      font-size: 12.5px;
+      height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
     }
+
+    /* ── Header ──────────────────────────────────────────────────── */
     header {
+      height: var(--hdr-h);
+      min-height: var(--hdr-h);
       display: flex;
       align-items: center;
-      gap: 16px;
-      padding: 12px 20px;
+      gap: 12px;
+      padding: 0 18px;
       background: var(--panel);
       border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
     }
-    header h1 { margin: 0; font-size: 16px; font-weight: 600; }
-    .stats { display: flex; gap: 12px; flex-wrap: wrap; }
+    .status-dot {
+      width: 9px; height: 9px; border-radius: 50%;
+      background: var(--error);
+      flex-shrink: 0;
+      transition: background 0.3s;
+    }
+    .status-dot.live { background: #22c55e; }
+    header h1 { font-size: 14px; font-weight: 700; white-space: nowrap; }
+    .hdr-stats {
+      display: flex; gap: 8px; flex-wrap: wrap; margin-left: 4px;
+    }
     .stat {
       background: var(--bg);
       border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: 4px 10px;
-      font-size: 12px;
+      border-radius: 5px;
+      padding: 2px 8px;
+      font-size: 11px;
+      white-space: nowrap;
     }
     .stat b { color: var(--accent); }
-    .status-dot {
-      width: 10px; height: 10px; border-radius: 50%;
-      background: var(--error);
+    .hdr-right {
+      margin-left: auto;
+      display: flex; align-items: center; gap: 10px;
+      font-size: 11px; color: var(--muted2);
     }
-    .status-dot.live { background: #22c55e; }
+
+    /* ── Controls ────────────────────────────────────────────────── */
     .controls {
-      display: flex; gap: 8px; flex-wrap: wrap;
-      padding: 10px 20px;
-      background: var(--panel);
+      height: var(--ctrl-h);
+      min-height: var(--ctrl-h);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 0 18px;
+      background: var(--panel2);
       border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+      flex-wrap: nowrap;
+      overflow-x: auto;
     }
-    select, input, button {
+    select, input[type="text"], button {
       background: var(--bg);
       color: var(--text);
       border: 1px solid var(--border);
       border-radius: 4px;
-      padding: 4px 8px;
+      padding: 3px 8px;
       font: inherit;
+      height: 26px;
+      outline: none;
     }
-    button { cursor: pointer; }
-    button:hover { border-color: var(--accent); }
-    #logs {
-      height: calc(100vh - 130px);
+    select:focus, input[type="text"]:focus { border-color: var(--accent); }
+    button { cursor: pointer; white-space: nowrap; }
+    button:hover { border-color: var(--accent); color: var(--accent); }
+    button.active { border-color: var(--accent); color: var(--accent); background: rgba(56,189,248,0.08); }
+    #search { width: 180px; }
+    .ctrl-sep { width: 1px; height: 20px; background: var(--border); flex-shrink: 0; }
+    #count { color: var(--muted2); font-size: 11px; white-space: nowrap; flex-shrink: 0; margin-left: auto; }
+
+    /* ── Source tabs ─────────────────────────────────────────────── */
+    .tabs {
+      height: var(--tab-h);
+      min-height: var(--tab-h);
+      display: flex;
+      align-items: stretch;
+      background: var(--panel);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+      overflow-x: auto;
+    }
+    .tab {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 0 14px;
+      cursor: pointer;
+      border-right: 1px solid var(--border);
+      font-size: 11.5px;
+      color: var(--muted2);
+      user-select: none;
+      white-space: nowrap;
+      position: relative;
+      transition: color 0.15s;
+    }
+    .tab::after {
+      content: '';
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      height: 2px;
+      background: transparent;
+      transition: background 0.15s;
+    }
+    .tab.active {
+      color: var(--text);
+      background: var(--panel2);
+    }
+    .tab.active::after { background: var(--tab-color, var(--accent)); }
+    .tab:hover:not(.active) { color: var(--text); background: rgba(255,255,255,0.03); }
+    .tab-dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: var(--tab-color, var(--accent));
+      flex-shrink: 0;
+    }
+    .badge {
+      background: var(--tab-color, var(--accent));
+      color: #000;
+      border-radius: 10px;
+      padding: 0 5px;
+      font-size: 10px;
+      font-weight: 700;
+      min-width: 18px;
+      text-align: center;
+      opacity: 0.85;
+    }
+
+    /* ── Log area ────────────────────────────────────────────────── */
+    #log-area {
+      flex: 1;
       overflow-y: auto;
-      padding: 8px 20px;
+      overflow-x: hidden;
+      padding: 0;
+      /* smooth scroll for auto-follow */
+      scroll-behavior: auto;
     }
-    .log {
-      display: grid;
-      grid-template-columns: 130px 70px 130px 220px 1fr;
-      gap: 10px;
-      padding: 3px 0;
-      border-bottom: 1px solid #1e293b;
+
+    /* sentinel for IntersectionObserver */
+    .sentinel { height: 1px; width: 100%; }
+
+    /* "Load older" banner */
+    #older-banner {
+      display: none;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 8px;
+      font-size: 11px;
+      color: var(--muted2);
+      background: var(--panel2);
+      border-bottom: 1px solid var(--border);
+      cursor: pointer;
+    }
+    #older-banner:hover { color: var(--accent); }
+    #older-banner.loading { cursor: default; color: var(--muted); }
+    .spinner {
+      width: 12px; height: 12px;
+      border: 2px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+      display: none;
+    }
+    #older-banner.loading .spinner { display: block; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Log rows ────────────────────────────────────────────────── */
+    .log-row {
+      display: flex;
       align-items: baseline;
-      content-visibility: auto;
-      contain-intrinsic-size: auto 21px;
+      gap: 0;
+      border-bottom: 1px solid rgba(30,58,95,0.5);
+      border-left: 3px solid transparent;
+      padding: 2px 12px 2px 10px;
+      line-height: 1.55;
+      cursor: pointer;
+      transition: background 0.1s;
     }
-    .log:hover { background: rgba(56,189,248,0.05); }
-    .ts { color: var(--muted); }
-    .level { font-weight: 600; text-align: center; border-radius: 3px; padding: 1px 4px; }
-    .level.INFO, .level.info { color: var(--info); }
-    .level.WARN, .level.WARNING, .level.warn { color: var(--warn); background: rgba(251,191,36,0.1); }
-    .level.ERROR, .level.error { color: var(--error); background: rgba(248,113,113,0.1); }
-    .level.DEBUG, .level.debug { color: var(--debug); }
-    .source { color: var(--accent); font-size: 11px; }
-    .target { color: var(--muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .msg { white-space: pre-wrap; word-break: break-word; }
-    .meta { color: var(--muted); font-size: 11px; margin-top: 2px; }
-    .paused { opacity: 0.5; }
+    .log-row:hover { background: rgba(56,189,248,0.04); }
+    .log-row.expanded { background: rgba(56,189,248,0.06); }
+
+    /* source accent stripe */
+    .log-row[data-src="logs.lead"]         { border-left-color: var(--src-lead); }
+    .log-row[data-src="logs.orchestrator"] { border-left-color: var(--src-orchestrator); }
+    .log-row[data-src="logs.worker"]       { border-left-color: var(--src-worker); }
+    .log-row[data-src="logs.surrogate"]    { border-left-color: var(--src-surrogate); }
+
+    .col-ts     { width: 100px; flex-shrink: 0; color: var(--muted); font-size: 11px; padding-right: 8px; }
+    .col-level  { width: 56px;  flex-shrink: 0; text-align: center; padding-right: 8px; }
+    .col-src    { width: 108px; flex-shrink: 0; font-size: 10.5px; padding-right: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .col-target { width: 180px; flex-shrink: 0; color: var(--muted2); font-size: 10.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding-right: 8px; }
+    .col-msg    { flex: 1; white-space: pre-wrap; word-break: break-all; min-width: 0; }
+
+    .lvl {
+      font-size: 10px; font-weight: 700;
+      border-radius: 3px;
+      padding: 1px 3px;
+    }
+    .lvl-INFO   { color: var(--info); }
+    .lvl-WARN, .lvl-WARNING { color: var(--warn); background: rgba(251,191,36,0.1); }
+    .lvl-ERROR, .lvl-CRIT, .lvl-ALERT, .lvl-EMERG { color: var(--error); background: rgba(248,113,113,0.1); }
+    .lvl-DEBUG  { color: var(--debug); }
+
+    .col-src-lead         { color: var(--src-lead); }
+    .col-src-orchestrator { color: var(--src-orchestrator); }
+    .col-src-worker       { color: var(--src-worker); }
+    .col-src-surrogate    { color: var(--src-surrogate); }
+
+    /* Expand detail */
+    .log-detail {
+      display: none;
+      background: #0a1628;
+      border-left: 3px solid var(--border);
+      border-bottom: 1px solid var(--border);
+      padding: 8px 14px;
+      margin-left: 0;
+    }
+    .log-detail.open { display: block; }
+    .log-detail pre {
+      white-space: pre-wrap;
+      word-break: break-all;
+      font-size: 11px;
+      color: var(--muted2);
+      line-height: 1.6;
+    }
+    .meta-pills {
+      display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 6px;
+    }
+    .pill {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 1px 6px;
+      font-size: 10px;
+      color: var(--muted2);
+    }
+    .pill b { color: var(--accent); }
+
+    /* paused overlay */
+    #log-area.paused { opacity: 0.65; }
   </style>
 </head>
 <body>
-  <header>
-    <div class="status-dot" id="dot"></div>
-    <h1>loadbalanceGA Monitor</h1>
-    <div class="stats" id="stats"></div>
-  </header>
 
-  <div class="controls">
-    <select id="source">
-      <option value="">all sources</option>
-      <option value="logs.lead">logs.lead</option>
-      <option value="logs.orchestrator">logs.orchestrator</option>
-      <option value="logs.worker">logs.worker</option>
-    </select>
-    <select id="container">
-      <option value="">all containers</option>
-    </select>
-    <select id="level">
-      <option value="">all levels</option>
-      <option value="DEBUG">DEBUG</option>
-      <option value="INFO">INFO</option>
-      <option value="WARN">WARN</option>
-      <option value="ERROR">ERROR</option>
-    </select>
-    <input id="search" type="text" placeholder="search..." style="width: 200px" />
-    <button id="pause">Pause</button>
-    <button id="clear">Clear</button>
-    <button id="backfill">Load recent (50)</button>
-    <span style="margin-left:auto; color: var(--muted)" id="count">0 shown</span>
+<!-- ── Header ─────────────────────────────────────────────────────────── -->
+<header>
+  <div class="status-dot" id="dot"></div>
+  <h1>loadbalanceGA Monitor</h1>
+  <div class="hdr-stats" id="hdr-stats"></div>
+  <div class="hdr-right">
+    <span id="last-event">—</span>
+  </div>
+</header>
+
+<!-- ── Controls ───────────────────────────────────────────────────────── -->
+<div class="controls">
+  <select id="ctl-level" title="filter by level">
+    <option value="">all levels</option>
+    <option value="DEBUG">DEBUG</option>
+    <option value="INFO">INFO</option>
+    <option value="WARN">WARN</option>
+    <option value="ERROR">ERROR</option>
+  </select>
+  <select id="ctl-container" title="filter by container">
+    <option value="">all containers</option>
+  </select>
+  <input id="search" type="text" placeholder="search…" />
+  <div class="ctrl-sep"></div>
+  <button id="btn-pause">Pause</button>
+  <button id="btn-clear">Clear</button>
+  <button id="btn-ts-toggle" title="toggle timestamp format">Rel. time</button>
+  <button id="btn-export" title="export visible logs as NDJSON">Export NDJSON</button>
+  <span id="count">0 shown</span>
+</div>
+
+<!-- ── Source tabs ─────────────────────────────────────────────────────── -->
+<div class="tabs" id="tabs">
+  <div class="tab active" data-src="" style="--tab-color: var(--accent)">
+    <div class="tab-dot"></div>
+    All
+    <span class="badge" id="badge-all">0</span>
+  </div>
+  <div class="tab" data-src="logs.lead" style="--tab-color: var(--src-lead)">
+    <div class="tab-dot"></div>
+    lead
+    <span class="badge" id="badge-lead">0</span>
+  </div>
+  <div class="tab" data-src="logs.orchestrator" style="--tab-color: var(--src-orchestrator)">
+    <div class="tab-dot"></div>
+    orchestrator
+    <span class="badge" id="badge-orchestrator">0</span>
+  </div>
+  <div class="tab" data-src="logs.worker" style="--tab-color: var(--src-worker)">
+    <div class="tab-dot"></div>
+    worker
+    <span class="badge" id="badge-worker">0</span>
+  </div>
+  <div class="tab" data-src="logs.surrogate" style="--tab-color: var(--src-surrogate)">
+    <div class="tab-dot"></div>
+    surrogate
+    <span class="badge" id="badge-surrogate">0</span>
+  </div>
+</div>
+
+<!-- ── Log area ────────────────────────────────────────────────────────── -->
+<div id="log-area">
+  <!-- top sentinel: when visible → load-older -->
+  <div class="sentinel" id="sentinel-top"></div>
+
+  <!-- banner shown while fetching older history -->
+  <div id="older-banner">
+    <div class="spinner"></div>
+    <span id="older-text">↑ Load older logs</span>
   </div>
 
-  <div id="logs"></div>
+  <!-- log rows injected here (newest at bottom by default, prepend for older) -->
+  <div id="log-list"></div>
 
-  <script>
-    const MAX = 500;
-    let paused = false;
-    const buffer = [];
-    let filter = {};
-    let pendingLogs = [];
-    let rafId = null;
-    let filterDirty = false;
-    const seenContainers = new Set();
+  <!-- bottom sentinel: tracks whether user is near bottom (auto-follow) -->
+  <div class="sentinel" id="sentinel-bottom"></div>
+</div>
 
-    const dot = document.getElementById('dot');
-    const logsEl = document.getElementById('logs');
-    const countEl = document.getElementById('count');
-    const statsEl = document.getElementById('stats');
+<!-- ── Script ──────────────────────────────────────────────────────────── -->
+<script>
+'use strict';
 
-    function debounce(fn, delay) {
-      let timer;
-      return function(...args) {
-        clearTimeout(timer);
-        timer = setTimeout(() => fn.apply(this, args), delay);
-      };
+// ── Constants & state ──────────────────────────────────────────────────────
+const SOURCE_COLORS = {
+  'logs.lead':         'col-src-lead',
+  'logs.orchestrator': 'col-src-orchestrator',
+  'logs.worker':       'col-src-worker',
+  'logs.surrogate':    'col-src-surrogate',
+};
+const BADGE_IDS = {
+  '':                  'badge-all',
+  'logs.lead':         'badge-lead',
+  'logs.orchestrator': 'badge-orchestrator',
+  'logs.worker':       'badge-worker',
+  'logs.surrogate':    'badge-surrogate',
+};
+
+// All logs in arrival order (newest at end). No browser-side cap.
+const allLogs  = [];
+// Filtered view (indices into allLogs... actually we store refs)
+let viewLogs   = [];
+
+let activeSource = '';        // tab filter
+let paused       = false;
+let relTime      = false;     // relative vs absolute timestamp display
+let filter       = {};        // {level, container, search}
+
+// Auto-scroll: follow bottom unless user has scrolled up
+let followBottom = true;
+
+// History cursor
+let oldestTs     = null;      // smallest ts we've fetched so far
+let loadingOlder = false;
+let noMoreOlder  = false;
+
+// Pending live logs to batch-render
+let pendingLive  = [];
+let rafId        = null;
+
+// Per-source totals (from WS stats frames)
+const sourceTotals = {};
+
+// Seen containers
+const seenContainers = new Set();
+
+// ── DOM refs ───────────────────────────────────────────────────────────────
+const dot          = document.getElementById('dot');
+const hdrStats     = document.getElementById('hdr-stats');
+const lastEventEl  = document.getElementById('last-event');
+const countEl      = document.getElementById('count');
+const logList      = document.getElementById('log-list');
+const logArea      = document.getElementById('log-area');
+const olderBanner  = document.getElementById('older-banner');
+const olderText    = document.getElementById('older-text');
+const ctlLevel     = document.getElementById('ctl-level');
+const ctlContainer = document.getElementById('ctl-container');
+const searchEl     = document.getElementById('search');
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+function escHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => (
+    {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]
+  ));
+}
+
+function fmtTs(ts) {
+  if (!ts) return '—';
+  if (relTime) {
+    const diff = Math.floor((Date.now() - ts) / 1000);
+    if (diff < 60)  return `${diff}s ago`;
+    if (diff < 3600) return `${Math.floor(diff/60)}m ago`;
+    return `${Math.floor(diff/3600)}h ago`;
+  }
+  return new Date(ts).toISOString().split('T')[1].slice(0, 12);
+}
+
+function levelClass(lvl) {
+  const u = String(lvl || '').toUpperCase();
+  if (['ERROR','CRIT','ALERT','EMERG'].includes(u)) return 'lvl-ERROR';
+  if (['WARN','WARNING'].includes(u)) return 'lvl-WARN';
+  if (u === 'DEBUG') return 'lvl-DEBUG';
+  return 'lvl-INFO';
+}
+
+function srcClass(src) {
+  return SOURCE_COLORS[src] || '';
+}
+
+function shortSrc(src) {
+  // "logs.orchestrator" → "orch."  for narrow col
+  const m = { 'logs.lead':'lead', 'logs.orchestrator':'orch.', 'logs.worker':'worker', 'logs.surrogate':'surrogate' };
+  return m[src] || src || '—';
+}
+
+function extractMsg(log) {
+  return log.message || log.msg || log.fields?.message || JSON.stringify(log);
+}
+
+// ── Filter logic ───────────────────────────────────────────────────────────
+function passesFilter(log) {
+  if (activeSource && log.source !== activeSource) return false;
+  if (filter.level) {
+    const want = filter.level.toUpperCase();
+    const got  = String(log.level || '').toUpperCase();
+    if (want === 'ERROR') {
+      if (!['ERROR','CRIT','ALERT','EMERG'].includes(got)) return false;
+    } else if (want === 'WARN') {
+      if (!['WARN','WARNING','ERROR','CRIT','ALERT','EMERG'].includes(got)) return false;
+    } else if (got !== want) return false;
+  }
+  if (filter.container && log.source_tag !== filter.container) return false;
+  if (filter.search) {
+    if (!JSON.stringify(log).toLowerCase().includes(filter.search.toLowerCase())) return false;
+  }
+  return true;
+}
+
+// ── Row rendering ──────────────────────────────────────────────────────────
+function makeRow(log) {
+  const lvl  = String(log.level || '').toUpperCase();
+  const msg  = extractMsg(log);
+  const tgt  = log.target || log.name || '';
+  const src  = log.source || '';
+
+  // Build meta pills for detail panel
+  const pills = [];
+  if (log.source_tag)            pills.push(['container', log.source_tag]);
+  if (log.worker_id !== undefined) pills.push(['worker', log.worker_id]);
+  if (log.generation !== undefined) pills.push(['gen', log.generation]);
+  if (log.offset !== undefined)  pills.push(['offset', log.offset]);
+  if (log.partition !== undefined) pills.push(['part', log.partition]);
+
+  // Build a clean detail JSON (drop noisy internal fields)
+  const detail = Object.fromEntries(
+    Object.entries(log).filter(([k]) => !['source','partition','offset'].includes(k))
+  );
+
+  const row = document.createElement('div');
+  row.className = 'log-row';
+  row.dataset.src = src;
+  row.innerHTML = `
+    <span class="col-ts">${escHtml(fmtTs(log.ts))}</span>
+    <span class="col-level"><span class="lvl ${levelClass(lvl)}">${escHtml(lvl || '—')}</span></span>
+    <span class="col-src ${srcClass(src)}">${escHtml(shortSrc(src))}</span>
+    <span class="col-target" title="${escHtml(tgt)}">${escHtml(tgt)}</span>
+    <span class="col-msg">${escHtml(msg)}</span>
+  `;
+
+  // Detail panel (hidden until click)
+  const detail_el = document.createElement('div');
+  detail_el.className = 'log-detail';
+  detail_el.innerHTML = `
+    <div class="meta-pills">
+      ${pills.map(([k,v]) => `<span class="pill"><b>${escHtml(k)}</b> ${escHtml(String(v))}</span>`).join('')}
+      <span class="pill"><b>ts</b> ${escHtml(new Date(log.ts||0).toISOString())}</span>
+      <span class="pill"><b>src</b> ${escHtml(src)}</span>
+    </div>
+    <pre>${escHtml(JSON.stringify(detail, null, 2))}</pre>
+  `;
+
+  // Click to expand/collapse
+  row.addEventListener('click', () => {
+    const open = detail_el.classList.toggle('open');
+    row.classList.toggle('expanded', open);
+  });
+
+  // Wrap row + detail into a fragment wrapper
+  const wrap = document.createElement('div');
+  wrap.appendChild(row);
+  wrap.appendChild(detail_el);
+  return wrap;
+}
+
+// ── Render helpers ─────────────────────────────────────────────────────────
+function rebuildView() {
+  viewLogs = allLogs.filter(passesFilter);
+  const frag = document.createDocumentFragment();
+  for (const log of viewLogs) frag.appendChild(makeRow(log));
+  logList.replaceChildren(frag);
+  updateCount();
+  if (followBottom) scrollToBottom();
+}
+
+function prependOlderRows(logs) {
+  const frag = document.createDocumentFragment();
+  // logs come newest-first from queryBefore; we need to insert oldest-first
+  const ordered = [...logs].reverse();
+  for (const log of ordered) frag.appendChild(makeRow(log));
+  logList.prepend(frag);
+  updateCount();
+}
+
+function appendLiveRows(logs) {
+  const frag = document.createDocumentFragment();
+  for (const log of logs) frag.appendChild(makeRow(log));
+  logList.appendChild(frag);
+  updateCount();
+  if (followBottom) scrollToBottom();
+}
+
+function updateCount() {
+  const total = logList.children.length;
+  countEl.textContent = `${total} shown`;
+}
+
+function scrollToBottom() {
+  logArea.scrollTop = logArea.scrollHeight;
+}
+
+// ── Batched live render ────────────────────────────────────────────────────
+function scheduleRender() {
+  if (rafId !== null) return;
+  rafId = requestAnimationFrame(() => {
+    rafId = null;
+    if (paused || pendingLive.length === 0) return;
+    const passing = pendingLive.filter(passesFilter);
+    pendingLive = [];
+    if (passing.length > 0) {
+      viewLogs.push(...passing);
+      appendLiveRows(passing);
     }
+  });
+}
 
-    function updateContainerDropdown() {
-      const sel = document.getElementById('container');
-      const current = sel.value;
-      sel.innerHTML = '<option value="">all containers</option>';
-      for (const c of [...seenContainers].sort()) {
-        const opt = document.createElement('option');
-        opt.value = c;
-        opt.textContent = c;
-        if (c === current) opt.selected = true;
-        sel.appendChild(opt);
-      }
+function addLiveLogs(logs) {
+  allLogs.push(...logs);
+  // Update oldestTs tracker
+  for (const l of logs) {
+    if (l.ts && (oldestTs === null || l.ts < oldestTs)) oldestTs = l.ts;
+  }
+  // Update container dropdown
+  for (const l of logs) {
+    if (l.source_tag && !seenContainers.has(l.source_tag)) {
+      seenContainers.add(l.source_tag);
+      refreshContainerDropdown();
     }
+  }
+  if (paused) return;
+  pendingLive.push(...logs);
+  scheduleRender();
+}
 
-    function readFilter() {
-      filter = {
-        source:    document.getElementById('source').value    || undefined,
-        container: document.getElementById('container').value || undefined,
-        level:     document.getElementById('level').value     || undefined,
-        search:    document.getElementById('search').value    || undefined,
-      };
-      sendFilter();
-      filterDirty = true;
-      scheduleRender();
-    }
+// ── Stats rendering ────────────────────────────────────────────────────────
+function renderStats(s) {
+  const parts = [];
+  parts.push(`<span class="stat">total <b>${s.total ?? '—'}</b></span>`);
+  for (const [src, n] of Object.entries(s.bySource || {})) {
+    const short = src.replace('logs.', '');
+    parts.push(`<span class="stat">${escHtml(short)} <b>${n}</b></span>`);
+  }
+  hdrStats.innerHTML = parts.join('');
 
-    const readFilterDebounced = debounce(readFilter, 300);
+  // Update badges
+  const totals = s.bySource || {};
+  document.getElementById('badge-all').textContent = s.total ?? 0;
+  for (const [src, id] of Object.entries(BADGE_IDS)) {
+    if (src === '') continue;
+    const el = document.getElementById(id);
+    if (el) el.textContent = totals[src] ?? 0;
+  }
 
-    document.getElementById('source').addEventListener('change', readFilter);
-    document.getElementById('container').addEventListener('change', readFilter);
-    document.getElementById('level').addEventListener('change', readFilter);
-    document.getElementById('search').addEventListener('input', readFilterDebounced);
+  lastEventEl.textContent = s.newestTs
+    ? new Date(s.newestTs).toLocaleTimeString()
+    : '—';
+}
 
-    function passes(log) {
-      if (filter.source && log.source !== filter.source) return false;
-      if (filter.container && log.source_tag !== filter.container) return false;
-      if (filter.level) {
-        const want = filter.level.toUpperCase();
-        const got = String(log.level || '').toUpperCase();
-        if (want === 'ERROR') {
-          if (!['ERROR','CRIT','ALERT','EMERG'].includes(got)) return false;
-        } else if (got !== want) return false;
-      }
-      if (filter.search) {
-        if (!JSON.stringify(log).toLowerCase().includes(filter.search.toLowerCase())) return false;
-      }
-      return true;
-    }
+// ── Container dropdown ─────────────────────────────────────────────────────
+function refreshContainerDropdown() {
+  const current = ctlContainer.value;
+  ctlContainer.innerHTML = '<option value="">all containers</option>';
+  for (const c of [...seenContainers].sort()) {
+    const opt = document.createElement('option');
+    opt.value = c; opt.textContent = c;
+    if (c === current) opt.selected = true;
+    ctlContainer.appendChild(opt);
+  }
+}
 
-    function fmtTs(ts) {
-      if (!ts) return '';
-      const d = new Date(ts);
-      return d.toISOString().split('T')[1].replace('Z','');
-    }
+// ── History (load older) ───────────────────────────────────────────────────
+function showOlderBanner(show) {
+  olderBanner.style.display = show ? 'flex' : 'none';
+}
 
-    function renderLog(log) {
-      const div = document.createElement('div');
-      div.className = 'log';
-      const lvl = String(log.level || '').toUpperCase();
-      const target = log.target || log.name || '';
-      const msg = log.message || log.msg || log.fields?.message || JSON.stringify(log);
-      const meta = [];
-      if (log.source_tag) meta.push(log.source_tag);
-      if (log.worker_id) meta.push(`worker=${log.worker_id}`);
-      if (log.generation !== undefined) meta.push(`gen=${log.generation}`);
-      if (log.offset) meta.push(`off=${log.offset}`);
-      div.innerHTML = `
-        <span class="ts">${fmtTs(log.ts)}</span>
-        <span class="level ${lvl}">${lvl}</span>
-        <span class="source">${log.source || ''}</span>
-        <span class="target" title="${target}">${target}</span>
-        <span>
-          <div class="msg">${escapeHtml(msg)}</div>
-          ${meta.length ? `<div class="meta">${meta.join(' · ')}</div>` : ''}
-        </span>
-      `;
-      return div;
-    }
+async function loadOlder() {
+  if (loadingOlder || noMoreOlder) return;
+  loadingOlder = true;
+  olderBanner.classList.add('loading');
+  olderText.textContent = 'Loading older logs…';
 
-    function escapeHtml(s) {
-      return String(s).replace(/[&<>"']/g, c => ({
-        '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
-      }[c]));
-    }
+  // Request history via WS so we stay on a single connection
+  const before = oldestTs ?? undefined;
+  const req = {
+    type:   'history',
+    before,
+    source: activeSource || undefined,
+    level:  filter.level  || undefined,
+    search: filter.search || undefined,
+    limit:  100,
+  };
+  ws.send(JSON.stringify(req));
+  // Response handled in ws.onmessage
+}
 
-    function scheduleRender() {
-      if (rafId !== null) return;
-      rafId = requestAnimationFrame(() => {
-        rafId = null;
-        doRender();
-      });
-    }
+function onHistoryChunk(data) {
+  loadingOlder = false;
+  olderBanner.classList.remove('loading');
 
-    function doRender() {
-      if (filterDirty) {
-        const matching = buffer.filter(passes).slice(-MAX).reverse();
-        const frag = document.createDocumentFragment();
-        for (const l of matching) frag.appendChild(renderLog(l));
-        logsEl.replaceChildren(frag);
-        countEl.textContent = `${matching.length} shown`;
-        filterDirty = false;
-        pendingLogs = [];
-      } else if (pendingLogs.length > 0) {
-        const toAdd = [];
-        for (const l of pendingLogs) {
-          if (passes(l)) toAdd.push(l);
-        }
-        pendingLogs = [];
+  if (!data.logs || data.logs.length === 0) {
+    noMoreOlder = true;
+    olderText.textContent = '— no older logs —';
+    return;
+  }
 
-        if (toAdd.length > 0) {
-          const frag = document.createDocumentFragment();
-          for (const l of toAdd.reverse()) frag.appendChild(renderLog(l));
-          logsEl.prepend(frag);
-          while (logsEl.children.length > MAX) logsEl.removeChild(logsEl.lastChild);
-          countEl.textContent = `${logsEl.children.length} shown`;
-        }
-      }
-    }
+  // Record the pre-insert scroll position so we can restore it
+  const prevHeight = logArea.scrollHeight;
+  const prevTop    = logArea.scrollTop;
 
-    function addLog(log) {
-      buffer.push(log);
-      if (buffer.length > MAX * 2) buffer.splice(0, buffer.length - MAX * 2);
-      if (log.source_tag && !seenContainers.has(log.source_tag)) {
-        seenContainers.add(log.source_tag);
-        updateContainerDropdown();
-      }
-      if (paused) return;
-      pendingLogs.push(log);
-      scheduleRender();
-    }
+  // Integrate into allLogs (oldest-first insertion at front of array)
+  const ordered = [...data.logs].sort((a,b) => (a.ts||0) - (b.ts||0));
+  allLogs.unshift(...ordered);
 
-    function sendFilter() {
-      if (ws && ws.readyState === ws.OPEN) {
-        ws.send(JSON.stringify({ type: 'filter', filter }));
-      }
-    }
+  // Update oldest cursor
+  for (const l of ordered) {
+    if (l.ts && (oldestTs === null || l.ts < oldestTs)) oldestTs = l.ts;
+  }
 
-    function refreshStats() {
-      fetch('/stats').then(r => r.json()).then(s => {
-        const parts = [];
-        parts.push(`<span class="stat">total <b>${s.total}</b></span>`);
-        for (const [src, n] of Object.entries(s.bySource || {})) {
-          parts.push(`<span class="stat">${src} <b>${n}</b></span>`);
-        }
-        statsEl.innerHTML = parts.join('');
-      }).catch(() => {});
-    }
-
-    let ws;
-    function connect() {
-      const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-      ws = new WebSocket(`${proto}://${location.host}/stream`);
-      ws.onopen = () => {
-        dot.classList.add('live');
-        sendFilter();
-      };
-      ws.onmessage = (ev) => {
-        const log = JSON.parse(ev.data);
-        if (log.type === 'hello' || log.type === 'ack' || log.type === 'pong') return;
-        addLog(log);
-      };
-      ws.onclose = () => {
-        dot.classList.remove('live');
-        setTimeout(connect, 2000);
-      };
-      ws.onerror = () => ws.close();
-    }
-
-    document.getElementById('pause').addEventListener('click', (e) => {
-      paused = !paused;
-      e.target.textContent = paused ? 'Resume' : 'Pause';
-      logsEl.classList.toggle('paused', paused);
-      if (!paused) {
-        filterDirty = true;
-        scheduleRender();
-      }
+  // Only prepend rows that pass current filter
+  const passing = data.logs.filter(passesFilter); // already newest-first
+  if (passing.length > 0) {
+    prependOlderRows(passing);
+    // Restore scroll so viewport doesn't jump
+    requestAnimationFrame(() => {
+      logArea.scrollTop = prevTop + (logArea.scrollHeight - prevHeight);
     });
-    document.getElementById('clear').addEventListener('click', () => {
-      buffer.length = 0;
-      pendingLogs = [];
-      logsEl.replaceChildren();
-      countEl.textContent = '0 shown';
-    });
-    document.getElementById('backfill').addEventListener('click', async () => {
-      const src = document.getElementById('source').value;
-      const url = '/logs/tail?limit=50' + (src ? `&source=${encodeURIComponent(src)}` : '');
-      const r = await fetch(url);
-      const j = await r.json();
-      for (const l of j.logs) addLog(l);
-    });
+  }
 
-    connect();
-    setInterval(refreshStats, 2000);
-    refreshStats();
-  </script>
+  noMoreOlder = !data.hasMore;
+  olderText.textContent = noMoreOlder ? '— no older logs —' : '↑ Load older logs';
+}
+
+// ── Filter change handling ─────────────────────────────────────────────────
+function applyFilter() {
+  filter = {
+    level:     ctlLevel.value     || undefined,
+    container: ctlContainer.value || undefined,
+    search:    searchEl.value     || undefined,
+  };
+  sendWsFilter();
+  noMoreOlder = false;  // filter changed, allow re-fetching history
+  rebuildView();
+}
+
+function debounce(fn, ms) {
+  let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); };
+}
+const applyFilterDebounced = debounce(applyFilter, 280);
+
+ctlLevel.addEventListener('change', applyFilter);
+ctlContainer.addEventListener('change', applyFilter);
+searchEl.addEventListener('input', applyFilterDebounced);
+
+// ── Tabs ───────────────────────────────────────────────────────────────────
+document.getElementById('tabs').addEventListener('click', (e) => {
+  const tab = e.target.closest('.tab');
+  if (!tab) return;
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  tab.classList.add('active');
+  activeSource = tab.dataset.src;
+  noMoreOlder  = false;
+  rebuildView();
+  sendWsFilter();
+});
+
+// ── Buttons ────────────────────────────────────────────────────────────────
+document.getElementById('btn-pause').addEventListener('click', (e) => {
+  paused = !paused;
+  e.target.textContent = paused ? 'Resume' : 'Pause';
+  e.target.classList.toggle('active', paused);
+  logArea.classList.toggle('paused', paused);
+  if (!paused) {
+    // flush pending
+    const passing = pendingLive.filter(passesFilter);
+    pendingLive = [];
+    if (passing.length) {
+      viewLogs.push(...passing);
+      appendLiveRows(passing);
+    }
+  }
+});
+
+document.getElementById('btn-clear').addEventListener('click', () => {
+  allLogs.length = 0;
+  viewLogs.length = 0;
+  pendingLive = [];
+  oldestTs = null;
+  noMoreOlder = false;
+  logList.replaceChildren();
+  updateCount();
+});
+
+document.getElementById('btn-ts-toggle').addEventListener('click', (e) => {
+  relTime = !relTime;
+  e.target.classList.toggle('active', relTime);
+  // Refresh all visible ts spans
+  const spans = logList.querySelectorAll('.col-ts');
+  // We need the corresponding log — pair by index in viewLogs
+  // (each child of logList is a wrapper div containing one row)
+  const children = Array.from(logList.children);
+  children.forEach((wrap, i) => {
+    const log = viewLogs[i];
+    if (!log) return;
+    const span = wrap.querySelector('.col-ts');
+    if (span) span.textContent = fmtTs(log.ts);
+  });
+});
+
+// Refresh relative timestamps every 10 s when relTime is on
+setInterval(() => {
+  if (!relTime) return;
+  const children = Array.from(logList.children);
+  children.forEach((wrap, i) => {
+    const log = viewLogs[i];
+    if (!log) return;
+    const span = wrap.querySelector('.col-ts');
+    if (span) span.textContent = fmtTs(log.ts);
+  });
+}, 10000);
+
+document.getElementById('btn-export').addEventListener('click', () => {
+  const lines = viewLogs.map(l => JSON.stringify(l)).join('\n');
+  const blob = new Blob([lines], { type: 'application/x-ndjson' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url;
+  a.download = `monitor-export-${new Date().toISOString().slice(0,19).replace(/:/g,'-')}.ndjson`;
+  a.click();
+  URL.revokeObjectURL(url);
+});
+
+// ── WS filter push ─────────────────────────────────────────────────────────
+function sendWsFilter() {
+  if (!ws || ws.readyState !== ws.OPEN) return;
+  const wsFilter = {
+    source:    activeSource || undefined,
+    level:     filter.level     || undefined,
+    container: filter.container || undefined,
+    search:    filter.search    || undefined,
+  };
+  ws.send(JSON.stringify({ type: 'filter', filter: wsFilter }));
+}
+
+// ── IntersectionObserver (auto-follow + load-older) ────────────────────────
+const bottomObs = new IntersectionObserver((entries) => {
+  followBottom = entries[0].isIntersecting;
+}, { root: logArea, threshold: 0.1 });
+bottomObs.observe(document.getElementById('sentinel-bottom'));
+
+// Show the "load older" banner when user reaches the top
+const topObs = new IntersectionObserver((entries) => {
+  if (entries[0].isIntersecting && allLogs.length > 0) {
+    showOlderBanner(true);
+  } else {
+    // Only hide if not actively loading
+    if (!loadingOlder) showOlderBanner(false);
+  }
+}, { root: logArea, threshold: 0 });
+topObs.observe(document.getElementById('sentinel-top'));
+
+// Clicking the banner triggers fetch
+olderBanner.addEventListener('click', () => {
+  if (!loadingOlder && !noMoreOlder) loadOlder();
+});
+
+// ── WebSocket ──────────────────────────────────────────────────────────────
+let ws;
+function connect() {
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  ws = new WebSocket(`${proto}://${location.host}/stream`);
+
+  ws.onopen = () => {
+    dot.classList.add('live');
+    sendWsFilter();
+  };
+
+  ws.onmessage = (ev) => {
+    let msg;
+    try { msg = JSON.parse(ev.data); } catch { return; }
+
+    if (msg.type === 'hello' || msg.type === 'ack' || msg.type === 'pong') return;
+
+    if (msg.type === 'stats') {
+      renderStats(msg);
+      return;
+    }
+
+    if (msg.type === 'history_chunk') {
+      onHistoryChunk(msg);
+      return;
+    }
+
+    // Live log
+    addLiveLogs([msg]);
+  };
+
+  ws.onclose = () => {
+    dot.classList.remove('live');
+    setTimeout(connect, 2000);
+  };
+  ws.onerror = () => ws.close();
+}
+
+// ── Bootstrap ──────────────────────────────────────────────────────────────
+connect();
+</script>
 </body>
 </html>
