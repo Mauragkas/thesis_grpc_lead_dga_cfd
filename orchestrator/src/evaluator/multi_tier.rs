@@ -82,6 +82,7 @@ impl Evaluator for MultiTierEvaluator {
         let mut tier2_indices = Vec::new();
         let mut tier3_indices = Vec::new();
 
+        info!("Phase 1: Spatial Proximity & Tier Partitioning for {n} individuals...");
         // ── Phase 1: Spatial Proximity & Tier Partitioning ───────────────── //
         for (i, ind) in population.iter().enumerate() {
             // First check exact match in local store
@@ -115,6 +116,12 @@ impl Evaluator for MultiTierEvaluator {
                 }
             }
         }
+        info!(
+            "Phase 1 complete: T1 hits={}, T2 candidates={}, T3 candidates={}",
+            tier1_hits,
+            tier2_indices.len(),
+            tier3_indices.len()
+        );
 
         if tier1_hits > 0 {
             self.metrics.record_tier1_hit(tier1_hits);
