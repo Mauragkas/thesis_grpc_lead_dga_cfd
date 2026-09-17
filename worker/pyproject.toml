@@ -1,0 +1,22 @@
+[project]
+name = "worker"
+version = "0.1.0"
+description = "AeroSandbox aerodynamic evaluation worker service"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "aerosandbox==4.2.10",
+    "grpcio==1.80.0",
+    "grpcio-tools==1.80.0",
+    "matplotlib==3.11.2",
+    "numpy==2.4.6",
+    "scipy==1.17.1",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0.0",
+]
+
+[tool.uv]
+package = false

@@ -1,7 +1,8 @@
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
+use surrogate_node::backend::{probe_available_devices, GpDeviceType};
 use surrogate_node::{
     ComputeBackend, CpuOpenMpBackend, CudaBackend, GaussianProcessSurrogate, GpHyperparameters,
-    KernelType,
+    KernelType, RocmBackend,
 };
 use rand::Rng;
 use rand_chacha::ChaCha8Rng;
@@ -25,47 +26,60 @@ fn generate_synthetic_data(num_samples: usize, dim: usize, seed: u64) -> (Vec<f6
     (x, y)
 }
 
+fn bench_backend_covariance(
+    group: &mut criterion::BenchmarkGroup<criterion::measurement::WallTime>,
+    name: &str,
+    backend: &dyn ComputeBackend,
+    x: &[f64],
+    n: usize,
+    dim: usize,
+    params: &GpHyperparameters,
+) {
+    group.bench_with_input(BenchmarkId::new(name, n), &n, |b, &size| {
+        b.iter(|| {
+            backend
+                .compute_covariance(
+                    black_box(x),
+                    black_box(size),
+                    black_box(x),
+                    black_box(size),
+                    black_box(dim),
+                    black_box(params),
+                    black_box(true),
+                )
+                .unwrap()
+        });
+    });
+}
+
 fn bench_covariance_matrix(c: &mut Criterion) {
     let mut group = c.benchmark_group("covariance_matrix");
     let dim = 11;
     let params = GpHyperparameters::new(vec![1.0; dim], 1.5, 1e-3, KernelType::Matern52);
     let cpu_backend = CpuOpenMpBackend::new().unwrap();
-    let cuda_backend = CudaBackend::new(0).ok();
+    // Only bench GPU paths backed by real hardware. `*_backend_create`
+    // always succeeds and silently falls back to CPU, so gating on
+    // `::new().ok()` would benchmark CPU twice (identical timings).
+    let devices = probe_available_devices();
+    let has_cuda = devices
+        .iter()
+        .any(|d| d.device_type == GpDeviceType::Cuda);
+    let has_rocm = devices
+        .iter()
+        .any(|d| d.device_type == GpDeviceType::Rocm);
+    let cuda_backend = has_cuda.then(|| CudaBackend::new(0).ok()).flatten();
+    let rocm_backend = has_rocm.then(|| RocmBackend::new(0).ok()).flatten();
 
     for &n in &[100, 360, 600, 1000] {
         let (x, _) = generate_synthetic_data(n, dim, 42);
 
-        group.bench_with_input(BenchmarkId::new("CPU_OpenMP", n), &n, |b, &size| {
-            b.iter(|| {
-                cpu_backend
-                    .compute_covariance(
-                        black_box(&x),
-                        black_box(size),
-                        black_box(&x),
-                        black_box(size),
-                        black_box(dim),
-                        black_box(&params),
-                        black_box(true),
-                    )
-                    .unwrap()
-            });
-        });
+        bench_backend_covariance(&mut group, "CPU_OpenMP", &cpu_backend, &x, n, dim, &params);
 
         if let Some(ref cuda) = cuda_backend {
-            group.bench_with_input(BenchmarkId::new("CUDA_GPU", n), &n, |b, &size| {
-                b.iter(|| {
-                    cuda.compute_covariance(
-                        black_box(&x),
-                        black_box(size),
-                        black_box(&x),
-                        black_box(size),
-                        black_box(dim),
-                        black_box(&params),
-                        black_box(true),
-                    )
-                    .unwrap()
-                });
-            });
+            bench_backend_covariance(&mut group, "CUDA_GPU", cuda, &x, n, dim, &params);
+        }
+        if let Some(ref rocm) = rocm_backend {
+            bench_backend_covariance(&mut group, "ROCm_GPU", rocm, &x, n, dim, &params);
         }
     }
     group.finish();

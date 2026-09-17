@@ -1,5 +1,8 @@
 target
 *.lock
+!Cargo.lock
+!uv.lock
+.venv/
 ignore/
 __pycache__
 diff.txt

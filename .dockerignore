@@ -1,0 +1,36 @@
+# Git and repository metadata
+.git/
+.gitignore
+
+# Rust build artifacts
+target/
+**/target/
+
+# Python cache & virtual environments
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+**/.pytest_cache/
+.venv/
+**/venv/
+env/
+
+# Node dependencies & logs
+node_modules/
+**/node_modules/
+npm-debug.log*
+
+# IDE and OS metadata
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Temporary data & benchmark results
+*.log
+scratch/
+**/scratch/
+benchmark_results.csv
