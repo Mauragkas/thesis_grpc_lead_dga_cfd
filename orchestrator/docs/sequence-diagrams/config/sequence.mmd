@@ -5,6 +5,8 @@ sequenceDiagram
     participant TransportCfg as TransportConfig
     participant StoreCfg as GeneStoreConfig
     participant LeadCfg as LeadConfig
+    participant SurrCfg as SurrogateClientConfig
+    participant TierCfg as TierConfig
     participant RingCfg as RingConfig
     participant MigCfg as MigrationConfig
 
@@ -12,6 +14,8 @@ sequenceDiagram
     ConfigFn->>TransportCfg: TransportConfig::default()
     ConfigFn->>StoreCfg: GeneStoreConfig::default()
     ConfigFn->>LeadCfg: LeadConfig::default()
+    ConfigFn->>SurrCfg: SurrogateClientConfig::default()
+    ConfigFn->>TierCfg: TierConfig::default()
     ConfigFn->>RingCfg: RingConfig::default()
     ConfigFn->>MigCfg: MigrationConfig::default()
 
@@ -27,6 +31,24 @@ sequenceDiagram
         ConfigFn->>GaCfg: ga.seed = parsed_seed
     end
 
+    opt Transport Resilience Overrides
+        ConfigFn->>Env: var("CIRCUIT_BREAKER_FAILURE_THRESHOLD")
+        Env-->>ConfigFn: threshold string
+        ConfigFn->>TransportCfg: circuit_breaker_failure_threshold = parsed
+
+        ConfigFn->>Env: var("CIRCUIT_BREAKER_RECOVERY_TIMEOUT_MS")
+        Env-->>ConfigFn: ms string
+        ConfigFn->>TransportCfg: circuit_breaker_recovery_timeout = ms
+
+        ConfigFn->>Env: var("MAX_INDIVIDUAL_RETRIES")
+        Env-->>ConfigFn: retries string
+        ConfigFn->>TransportCfg: max_individual_retries = parsed
+
+        ConfigFn->>Env: var("FALLBACK_PENALTY_ON_EXHAUSTION")
+        Env-->>ConfigFn: bool string
+        ConfigFn->>TransportCfg: fallback_penalty_on_exhaustion = parsed
+    end
+
     opt GENE_STORE_MAX_AGE is set and parses as usize
         ConfigFn->>Env: var("GENE_STORE_MAX_AGE")
         Env-->>ConfigFn: age string
@@ -37,6 +59,26 @@ sequenceDiagram
         ConfigFn->>Env: var("LEAD_ENDPOINT")
         Env-->>ConfigFn: endpoint
         ConfigFn->>LeadCfg: lead.endpoint = Some(endpoint)
+    end
+
+    opt SURROGATE_ENDPOINT is set
+        ConfigFn->>Env: var("SURROGATE_ENDPOINT")
+        Env-->>ConfigFn: endpoint
+        ConfigFn->>SurrCfg: surrogate.endpoint = Some(endpoint)
+    end
+
+    opt Tier Config Overrides
+        ConfigFn->>Env: var("TIER_EPSILON_EXACT")
+        Env-->>ConfigFn: eps string
+        ConfigFn->>TierCfg: tier.epsilon_exact = parsed
+
+        ConfigFn->>Env: var("TIER_RADIUS_R")
+        Env-->>ConfigFn: r string
+        ConfigFn->>TierCfg: tier.radius_r = parsed
+
+        ConfigFn->>Env: var("TIER_K_NEIGHBORS")
+        Env-->>ConfigFn: k string
+        ConfigFn->>TierCfg: tier.k_neighbors = parsed
     end
 
     opt RING_BIND is set
@@ -69,5 +111,5 @@ sequenceDiagram
         ConfigFn->>MigCfg: migration.migrant_count = parsed_count
     end
 
-    ConfigFn-->>ConfigFn: return (GaConfig, TransportConfig, GeneStoreConfig, LeadConfig, RingConfig, MigrationConfig)
+    ConfigFn-->>ConfigFn: return (GaConfig, TransportConfig, GeneStoreConfig, LeadConfig, SurrogateClientConfig, TierConfig, RingConfig, MigrationConfig)
 

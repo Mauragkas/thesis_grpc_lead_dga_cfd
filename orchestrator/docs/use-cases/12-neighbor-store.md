@@ -10,8 +10,8 @@ Indexes evaluated continuous gene vectors across multiple rotated Hilbert space-
 
 ## Supporting systems
 
-- `HilbertKeyGenerator` / `HilbertEncoder` (Skilling multi-curve indexing)
-- `LeadStore` / `GrpcLeadStore` (LEAD DHT routed storage and range queries)
+- `HilbertKeyGenerator` / `HilbertEncoder` (from the unified `hilbert_rs` crate, single source of truth for Hilbert encoding across Rust and Python)
+- `LeadStore` / `GrpcLeadStore` (LEAD DHT routed storage and range queries with 5s timeouts)
 - `EuclideanDistance` (metric ground truth)
 
 ## Preconditions
@@ -27,18 +27,19 @@ Indexes evaluated continuous gene vectors across multiple rotated Hilbert space-
    - For each curve $c \in \{0, 1, 2\}$, the gene coordinates are permuted using a deterministic axis rotation.
    - The point is discretized and encoded into a hex Hilbert scalar using the Skilling algorithm.
    - The key is formatted as `{curve_hex}{hex_hilbert}|{canonical_json}`.
-4. For each key, `LeadStore::store_gene(key, payload_json)` is called.
+4. **Concurrent Multi-Probe Store**: Storage futures for all generated keys are dispatched concurrently using `futures::future::try_join_all(store_futs)`, persisting the individual into each curve's partition in parallel.
 
 ## Main steps: Query k-Nearest Neighbors (k-NN)
 
 1. A query point `query` and integer `k` are passed to `query_knn(query, k)`.
 2. `HilbertKeyGenerator::keys_for(query)` generates the probe start keys for all 3 curves.
-3. For each curve probe key:
-   - `LeadStore::range_query(key, k)` retrieves candidate entries along that curve's 1D order in the DHT.
-   - Returned JSON payloads are deserialized and deduplicated by key into a candidate map.
+3. **Concurrent Multi-Probe Fan-Out**:
+   - `LeadStore::range_query` requests are initiated concurrently across all 3 probe keys via `futures::future::join_all(query_futs)`.
+   - Each curve queries $k$ candidates from the LEAD DHT.
+   - Returned JSON payloads are deserialized and deduplicated by key into a `HashMap<String, GenePayload>` candidate map.
 4. For each unique candidate:
    - The exact Euclidean distance $d(query, candidate)$ is computed via `EuclideanDistance`.
-5. Candidates are sorted by ascending Euclidean distance.
+5. Candidates are sorted ascending by true Euclidean distance.
 6. The top `k` closest `GenePayload` records are returned.
 
 ## Postconditions

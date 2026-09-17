@@ -1,44 +1,55 @@
 sequenceDiagram
-    participant Caller as caller
+    autonumber
+    participant Caller as GaRunner / MultiTierEvaluator
     participant Eval as GrpcEvaluator::evaluate_population()
-    participant Client as EvaluatorClient<Channel>
-    participant Batch as GrpcEvaluator::eval_batch()
-    participant Remote as eval.Evaluator service
-    participant Timer as tokio::time::timeout()
-    participant Sleep as tokio::time::sleep()
+    participant Task as Tokio Chunk Task (eval_chunk)
+    participant CB as CircuitBreaker
+    participant RP as RetryPolicy
+    participant Remote as eval.Evaluator (Envoy / Worker Pool)
 
     Caller->>Eval: evaluate_population(population)
     Eval->>Eval: population.chunks(batch_size)
 
-    loop for each chunk
-        Eval->>Client: clone()
-        Eval->>Batch: eval_batch(&mut client, &cfg, chunk)
-
-        Batch->>Batch: build BatchRequest from chunk
-
-        loop attempt in 0..cfg.max_attempts
-            Batch->>Timer: timeout(cfg.rpc_timeout, client.evaluate_batch(Request::new(req.clone())))
-            Timer->>Client: evaluate_batch(Request::new(req.clone()))
-            Client->>Remote: /eval.Evaluator/EvaluateBatch
-
-            alt success
-                Remote-->>Client: BatchResponse
-                Client-->>Timer: Ok(Response<BatchResponse>)
-                Timer-->>Batch: Ok(Response<BatchResponse>)
-                Batch-->>Eval: Vec<f64> fitnesses
-            else gRPC unavailable
-                Remote-->>Client: Status::Unavailable
-                Client-->>Timer: Err(Status)
-                Timer-->>Batch: Err(Status)
-                Batch->>Sleep: sleep(cfg.retry_delay)
-            else timeout
-                Timer-->>Batch: Err(elapsed)
-                Batch->>Sleep: sleep(cfg.retry_delay)
-            else non-retryable error
-                Timer-->>Batch: Err(Status)
-                Batch-->>Eval: Err(Status)
+    par For Each Chunk (tokio::spawn)
+        Eval->>Task: spawn(eval_chunk(client, cb, rp, cfg, chunk))
+        
+        alt Chunk Size > 1 (Try Batch First)
+            Task->>CB: wait_until_ready(rpc_timeout)
+            Task->>Remote: /eval.Evaluator/EvaluateBatch(BatchRequest)
+            
+            alt Batch Success
+                Remote-->>Task: BatchResponse { results }
+                Task->>CB: record_success()
+                Task-->>Eval: Ok(fitnesses)
+            else Transient Failure or Timeout
+                Remote-->>Task: Status::Unavailable / DeadlineExceeded
+                Task->>CB: record_failure()
+                Note over Task: Degrade to per-individual evaluation
+                
+                loop For Each Individual in Chunk
+                    Task->>Task: eval_individual(client, cb, rp, cfg, ind)
+                    loop Attempt k in 1..=max_attempts
+                        Task->>CB: wait_until_ready(rpc_timeout)
+                        Task->>Remote: /eval.Evaluator/Evaluate(Individual)
+                        alt Individual Success
+                            Remote-->>Task: EvaluateResponse { fitness }
+                            Task->>CB: record_success()
+                        else Retryable Transient Error
+                            Remote-->>Task: Status Error
+                            Task->>CB: record_failure()
+                            Task->>RP: backoff_for_attempt(k)
+                            RP-->>Task: backoff_duration
+                            Task->>Task: tokio::time::sleep(backoff_duration)
+                        end
+                    end
+                end
+                Task-->>Eval: Ok(recovered_fitnesses)
             end
+        else Single Individual (chunk.len() == 1)
+            Task->>Task: eval_individual(client, cb, rp, cfg, chunk[0])
+            Task-->>Eval: Ok(vec![fitness])
         end
     end
 
-    Eval-->>Caller: flat Vec<f64>
+    Eval->>Eval: flatten task results in chunk order
+    Eval-->>Caller: Ok(population_fitnesses)

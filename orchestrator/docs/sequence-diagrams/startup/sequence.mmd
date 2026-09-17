@@ -10,12 +10,14 @@ sequenceDiagram
     participant GrpcEval as GrpcEvaluator
     participant Store as InMemoryGeneStore
     participant NeighborStore as HilbertNeighborStore
+    participant SurrogateClient as GrpcSurrogateClient
+    participant MTE as MultiTierEvaluator
     participant Migration as LeadMigration
     participant Runner as GaRunner
 
     Main->>Tracing: init JSON logger
     Main->>Config: config_from_env()
-    Config-->>Main: (GaConfig, TransportConfig, GeneStoreConfig, LeadConfig, RingConfig, MigrationConfig)
+    Config-->>Main: (GaConfig, TransportConfig, GeneStoreConfig, LeadConfig, SurrogateClientConfig, TierConfig, RingConfig, MigrationConfig)
 
     Main->>Main: Sha256Hasher::hash(ring_cfg.self_address)
     Main->>Main: create RingState, LocalRingMember, MigrantBuffer
@@ -37,7 +39,8 @@ sequenceDiagram
     Transport-->>Main: Endpoint
     Main->>Wait: wait_for_channel(endpoint, deadline)
     Wait-->>Main: Channel
-    Main->>GrpcEval: GrpcEvaluator::new(EvaluatorClient::new(channel), cfg, batch_size)
+    Main->>GrpcEval: GrpcEvaluator::new(client, transport_cfg, batch_size)
+    Note over GrpcEval: Initialized with CircuitBreaker & RetryPolicy
 
     Main->>Store: InMemoryGeneStore::new(EuclideanDistance, GenerationEvictor { max_age })
 
@@ -49,8 +52,18 @@ sequenceDiagram
         Main->>NeighborStore: HilbertNeighborStore::new(HilbertKeyGenerator, GrpcLeadStore)
     end
 
-    Main->>Migration: LeadMigration::new(migration_cfg, member, TopKSelector, migrant_buffer)
+    opt surrogate_cfg.endpoint is Some(ep)
+        Main->>Transport: build_endpoint(ep, transport_cfg)
+        Transport-->>Main: SurrEndpoint
+        Main->>Wait: wait_for_channel(surr_endpoint, deadline)
+        Wait-->>Main: SurrChannel
+        Main->>SurrogateClient: GrpcSurrogateClient::new(SurrogateServiceClient::new(channel), transport_cfg)
+    end
 
-    Main->>Runner: GaRunner { cfg, evaluator, store, neighbor_store, migration }.run(&mut rng)
+    Main->>MTE: MultiTierEvaluator::new(simulator, store, neighbor_store, surrogate_client, tier_cfg)
+
+    Main->>Migration: LeadMigration::new(migration_cfg, member, ring_client, TopKSelector, migrant_buffer)
+
+    Main->>Runner: GaRunner { cfg, evaluator: &multi_tier_evaluator, store, neighbor_store, migration }.run(&mut rng)
     Runner-->>Main: Result<f64>
 

@@ -1,35 +1,42 @@
 sequenceDiagram
-    participant Caller as Caller / GaRunner
+    autonumber
+    participant Caller as Caller / MultiTierEvaluator
     participant NStore as HilbertNeighborStore
-    participant KeyGen as HilbertKeyGenerator
+    participant KeyGen as HilbertKeyGenerator (hilbert_rs)
     participant Lead as LeadStore (GrpcLeadStore)
     participant Euclid as EuclideanDistance
 
-    Note over Caller,Lead: 1. Multi-Probe Store (3 rotated Hilbert curves)
+    Note over Caller,Lead: 1. Concurrent Multi-Probe Store (3 rotated curves)
     Caller->>NStore: store(genes, fitness, generation)
     NStore->>NStore: serde_json::to_string(&GenePayload)
     NStore->>KeyGen: keys_for(genes)
-    KeyGen-->>NStore: keys (3 rotated Hilbert curve keys)
-    loop for each key in keys
-        NStore->>Lead: store_gene(key, value)
-        Lead-->>NStore: Ok(())
+    KeyGen-->>NStore: [key_curve0, key_curve1, key_curve2]
+    
+    par Concurrent Store Fanout (try_join_all)
+        NStore->>Lead: store_gene(key_curve0, value)
+        NStore->>Lead: store_gene(key_curve1, value)
+        NStore->>Lead: store_gene(key_curve2, value)
     end
+    Lead-->>NStore: all Ok(())
     NStore-->>Caller: Ok(())
 
-    Note over Caller,Euclid: 2. Multi-Probe k-NN Query & Euclidean Re-ranking
+    Note over Caller,Euclid: 2. Concurrent Multi-Probe k-NN Query & Euclidean Re-ranking
     Caller->>NStore: query_knn(query, k)
     NStore->>KeyGen: keys_for(query)
-    KeyGen-->>NStore: probe_keys (3 probe keys)
-    loop for each probe_key in probe_keys
-        NStore->>Lead: range_query(probe_key, k)
-        Lead-->>NStore: Vec<(key, json_payload)>
-        NStore->>NStore: parse GenePayload & deduplicate into candidates map
-    end
+    KeyGen-->>NStore: [probe_curve0, probe_curve1, probe_curve2]
 
-    loop for each candidate in candidates
+    par Concurrent Range Query Fanout (join_all)
+        NStore->>Lead: range_query(probe_curve0, k)
+        NStore->>Lead: range_query(probe_curve1, k)
+        NStore->>Lead: range_query(probe_curve2, k)
+    end
+    Lead-->>NStore: candidate slices from all curves
+
+    NStore->>NStore: deduplicate by key into candidate HashMap
+    loop For each candidate in map
         NStore->>Euclid: distance(query, &candidate.genes)
         Euclid-->>NStore: distance f64
     end
-    NStore->>NStore: sort candidates ascending by Euclidean distance
+    NStore->>NStore: sort candidates ascending by true Euclidean distance
     NStore->>NStore: take top k candidates
     NStore-->>Caller: Ok(Vec<GenePayload>)

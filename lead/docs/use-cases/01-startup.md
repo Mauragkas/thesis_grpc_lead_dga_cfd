@@ -2,7 +2,7 @@
 
 ## Description
 
-Starts the `lead-node` binary, loads runtime configuration from environment variables, initializes the in-memory ordered storage engine, instantiates the `LeadNode` coordinator with $k$ virtual nodes, optionally joins an existing ring cluster, spawns periodic maintenance loops, and starts both the gRPC and HTTP REST servers.
+Starts the `lead-node` binary, loads runtime configuration from environment variables, initializes the pluggable ordered storage engine (in-memory `InMemoryStore` or persistent disk-backed `SledStore` via `StorageEngine`), instantiates the `LeadNode` coordinator with $k$ virtual nodes, restores any persisted key counts into the FRM learned index, optionally joins an existing ring cluster, spawns periodic maintenance loops, and starts both the gRPC and HTTP REST servers.
 
 ## Primary actor
 
@@ -10,7 +10,7 @@ Starts the `lead-node` binary, loads runtime configuration from environment vari
 
 ## Supporting systems
 
-- `InMemoryStore` (ordered BTreeMap storage)
+- `KeyStore` (`StorageEngine` wrapping `InMemoryStore` or persistent `SledStore`)
 - `GrpcRemote` (tonic gRPC client pool)
 - `axum` HTTP server
 - `tonic` gRPC server
@@ -19,29 +19,33 @@ Starts the `lead-node` binary, loads runtime configuration from environment vari
 ## Preconditions
 
 - The host network ports for HTTP and gRPC bindings are free.
-- Environment variables may override default binding addresses and vnode counts.
+- Environment variables may override default binding addresses, vnode counts, and storage backend settings.
 
 ## Main steps
 
 1. The process initializes structured JSON logging via `tracing_subscriber`.
 2. Runtime configuration is loaded with `Config::from_env()`.
-3. An `InMemoryStore` and a `GrpcRemote` client adapter are instantiated.
-4. The `LeadNode` coordinator is created:
+3. The storage engine is instantiated based on `cfg.storage_backend`:
+   - If `StorageBackend::Sled`: opens persistent database via `StorageEngine::sled(path)` (default path `"./data/lead"`).
+   - If `StorageBackend::Memory`: allocates in-memory B-tree storage via `StorageEngine::memory()`.
+4. A `GrpcRemote` client adapter is instantiated.
+5. The `LeadNode` coordinator is created:
    - Derives $k$ virtual node IDs (VIDs) using `PeerHASH` on `"{i}|{self_uri}"`.
    - Initializes $k$ `VirtualNode` instances with base-10 finger tables.
    - Links initial successors locally in a circular ring.
    - Instantiates the initial `LearnedIndex` with default `RmiModel`.
-5. If `join_uri` is configured:
+6. `lead.init_from_storage().await;` is called to inspect existing keys in storage and initialize `LearnedIndex::keys_total`.
+7. If `join_uri` is configured:
    - An asynchronous join loop contacts the bootstrap node to discover successors for each local vnode.
-   - Retries up to 300 times (with 1-second sleeps) until all vnodes discover remote successors.
-6. The background maintenance tasks are spawned:
+   - Retries up to `join_retry_count` times (default 300) with `join_retry_delay_secs` sleeps (default 1s) until all vnodes discover remote successors.
+8. The background maintenance tasks are spawned:
    - `stabilize_all()` (every 2s)
    - `fix_fingers_all()` (every 5s)
    - `check_predecessor_all()` (every 10s)
    - `heartbeat_round()` (every 8s)
    - `maybe_retrain()` (every 5s)
-7. The tonic gRPC server is spawned on `cfg.grpc_bind`.
-8. The axum HTTP server binds to `cfg.http_bind` and starts listening for REST requests.
+9. The tonic gRPC server is spawned on `cfg.grpc_bind`.
+10. The axum HTTP server binds to `cfg.http_bind` and starts listening for REST requests.
 
 ## Postconditions
 

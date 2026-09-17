@@ -22,6 +22,14 @@ class TransportConfig {
   +request_timeout: Duration
   +keep_alive_timeout: Duration
   +tcp_keepalive: Option~Duration~
+  +circuit_breaker_failure_threshold: usize
+  +circuit_breaker_recovery_timeout: Duration
+  +circuit_breaker_half_open_probes: usize
+  +max_individual_retries: usize
+  +initial_retry_backoff: Duration
+  +max_retry_backoff: Duration
+  +retry_jitter_factor: f64
+  +fallback_penalty_on_exhaustion: bool
 }
 
 class GeneStoreConfig {
@@ -30,6 +38,17 @@ class GeneStoreConfig {
 
 class LeadConfig {
   +endpoint: Option~String~
+}
+
+class SurrogateClientConfig {
+  +endpoint: Option~String~
+}
+
+class TierConfig {
+  +epsilon_exact: f64
+  +radius_r: f64
+  +k_neighbors: usize
+  +min_neighbors: usize
 }
 
 class RingConfig {
@@ -71,11 +90,48 @@ class Evaluator <<interface>> {
   +evaluate_population(population) Result~Vec~f64~~
 }
 
+class CircuitState <<enumeration>> {
+  Closed
+  Open
+  HalfOpen
+}
+
+class CircuitBreakerConfig {
+  +failure_threshold: usize
+  +recovery_timeout: Duration
+  +half_open_probes: usize
+}
+
+class CircuitBreaker {
+  -config: CircuitBreakerConfig
+  -inner: Mutex~Inner~
+  +new(config)
+  +state() CircuitState
+  +can_execute() bool
+  +wait_until_ready(timeout) Result~()~
+  +record_success()
+  +record_failure()
+}
+
+class RetryPolicy {
+  +max_attempts: usize
+  +initial_backoff: Duration
+  +max_backoff: Duration
+  +jitter_factor: f64
+  +new(max_attempts, initial_backoff, max_backoff, jitter_factor)
+  +backoff_for_attempt(attempt) Duration
+  +is_retryable(status)$ bool
+}
+
 class GrpcEvaluator {
   -client: EvaluatorClient
   -cfg: TransportConfig
   -batch_size: usize
+  -circuit_breaker: Arc~CircuitBreaker~
+  -retry_policy: RetryPolicy
   +new(client, cfg, batch_size)
+  +with_resilience(client, cfg, batch_size, cb, rp)$ GrpcEvaluator
+  +eval_individual(client, cb, rp, cfg, genes)$ Result~f64~
   +evaluate_population(population) Result~Vec~f64~~
 }
 
@@ -85,7 +141,7 @@ class MultiTierEvaluator {
   -neighbor_store: Option~Arc~dyn NeighborStore~~
   -surrogate: Option~Arc~dyn SurrogateClient~~
   -tier_cfg: TierConfig
-  +metrics: TierMetricsTracker
+  +metrics: Arc~TierMetricsTracker~
   +new(sim, store, neighbor_store, surrogate, tier_cfg)
   +evaluate_population(population) Result~Vec~f64~~
 }
@@ -110,7 +166,7 @@ class SurrogateClient <<interface>> {
 class GrpcSurrogateClient {
   -client: SurrogateServiceClient
   -ready_cached: AtomicBool
-  +new(client)
+  +new(client, cfg)
   +predict_batch(individuals) Result~Option~Vec~f64~~~
   +ingest_samples(samples) Result~()~
   +is_ready() bool
@@ -348,12 +404,17 @@ GaRunner --> GAOperators : generational operators
 GrpcEvaluator ..|> Evaluator
 GrpcEvaluator --> TransportConfig
 GrpcEvaluator --> EvaluatorClient
+GrpcEvaluator *-- CircuitBreaker
+GrpcEvaluator *-- RetryPolicy
+CircuitBreaker *-- CircuitBreakerConfig
+CircuitBreaker *-- CircuitState
 
 MultiTierEvaluator ..|> Evaluator
 MultiTierEvaluator --> Evaluator : simulator
 MultiTierEvaluator --> GeneStore : local exact cache
 MultiTierEvaluator --> NeighborStore : LEAD DHT
 MultiTierEvaluator --> SurrogateClient : surrogate node
+MultiTierEvaluator --> TierConfig
 MultiTierEvaluator *-- TierMetricsTracker
 GrpcSurrogateClient ..|> SurrogateClient
 

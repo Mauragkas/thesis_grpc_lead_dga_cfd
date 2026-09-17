@@ -24,8 +24,8 @@ Exposes dual communication interfaces: high-throughput tonic gRPC for inter-node
 | `Notify` | Informs a local vnode of a candidate predecessor. |
 | `GetSuccessor` / `GetSuccessorList` | Retrieves immediate successor or backup successor list. |
 | `GetLocal` / `PutLocal` / `DeleteLocal` | Direct non-routed local storage operations. |
-| `GetRouted` / `PutRouted` | Routed storage operations using LearnedHASH prediction and Chord lookup. |
-| `RangeQuery` / `RangeForward` | Multi-node ordered range query scanning and forwarding. |
+| `RangeQuery` | Distributed ordered range query using parallel scatter-gather fanout across known peers and global Hilbert merge-sorting. |
+| `RangeForward` | Legacy/forwarding range query hop interface for node-to-node transfer. |
 | `PushModel` / `RequestModel` | Model synchronization and federated learning distribution. |
 | `Heartbeat` | Peer health checks and model update readiness status. |
 | `GetKeys` | Returns snapshot list of local storage keys. |
@@ -43,7 +43,7 @@ Exposes dual communication interfaces: high-throughput tonic gRPC for inter-node
 | `/kv/local/:key` | `GET`, `POST`, `DELETE` | Accesses local node key-value storage directly. |
 | `/kv/:key` | `GET`, `POST`, `DELETE` | Executes routed key-value operation using LearnedHASH. |
 | `/keys` | `GET` | Returns JSON array of all stored keys on this node. |
-| `/range?start=&count=` | `GET` | Runs distributed range query starting at `start` key. |
+| `/range?start=&count=` | `GET` | Runs distributed scatter-gather range query starting at `start` key. |
 
 ## Postconditions
 

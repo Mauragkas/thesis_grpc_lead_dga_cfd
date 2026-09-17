@@ -1,27 +1,32 @@
 sequenceDiagram
+    autonumber
     participant Client as Client
-    participant Lead as LeadNode (Node A)
-    participant Index as LearnedIndex
-    participant Store as InMemoryStore (A)
+    participant Coord as LeadNode (Coordinator Node A)
+    participant StorageA as StorageEngine (Node A)
     participant Remote as GrpcRemote
-    participant Succ as Successor Node (Node B)
+    participant PeerB as Peer Node B
+    participant StorageB as StorageEngine (Node B)
 
-    Client->>Lead: RangeQuery(start_key, count)
-    Lead->>Index: model.predict(start_key)
-    Index-->>Lead: predicted_id
-    Lead->>Lead: find_owning_vnode(predicted_id)
+    Client->>Coord: RangeQuery(start_key, count)
+    Note over Coord: External caller triggers scatter-gather
 
-    Lead->>Store: range_scan(start_key, count * 3)
-    Store-->>Lead: local_entries
-    Lead->>Lead: collect_owned(local_entries, model, count) -> payload
+    Coord->>Coord: known_peer_addresses() (from vnodes' fingers & successors)
+    Coord->>StorageA: range_scan(start_key, overscan)
+    StorageA-->>Coord: local_entries
 
-    alt payload.len() >= count
-        Lead-->>Client: RangeResponse { entries: payload, complete: true }
-    else payload.len() < count
-        Lead->>Remote: range_forward(succ.address, last_key, remaining, payload)
-        Remote->>Succ: /lead.Lead/RangeForward(RangeForwardRequest)
-        Succ->>Succ: handle_range_forward(...)
-        Succ-->>Remote: RangeResponse { entries: full_payload, complete: true }
-        Remote-->>Lead: full_payload
-        Lead-->>Client: RangeResponse { entries: full_payload, complete: true }
+    par Fanout to Cluster Peers
+        Coord->>Remote: range_query(Peer B, start_key, overscan, caller="__local__")
+        Remote->>PeerB: /lead.Lead/RangeQuery(caller="__local__")
+        Note over PeerB: Sentinel detected: local scan only (no recursive fanout)
+        PeerB->>StorageB: range_scan(start_key, overscan)
+        StorageB-->>PeerB: peer_b_entries
+        PeerB-->>Remote: RangeResponse { entries: peer_b_entries, complete: true }
+        Remote-->>Coord: peer_b_entries
     end
+
+    Note over Coord: Merge, global Hilbert sort & deduplication
+    Coord->>Coord: all_entries.extend(peer_b_entries)
+    Coord->>Coord: sort_unstable_by(|(a, _), (b, _)| a.cmp(b))
+    Coord->>Coord: dedup_by(|(a, _), (b, _)| a == b) & truncate to count
+
+    Coord-->>Client: RangeResponse { entries: top_count, complete: true }

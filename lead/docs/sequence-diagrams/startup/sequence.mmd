@@ -1,7 +1,7 @@
 sequenceDiagram
     participant Main as main()
     participant Config as Config::from_env()
-    participant Store as InMemoryStore
+    participant Storage as StorageEngine
     participant Remote as GrpcRemote
     participant Lead as LeadNode
     participant Join as Join Task
@@ -12,10 +12,18 @@ sequenceDiagram
     Main->>Config: Config::from_env()
     Config-->>Main: cfg
 
-    Main->>Store: InMemoryStore::new()
+    alt cfg.storage_backend == Sled
+        Main->>Storage: StorageEngine::sled(path)
+        Storage-->>Main: storage (SledStore)
+    else cfg.storage_backend == Memory
+        Main->>Storage: StorageEngine::memory()
+        Storage-->>Main: storage (InMemoryStore)
+    end
+
     Main->>Remote: GrpcRemote::new()
-    Main->>Lead: LeadNode::new(cfg.self_uri, cfg.vnodes, store, remote)
+    Main->>Lead: LeadNode::new(cfg, storage, remote)
     Lead-->>Main: Arc<LeadNode>
+    Main->>Lead: init_from_storage().await
 
     opt cfg.join_uri is Some(join_uri)
         Main->>Join: spawn join loop

@@ -2,12 +2,23 @@ classDiagram
 direction TB
 
 %% Configuration Subsystem
+class StorageBackend <<enumeration>> {
+  Memory
+  Sled
+}
+
 class Config {
+  +storage_backend: StorageBackend
+  +storage_path: Option~String~
   +http_bind: String
   +grpc_bind: String
   +self_uri: String
   +join_uri: Option~String~
   +virtual_node_count: usize
+  +successor_list_len: usize
+  +range_overscan_multiplier: usize
+  +join_retry_count: usize
+  +join_retry_delay_secs: u64
   +from_env()$ Config
 }
 
@@ -47,7 +58,8 @@ class LeadNode {
   -storage: Arc~KeyStore~
   -remote: Arc~RemoteNode~
   -learning: LearnedIndex
-  +new(self_uri, k, storage, remote)
+  +new(config, storage, remote)
+  +init_from_storage()
   +join(known_uri)
   +stabilize_all()
   +fix_fingers_all()
@@ -71,6 +83,22 @@ class KeyStore <<interface>> {
   +snapshot() Vec~Tuple~String_String~~~
   +len() usize
   +is_empty() bool
+  +flush()
+}
+
+class StorageEngine {
+  +memory()$ StorageEngine
+  +sled(path)$ StorageEngine
+  +sled_temporary()$ StorageEngine
+  +get(key) Option~String~
+  +put(key, val)
+  +remove(key) Option~String~
+  +range_scan(start_key, count) Vec~Tuple~String_String~~~
+  +range_scan_after(after_key, count) Vec~Tuple~String_String~~~
+  +snapshot() Vec~Tuple~String_String~~~
+  +len() usize
+  +is_empty() bool
+  +flush()
 }
 
 class InMemoryStore {
@@ -84,6 +112,22 @@ class InMemoryStore {
   +snapshot() Vec~Tuple~String_String~~~
   +len() usize
   +is_empty() bool
+  +flush()
+}
+
+class SledStore {
+  -db: Db
+  +open(path)$ SledStore
+  +open_temporary()$ SledStore
+  +get(key) Option~String~
+  +put(key, val)
+  +remove(key) Option~String~
+  +range_scan(start_key, count) Vec~Tuple~String_String~~~
+  +range_scan_after(after_key, count) Vec~Tuple~String_String~~~
+  +snapshot() Vec~Tuple~String_String~~~
+  +len() usize
+  +is_empty() bool
+  +flush()
 }
 
 %% Transport & Remote Communication
@@ -199,6 +243,7 @@ class FederatedAveraging <<utility>> {
 }
 
 %% Relationships
+Config *-- StorageBackend
 LeadNode --> Config
 LeadNode *-- "1..*" VirtualNode
 LeadNode --> KeyStore
@@ -207,7 +252,11 @@ LeadNode *-- LearnedIndex
 
 VirtualNode *-- "1..*" NodeAddr
 
+StorageEngine ..|> KeyStore
+StorageEngine *-- InMemoryStore
+StorageEngine *-- SledStore
 InMemoryStore ..|> KeyStore
+SledStore ..|> KeyStore
 
 RemoteNode --|> RingClient
 RemoteNode --|> KvClient

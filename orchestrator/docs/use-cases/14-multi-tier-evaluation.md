@@ -67,6 +67,6 @@ Evaluates a population of candidate aircraft designs using a 3-tier hierarchical
 
 ## Failure Cases
 
-- Worker simulator unavailable -> Retries up to `max_attempts`, then returns error.
-- Surrogate service unavailable -> Graceful fallback to Tier 3 simulation without failing GA run.
-- LEAD DHT unreachable -> Continues with local in-memory store.
+- Worker simulator unavailable -> Guarded by `CircuitBreaker` and per-individual retries with exponential backoff and jitter; returns error or `-1e9` penalty if `fallback_penalty_on_exhaustion` is enabled.
+- Surrogate service unavailable or cold -> Graceful fallback to Tier 3 simulation without failing GA run.
+- LEAD DHT unreachable -> Continues gracefully with local in-memory store and logs warning.
