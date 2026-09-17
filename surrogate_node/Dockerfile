@@ -15,7 +15,11 @@ COPY native ./native
 COPY benches ./benches
 COPY src ./src
 
-RUN cargo build --release
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/usr/local/cargo/git \
+    --mount=type=cache,target=/app/target \
+    cargo build --release && \
+    cp /app/target/release/surrogate_node /app/surrogate_node
 
 FROM debian:bookworm-slim
 WORKDIR /app
@@ -26,7 +30,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
  && rm -rf /var/lib/apt/lists/*
 
-COPY --from=builder /app/target/release/surrogate_node /usr/local/bin/surrogate_node
+COPY --from=builder /app/surrogate_node /usr/local/bin/surrogate_node
 ENV RUST_LOG=info
 EXPOSE 50054
 CMD ["surrogate_node"]

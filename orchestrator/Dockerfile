@@ -12,9 +12,13 @@ COPY proto ./proto
 COPY benches ./benches
 COPY src ./src
 
-RUN cargo build --release
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/usr/local/cargo/git \
+    --mount=type=cache,target=/app/target \
+    cargo build --release && \
+    cp /app/target/release/orchestrator /app/orchestrator
 
 FROM debian:bookworm-slim
 WORKDIR /app
-COPY --from=builder /app/target/release/orchestrator /usr/local/bin/orchestrator
+COPY --from=builder /app/orchestrator /usr/local/bin/orchestrator
 CMD ["orchestrator"]
