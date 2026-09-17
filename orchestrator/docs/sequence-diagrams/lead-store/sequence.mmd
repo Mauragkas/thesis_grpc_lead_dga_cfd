@@ -1,45 +1,63 @@
 sequenceDiagram
+    autonumber
     participant Caller as Caller (HilbertNeighborStore / GaRunner)
     participant Lead as GrpcLeadStore
+    participant Timer as tokio::time::timeout (5s)
     participant Client as LeadClient<Channel>
     participant Remote as lead.Lead service
 
-    Note over Caller,Remote: 1. Store Gene (PutRouted)
+    Note over Caller,Remote: 1. Store Gene (PutRouted with 5s Timeout)
     Caller->>Lead: store_gene(key, value)
-    Lead->>Client: clone()
-    Lead->>Client: put_routed(PutRoutedRequest { key, value })
+    Lead->>Timer: timeout(5s, put_routed(PutRoutedRequest { key, value }))
+    Timer->>Client: put_routed(PutRoutedRequest)
     Client->>Remote: /lead.Lead/PutRouted
-    alt success
+    alt Success
         Remote-->>Client: BoolMsg { ok: true }
-        Client-->>Lead: Ok(())
+        Client-->>Timer: Ok(BoolMsg)
+        Timer-->>Lead: Ok(Ok(()))
         Lead-->>Caller: Ok(())
-    else failure
-        Remote-->>Client: Status error
-        Client-->>Lead: Err(Status)
+    else Timeout (> 5s)
+        Timer-->>Lead: Err(Elapsed)
+        Lead-->>Caller: Err(Status::deadline_exceeded)
+    else gRPC Error
+        Remote-->>Client: Status Error
+        Client-->>Timer: Err(Status)
+        Timer-->>Lead: Ok(Err(Status))
         Lead-->>Caller: Err(Status)
     end
 
-    Note over Caller,Remote: 2. Get Gene (GetRouted)
+    Note over Caller,Remote: 2. Get Gene (GetRouted with 5s Timeout)
     Caller->>Lead: get_gene(key)
-    Lead->>Client: clone()
-    Lead->>Client: get_routed(KeyMsg { key })
+    Lead->>Timer: timeout(5s, get_routed(KeyMsg { key }))
+    Timer->>Client: get_routed(KeyMsg)
     Client->>Remote: /lead.Lead/GetRouted
-    alt found
+    alt Found
         Remote-->>Client: ValMsg { value }
-        Client-->>Lead: Ok(Some(value))
+        Client-->>Timer: Ok(ValMsg)
+        Timer-->>Lead: Ok(Ok(Some(value)))
         Lead-->>Caller: Ok(Some(value))
     else NotFound
         Remote-->>Client: Status::NotFound
-        Client-->>Lead: Ok(None)
+        Client-->>Timer: Err(NotFound)
+        Timer-->>Lead: Ok(Ok(None))
         Lead-->>Caller: Ok(None)
+    else Timeout (> 5s)
+        Timer-->>Lead: Err(Elapsed)
+        Lead-->>Caller: Err(Status::deadline_exceeded)
     end
 
-    Note over Caller,Remote: 3. Range Query (RangeQuery)
+    Note over Caller,Remote: 3. Range Query (RangeQuery with 5s Timeout)
     Caller->>Lead: range_query(start_key, count)
-    Lead->>Client: clone()
-    Lead->>Client: range_query(RangeRequest { start_key, count, caller_address })
-    Client->>Remote: /lead.Lead/RangeQuery
-    Remote-->>Client: RangeResponse { entries }
-    Client-->>Lead: Ok(entries)
-    Lead-->>Caller: Ok(Vec<(String, String)>)
+    Lead->>Timer: timeout(5s, range_query(RangeRequest))
+    Timer->>Client: range_query(RangeRequest { start_key, count })
+    Client->>Remote: /lead.Lead/RangeQuery (Scatter-Gather Fanout)
+    alt Success
+        Remote-->>Client: RangeResponse { entries }
+        Client-->>Timer: Ok(RangeResponse)
+        Timer-->>Lead: Ok(Ok(entries))
+        Lead-->>Caller: Ok(Vec<(String, String)>)
+    else Timeout (> 5s)
+        Timer-->>Lead: Err(Elapsed)
+        Lead-->>Caller: Err(Status::deadline_exceeded)
+    end
 

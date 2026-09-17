@@ -10,28 +10,28 @@ Provides point key-value storage operations. Clients can execute operations eith
 
 ## Supporting systems
 
-- `KeyStore` (`InMemoryStore` BTreeMap)
+- `KeyStore` (`StorageEngine` dispatching to `InMemoryStore` or persistent `SledStore`)
 - `LearnedIndex` (predicts target hash ID)
 - `RemoteNode` (`GrpcRemote`)
 
 ## Main steps: Local Key-Value Operations
 
-1. **`GetLocal(key)`**: Checks local `InMemoryStore`. Returns value if found, or `NotFound`.
-2. **`PutLocal(key, value)`**: Writes `(key, value)` to local `InMemoryStore`.
+1. **`GetLocal(key)`**: Checks local `KeyStore` storage engine. Returns value if found, or `NotFound`.
+2. **`PutLocal(key, value)`**: Writes `(key, value)` to local `KeyStore` storage engine (durable on disk if Sled is enabled).
    - Calls `record_insertion(key)` on `LearnedIndex` to track drift and trigger PID tuning.
-3. **`DeleteLocal(key)`**: Deletes `key` from local `InMemoryStore`.
+3. **`DeleteLocal(key)`**: Deletes `key` from local `KeyStore` storage engine.
 
 ## Main steps: Routed Key-Value Operations
 
 1. **`PutRouted(key, value)`**:
    - Computes target hash ID: $id = \text{learned\_hash}(key)$.
    - Performs Chord lookup `find_successor(id)` starting from the best local vnode.
-   - If the responsible node is local: inserts into local `InMemoryStore` and records insertion.
+   - If the responsible node is local: inserts into local storage engine and records insertion.
    - If the responsible node is remote: forwards `PutLocal(key, value)` to the destination node via gRPC.
 2. **`GetRouted(key)`**:
    - Computes target hash ID: $id = \text{learned\_hash}(key)$.
    - Resolves the responsible node via `find_successor(id)`.
-   - If local: reads from local `InMemoryStore`.
+   - If local: reads from local storage engine.
    - If remote: forwards `GetLocal(key)` to the destination node via gRPC.
 
 ## Postconditions

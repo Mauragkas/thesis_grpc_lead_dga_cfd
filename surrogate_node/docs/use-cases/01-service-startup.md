@@ -18,11 +18,19 @@ Initializes hardware probes, loads runtime configuration from environment variab
 ## Main Steps
 
 1. Initialize JSON tracing logging subscriber.
-2. Read runtime parameters from environment (`GRPC_BIND`, `WINDOW_SIZE`, `RETRAIN_INTERVAL`, `MIN_TRAIN_SAMPLES`, `MLP_EPOCHS`, `MLP_LR`, `MLP_BATCH_SIZE`, `MLP_HIDDEN`).
-3. Parse socket address (default `0.0.0.0:50054`).
-4. Allocate `SurrogateState` with a `SlidingWindowBuffer` of max capacity `WINDOW_SIZE`.
-5. Wrap in `SurrogateServer` and construct `SurrogateServiceServer`.
-6. Start Tonic server listener and begin serving incoming gRPC calls.
+2. Read runtime parameters from environment variables (supporting both standard and `SURROGATE_*` prefixes):
+   - `GRPC_BIND` / `SURROGATE_GRPC_BIND`: Socket address (default: `"0.0.0.0:50054"`).
+   - `WINDOW_SIZE` / `SURROGATE_WINDOW_SIZE`: FIFO sample buffer capacity (default: `1000`).
+   - `RETRAIN_INTERVAL` / `SURROGATE_RETRAIN_INTERVAL`: Newly ingested sample threshold triggering retraining (default: `20`).
+   - `MIN_TRAIN_SAMPLES` / `SURROGATE_MIN_TRAIN_SAMPLES`: Minimum samples in buffer before online training starts (default: `30`).
+   - `MLP_EPOCHS` / `SURROGATE_MLP_EPOCHS`: Training epochs for backpropagation (default: `250`).
+   - `MLP_LR` / `SURROGATE_MLP_LR`: Optimizer learning rate (default: `0.001`).
+   - `MLP_BATCH_SIZE` / `SURROGATE_MLP_BATCH_SIZE`: Mini-batch size (default: `32`).
+   - `MLP_HIDDEN` / `SURROGATE_MLP_HIDDEN`: Comma-separated hidden layer neuron counts (default: `64, 32`).
+   - Activation function defaults to SiLU (`MlpActivation::Silu`).
+3. Parse socket address and initialize `SurrogateState` with a `SlidingWindowBuffer` of max capacity `WINDOW_SIZE`.
+4. Wrap `SurrogateState` in `SurrogateServer` and construct Tonic `SurrogateServiceServer`.
+5. Start Tonic server listener and begin serving incoming gRPC calls.
 
 ## Postconditions
 

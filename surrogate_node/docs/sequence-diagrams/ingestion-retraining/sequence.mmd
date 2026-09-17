@@ -8,8 +8,8 @@ sequenceDiagram
     participant Trainer as SurrogateTrainer
     participant ModelLock as active_model (RwLock)
 
-    Client-)Srv: IngestSamples(IngestSamplesRequest { samples })
-    Srv->>State: ingest_samples(samples, trigger_training)
+    Client-)Srv: IngestSamples(IngestSamplesRequest { samples, force_train })
+    Srv->>State: ingest_samples(samples, force_train)
 
     State->>Buf: lock() & push_batch(samples)
     Note over Buf: If len > capacity, pop oldest sample
@@ -17,7 +17,7 @@ sequenceDiagram
 
     State->>State: samples_since_retrain += count_ingested
 
-    alt Threshold Met (samples_since >= RETRAIN_INTERVAL and window_len >= MIN_TRAIN_SAMPLES)
+    alt Threshold Met (samples_since >= RETRAIN_INTERVAL and window_len >= MIN_TRAIN_SAMPLES, or force_train)
         State->>State: is_training.compare_exchange(false, true)
         State->>Buf: extract_dataset()
         Buf-->>State: (x_data, y_data, n_samples, dim)
@@ -37,7 +37,7 @@ sequenceDiagram
         ModelLock-->>Worker: guard
         Worker->>ModelLock: *active = Some(Arc::new(new_surrogate))
         Note over ModelLock: Atomic zero-downtime swap!
-        Worker->>State: model_version += 1, samples_since_retrain = 0, is_training = false
+        Worker->>State: model_version += 1, samples_since_retrain = 0, is_training = false, last_metrics = Some(metrics)
         deactivate Worker
     else Below Threshold
         State-->>Srv: (window_len, training_started = false)

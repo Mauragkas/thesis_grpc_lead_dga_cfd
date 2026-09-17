@@ -2,6 +2,13 @@ classDiagram
 direction TB
 
 %% Service Subsystem
+class MlpActivation <<enumeration>> {
+  Relu
+  Gelu
+  Silu
+  Tanh
+}
+
 class SurrogateConfig {
   +grpc_bind: String
   +window_size: usize
@@ -11,7 +18,9 @@ class SurrogateConfig {
   +mlp_lr: f64
   +mlp_batch_size: usize
   +mlp_hidden_layers: Vec~usize~
+  +mlp_activation: MlpActivation
   +from_env()$ Self
+  +to_mlp_config(seed) MlpConfig
 }
 
 class SlidingWindowBuffer {
@@ -37,10 +46,11 @@ class SurrogateState {
   -is_training: AtomicBool
   -model_version: AtomicU64
   -samples_since_retrain: AtomicUsize
+  -last_metrics: RwLock~Option~EvaluationMetrics~~
   +new(config)
   +predict_batch(individuals) Result~Vec~f64~~~
   +ingest_samples(samples, trigger) Result~Tuple~usize_bool~~~
-  +trigger_train_async(self)
+  +trigger_train_async(force_train) bool
 }
 
 class SurrogateServer {
@@ -127,6 +137,7 @@ class TargetScaler {
 }
 
 %% Relationships
+SurrogateConfig *-- MlpActivation
 SurrogateServer --> SurrogateState
 SurrogateState --> SurrogateConfig
 SurrogateState *-- SlidingWindowBuffer
