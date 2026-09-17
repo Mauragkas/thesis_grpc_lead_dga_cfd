@@ -28,9 +28,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgomp1 \
     netcat-openbsd \
     curl \
- && rm -rf /var/lib/apt/lists/*
+    ca-certificates \
+ && rm -rf /var/lib/apt/lists/* \
+ && groupadd -g 10001 appgroup \
+ && useradd -u 10001 -g appgroup -s /bin/sh -m appuser
 
 COPY --from=builder /app/surrogate_node /usr/local/bin/surrogate_node
+
+USER appuser:appgroup
+
 ENV RUST_LOG=info
 EXPOSE 50054
 CMD ["surrogate_node"]

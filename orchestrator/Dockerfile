@@ -19,6 +19,15 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
     cp /app/target/release/orchestrator /app/orchestrator
 
 FROM debian:bookworm-slim
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+ && rm -rf /var/lib/apt/lists/* \
+ && groupadd -g 10001 appgroup \
+ && useradd -u 10001 -g appgroup -s /bin/sh -m appuser
+
 WORKDIR /app
 COPY --from=builder /app/orchestrator /usr/local/bin/orchestrator
+
+USER appuser:appgroup
+
 CMD ["orchestrator"]

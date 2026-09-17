@@ -17,12 +17,24 @@ services:
       timeout: 3s
       retries: 20
       start_period: 5s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.5'
+          memory: 1024M
+        reservations:
+          cpus: '0.2'
+          memory: 128M
     networks:
       - default
     logging:
       driver: fluentd
       options:
         fluentd-address: localhost:24224
+        fluentd-async: "true"
+        fluentd-buffer-limit: "1048576"
+        fluentd-retry-wait: "1s"
+        fluentd-max-retries: "10"
         tag: lead.node1
 
   lead-node2:
@@ -37,14 +49,20 @@ services:
       - VIRTUAL_NODE_COUNT=20
     ports:
       - "2002:2002"
-      # optional: map gRPC port for external debugging
-      # - "50062:50052"
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://127.0.0.1:2002/health || exit 1"]
       interval: 3s
       timeout: 3s
       retries: 20
       start_period: 5s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.5'
+          memory: 1024M
+        reservations:
+          cpus: '0.2'
+          memory: 128M
     depends_on:
       lead-node1:
         condition: service_healthy
@@ -54,6 +72,10 @@ services:
       driver: fluentd
       options:
         fluentd-address: localhost:24224
+        fluentd-async: "true"
+        fluentd-buffer-limit: "1048576"
+        fluentd-retry-wait: "1s"
+        fluentd-max-retries: "10"
         tag: lead.node2
 
   lead-node3:
@@ -68,14 +90,20 @@ services:
       - VIRTUAL_NODE_COUNT=20
     ports:
       - "2003:2003"
-      # optional: map gRPC port
-      # - "50063:50053"
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://127.0.0.1:2003/health || exit 1"]
       interval: 3s
       timeout: 3s
       retries: 20
       start_period: 5s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.5'
+          memory: 1024M
+        reservations:
+          cpus: '0.2'
+          memory: 128M
     depends_on:
       lead-node1:
         condition: service_healthy
@@ -85,6 +113,10 @@ services:
       driver: fluentd
       options:
         fluentd-address: localhost:24224
+        fluentd-async: "true"
+        fluentd-buffer-limit: "1048576"
+        fluentd-retry-wait: "1s"
+        fluentd-max-retries: "10"
         tag: lead.node3
 
 networks:
