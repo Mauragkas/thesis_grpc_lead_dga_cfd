@@ -9,7 +9,7 @@ The `lead-node` crate implements the LEAD Chord-like Distributed Hash Table with
 - **`src/lead/query/`**: Multi-node ordered range query execution and successor forwarding.
 - **`src/lead/routing/`**: Chord ring routing, bootstrap joining, and periodic stabilization loops.
 - **`src/rmi/`**: Two-stage Learned Index (RMI) mapping feature space to 64-bit ring hash space.
-- **`src/storage.rs`**: Ordered in-memory key-value store (`KeyStore` / `InMemoryStore`).
+- **`src/storage.rs`**: Ordered key-value storage engine (`KeyStore`, `InMemoryStore`, `SledStore`, and `StorageEngine` for persistent disk-backed storage).
 - **`src/ring.rs`**: 64-bit ring arithmetic, `PeerHASH`, base-10 finger table calculations, and interval logic.
 - **`src/transport/`**: Tonic gRPC server and client implementations.
 - **`src/api/`**: Axum HTTP REST API.

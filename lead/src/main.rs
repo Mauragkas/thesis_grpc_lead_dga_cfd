@@ -5,9 +5,9 @@ use tracing::info;
 use tracing_subscriber::EnvFilter;
 
 use lead_node::api;
-use lead_node::config::Config;
+use lead_node::config::{Config, StorageBackend};
 use lead_node::lead::LeadNode;
-use lead_node::storage::{InMemoryStore, KeyStore};
+use lead_node::storage::{KeyStore, StorageEngine};
 use lead_node::transport::grpc::{client::GrpcRemote, server};
 use lead_node::transport::RemoteNode;
 
@@ -28,16 +28,31 @@ async fn main() {
         grpc = %cfg.grpc_bind,
         vnodes = cfg.virtual_node_count,
         join = ?cfg.join_uri,
+        storage_backend = ?cfg.storage_backend,
+        storage_path = ?cfg.storage_path,
         "starting LEAD node"
     );
 
-    let storage = Arc::new(InMemoryStore::new());
+    let storage = match cfg.storage_backend {
+        StorageBackend::Sled => {
+            let path = cfg.storage_path.as_deref().unwrap_or("./data/lead");
+            info!(path = %path, "initializing persistent sled storage");
+            Arc::new(StorageEngine::sled(path).unwrap_or_else(|e| {
+                panic!("failed to open sled storage at {path}: {e}")
+            }))
+        }
+        StorageBackend::Memory => {
+            info!("initializing in-memory storage");
+            Arc::new(StorageEngine::memory())
+        }
+    };
     let remote = Arc::new(GrpcRemote::new());
     let lead = Arc::new(LeadNode::new(
         cfg.clone(),
         storage,
         remote,
     ));
+    lead.init_from_storage().await;
 
     let join_handle = if let Some(ju) = cfg.join_uri.clone() {
         let c = lead.clone();

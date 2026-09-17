@@ -98,4 +98,13 @@ where
         }
         true
     }
+
+    /// Initializes learning state with pre-existing keys from persistent storage.
+    pub async fn init_from_storage(&self) {
+        let n = self.storage.len().await;
+        if n > 0 {
+            tracing::info!(initial_keys = n, "restored existing keys from storage");
+            self.learning.set_keys_total(n);
+        }
+    }
 }
