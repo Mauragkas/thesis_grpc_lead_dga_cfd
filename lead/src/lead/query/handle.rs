@@ -1,9 +1,15 @@
+use std::collections::HashSet;
+
 use crate::ring::NodeId;
 use crate::storage::KeyStore;
 use crate::transport::{RangeResult, RemoteNode};
 
 use super::super::node::LeadNode;
 use super::super::vnode::VirtualNode;
+
+/// Sentinel passed as `caller` to peers so they return only their local scan
+/// without triggering another round of scatter-gather.
+const LOCAL_SCAN_SENTINEL: &str = "__local__";
 
 impl<S, R> LeadNode<S, R>
 where
@@ -33,6 +39,27 @@ where
         best
     }
 
+    /// Collect all unique peer addresses known to this node's vnodes
+    /// (successor lists + finger tables), excluding self.
+    async fn known_peer_addresses(&self) -> Vec<String> {
+        let mut seen: HashSet<String> = HashSet::new();
+        seen.insert(self.self_uri.clone()); // exclude self
+        let mut peers: Vec<String> = Vec::new();
+        for vnode in &self.vnodes {
+            for na in vnode.successor_list.read().await.iter() {
+                if seen.insert(na.address.clone()) {
+                    peers.push(na.address.clone());
+                }
+            }
+            for na in vnode.fingers.read().await.iter().flatten() {
+                if seen.insert(na.address.clone()) {
+                    peers.push(na.address.clone());
+                }
+            }
+        }
+        peers
+    }
+
     pub async fn handle_range_query(
         &self,
         start_key: &str,
@@ -41,34 +68,67 @@ where
         model_version: u64,
     ) -> RangeResult {
         let need = count as usize;
-        let model = self.get_model_for_version(model_version).await;
-        let id = model.predict(start_key);
 
-        let vnode = match self.find_owning_vnode(id).await {
-            Some((v, _, _)) => v,
-            None => self.best_vnode_for(id),
-        };
+        // ── Local-only path ──────────────────────────────────────────────────
+        // Peers call us with this sentinel so we return only our local scan
+        // without triggering another scatter-gather round.
+        if caller == LOCAL_SCAN_SENTINEL {
+            let overscan = need
+                .saturating_mul(self.config.range_overscan_multiplier)
+                .max(need);
+            let local = self.storage.range_scan(start_key, overscan).await;
+            return RangeResult {
+                entries: local,
+                complete: true,
+                next_address: String::new(),
+            };
+        }
 
+        // ── Scatter-gather path ──────────────────────────────────────────────
+        // Discover all peers, fan out local-scan requests in parallel, then
+        // merge-sort all results and return the globally correct top-N slice.
+        //
+        // This is necessary because the Chord ring ordering (by learned hash)
+        // does not match Hilbert (lexicographic) key ordering. Ring-hop
+        // forwarding visits nodes in ring order, not in Hilbert order, so it
+        // cannot assemble a globally sorted Hilbert slice. Scatter-gather
+        // collects all relevant data and sorts it here instead.
+        let peers = self.known_peer_addresses().await;
         let overscan = need
             .saturating_mul(self.config.range_overscan_multiplier)
             .max(need);
 
-        // Scan locally in Hilbert (lexicographic) order. No ownership filter:
-        // there is no key-migration in this system, so every key stored on this
-        // node is legitimately served by it. Filtering by vnode ownership would
-        // exclude Hilbert-adjacent keys whose learned-hash maps to a different
-        // vnode, breaking the globally-sorted range semantics the multi-probe
-        // query path depends on.
-        let mut local = self.storage.range_scan(start_key, overscan).await;
-        local.truncate(need);
+        // Local scan (this node).
+        let mut all: Vec<(String, String)> = self.storage.range_scan(start_key, overscan).await;
 
-        let caller_addr = if caller.is_empty() {
-            self.self_uri.clone()
-        } else {
-            caller.to_string()
-        };
-        self.complete_or_forward(local, need, start_key, vnode, vnode.vid, &caller_addr, model_version)
-            .await
+        // Fan out to all known peers sequentially (cluster is small: 2-6 nodes).
+        // Sequential awaits avoid the `tokio::spawn` `'static` bound on R.
+        for addr in peers {
+            let entries = self
+                .remote
+                .range_query(&addr, start_key, overscan as u64, LOCAL_SCAN_SENTINEL, model_version)
+                .await
+                .map(|r| r.entries)
+                .unwrap_or_default();
+            all.extend(entries);
+        }
+
+        // Global merge-sort: deduplicate by key and sort lexicographically
+        // (= Hilbert order, since keys encode curve-id + Hilbert index as hex).
+        all.sort_unstable_by(|(a, _), (b, _)| a.cmp(b));
+        all.dedup_by(|(a, _), (b, _)| a == b);
+
+        // Find the start position and return the next `need` entries.
+        // Skip entries that are lex-before the start_key (peers may have
+        // returned entries < start_key due to their local overscan).
+        all.retain(|(k, _)| k.as_str() >= start_key);
+        all.truncate(need);
+
+        RangeResult {
+            entries: all,
+            complete: true,
+            next_address: String::new(),
+        }
     }
 
     pub async fn handle_range_forward(
