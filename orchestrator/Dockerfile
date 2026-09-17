@@ -15,11 +15,13 @@ COPY orchestrator/src ./orchestrator/src
 
 WORKDIR /app/orchestrator
 
+ENV CARGO_TARGET_DIR=/app/target
+
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/usr/local/cargo/git \
     --mount=type=cache,target=/app/target \
     cargo build --release && \
-    cp /app/target/release/orchestrator /app/orchestrator
+    cp /app/target/release/orchestrator /app/bin-orchestrator
 
 FROM debian:bookworm-slim
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -29,7 +31,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
  && useradd -u 10001 -g appgroup -s /bin/sh -m appuser
 
 WORKDIR /app
-COPY --from=builder /app/orchestrator /usr/local/bin/orchestrator
+COPY --from=builder /app/bin-orchestrator /usr/local/bin/orchestrator
 
 USER appuser:appgroup
 
