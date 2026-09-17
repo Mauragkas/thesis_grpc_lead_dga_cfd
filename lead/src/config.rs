@@ -31,11 +31,24 @@ pub const DEFAULT_RETRAIN_INTERVAL_SECS: u64 = 5;
 pub const DEFAULT_JOIN_RETRY_COUNT: usize = 300;
 pub const DEFAULT_JOIN_RETRY_DELAY_SECS: u64 = 1;
 
+/// Storage engine backend selection.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StorageBackend {
+    Memory,
+    Sled,
+}
+
+pub const DEFAULT_STORAGE_BACKEND: StorageBackend = StorageBackend::Memory;
+
 /// Complete runtime configuration for a LEAD node.
 /// Encapsulates network addressing, ring topology, FRM learning,
 /// PID anchor tuning, pruning, range query overscan, and maintenance intervals.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Config {
+    // Storage
+    pub storage_backend: StorageBackend,
+    pub storage_path: Option<String>,
+
     // Network & Topology
     pub http_bind: String,
     pub grpc_bind: String,
@@ -79,6 +92,8 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
+            storage_backend: DEFAULT_STORAGE_BACKEND,
+            storage_path: None,
             http_bind: DEFAULT_HTTP_BIND.to_string(),
             grpc_bind: DEFAULT_GRPC_BIND.to_string(),
             self_uri: DEFAULT_SELF_URI.to_string(),
@@ -154,6 +169,33 @@ impl Config {
         if let Some(v) = map.get("JOIN_URI") {
             if !v.trim().is_empty() {
                 cfg.join_uri = Some(v.clone());
+            }
+        }
+
+        if let Some(v) = map
+            .get("LEAD_STORAGE_PATH")
+            .or_else(|| map.get("STORAGE_PATH"))
+            .or_else(|| map.get("LEAD_DATA_DIR"))
+        {
+            let trimmed = v.trim();
+            if !trimmed.is_empty() {
+                cfg.storage_path = Some(trimmed.to_string());
+                cfg.storage_backend = StorageBackend::Sled;
+            }
+        }
+
+        if let Some(v) = map.get("LEAD_STORAGE_BACKEND").or_else(|| map.get("STORAGE_BACKEND")) {
+            match v.trim().to_lowercase().as_str() {
+                "sled" => {
+                    cfg.storage_backend = StorageBackend::Sled;
+                    if cfg.storage_path.is_none() {
+                        cfg.storage_path = Some("./data/lead".to_string());
+                    }
+                }
+                "memory" | "inmemory" | "in-memory" => {
+                    cfg.storage_backend = StorageBackend::Memory;
+                }
+                other => warn!("Unknown STORAGE_BACKEND={other:?}; keeping {:?}", cfg.storage_backend),
             }
         }
 

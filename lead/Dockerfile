@@ -22,12 +22,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libssl3 ca-certificates curl \
  && rm -rf /var/lib/apt/lists/* \
  && groupadd -g 10001 appgroup \
- && useradd -u 10001 -g appgroup -s /bin/sh -m appuser
+ && useradd -u 10001 -g appgroup -s /bin/sh -m appuser \
+ && mkdir -p /data/lead \
+ && chown -R appuser:appgroup /data
 
 WORKDIR /app
 COPY --from=builder --chown=appuser:appgroup /app/lead_node /app/lead_node
 
 USER appuser:appgroup
 
+VOLUME ["/data"]
 EXPOSE 8080 50051
 CMD ["./lead_node"]
