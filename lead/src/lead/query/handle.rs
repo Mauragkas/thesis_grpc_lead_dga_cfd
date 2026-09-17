@@ -52,14 +52,22 @@ where
         let overscan = need
             .saturating_mul(self.config.range_overscan_multiplier)
             .max(need);
-        let local = self.storage.range_scan(start_key, overscan).await;
-        let payload = self.collect_owned(local, &model, need).await;
+
+        // Scan locally in Hilbert (lexicographic) order. No ownership filter:
+        // there is no key-migration in this system, so every key stored on this
+        // node is legitimately served by it. Filtering by vnode ownership would
+        // exclude Hilbert-adjacent keys whose learned-hash maps to a different
+        // vnode, breaking the globally-sorted range semantics the multi-probe
+        // query path depends on.
+        let mut local = self.storage.range_scan(start_key, overscan).await;
+        local.truncate(need);
+
         let caller_addr = if caller.is_empty() {
             self.self_uri.clone()
         } else {
             caller.to_string()
         };
-        self.complete_or_forward(payload, need, start_key, vnode, vnode.vid, &caller_addr, model_version)
+        self.complete_or_forward(local, need, start_key, vnode, vnode.vid, &caller_addr, model_version)
             .await
     }
 
@@ -96,12 +104,13 @@ where
             },
         };
 
-        let overscan = need
+        let remaining = need - payload.len();
+        let overscan = remaining
             .saturating_mul(self.config.range_overscan_multiplier)
-            .max(need);
-        let local = self.storage.range_scan_after(from_key, overscan).await;
-        let filtered = self.collect_owned(local, &model, need).await;
-        payload.extend(filtered);
+            .max(remaining);
+        let mut local = self.storage.range_scan_after(from_key, overscan).await;
+        local.truncate(remaining);
+        payload.extend(local);
 
         let caller_chain = if caller.is_empty() {
             self.self_uri.clone()
@@ -113,28 +122,6 @@ where
 
         self.complete_or_forward(payload, need, from_key, vnode, origin_vid, &caller_chain, model_version)
             .await
-    }
-
-    /// Keep keys from a local scan that are owned by *any* of this node's
-    /// vnodes (per the given model), up to `need`. Keys owned by remote nodes
-    /// (stale / pending migration) are excluded so the result only contains
-    /// keys this node legitimately serves.
-    async fn collect_owned(
-        &self,
-        local: Vec<(String, String)>,
-        model: &crate::rmi::RmiModel,
-        need: usize,
-    ) -> Vec<(String, String)> {
-        let mut owned = Vec::with_capacity(need.min(local.len()));
-        for (k, v) in local {
-            if self.owns_key_with_model(&k, model).await {
-                owned.push((k, v));
-                if owned.len() >= need {
-                    break;
-                }
-            }
-        }
-        owned
     }
 
     /// Shared tail for both range paths: if we have enough entries, return
