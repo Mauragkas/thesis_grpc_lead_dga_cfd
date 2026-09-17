@@ -42,6 +42,7 @@ fn fast_transport() -> TransportConfig {
         request_timeout: Duration::from_secs(2),
         keep_alive_timeout: Duration::from_secs(2),
         tcp_keepalive: Some(Duration::from_secs(2)),
+        ..TransportConfig::default()
     }
 }
 

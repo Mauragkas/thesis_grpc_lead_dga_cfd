@@ -27,6 +27,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 tracing-log = "0.2"
 sha2 = "0.10"
 futures = "0.3"
+hilbert = { path = "../hilbert" }
 
 [dev-dependencies]
 serial_test = "3"

@@ -10,11 +10,18 @@ import grpc
 
 from grpc_health.v1 import health, health_pb2, health_pb2_grpc
 
-import eval_pb2_grpc
-from aero import AerosandboxAeroEvaluator
-from config import GENE_BOUNDS, load_config
-from fitness import FitnessEvaluator
-from service import EvaluatorServicer
+try:
+    from . import eval_pb2_grpc
+    from .aero import AerosandboxAeroEvaluator
+    from .config import GENE_BOUNDS, load_config
+    from .fitness import FitnessEvaluator
+    from .service import EvaluatorServicer
+except (ImportError, ValueError):
+    import eval_pb2_grpc
+    from aero import AerosandboxAeroEvaluator
+    from config import GENE_BOUNDS, load_config
+    from fitness import FitnessEvaluator
+    from service import EvaluatorServicer
 
 
 class JsonFormatter(logging.Formatter):
@@ -76,7 +83,7 @@ async def serve() -> None:
     )
 
     server = grpc.aio.server()
-    health_servicer = health.aio.HealthServer()
+    health_servicer = health.aio.HealthServicer()
     health_pb2_grpc.add_HealthServicer_to_server(health_servicer, server)
     await health_servicer.set("", health_pb2.HealthCheckResponse.SERVING)
 
@@ -98,5 +105,9 @@ async def serve() -> None:
     await server.wait_for_termination()
 
 
-if __name__ == "__main__":
+def main() -> None:
     asyncio.run(serve())
+
+
+if __name__ == "__main__":
+    main()

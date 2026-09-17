@@ -5,6 +5,7 @@ use tokio::sync::Mutex;
 use tonic::Status;
 
 /// Mock surrogate client for unit testing and offline simulation.
+#[allow(clippy::type_complexity)]
 pub struct MockSurrogateClient {
     pub is_ready_flag: AtomicBool,
     pub ingested: Arc<Mutex<Vec<(Vec<f64>, f64)>>>,

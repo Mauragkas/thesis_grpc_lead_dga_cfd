@@ -30,6 +30,8 @@ from urllib.parse import quote
 
 import requests
 
+sys.path.insert(0, str(Path(__file__).parent / "../worker/src/worker"))
+sys.path.insert(0, str(Path(__file__).parent / "../worker/src"))
 sys.path.insert(0, str(Path(__file__).parent / "../worker"))
 from config import BASELINE, GENE_BOUNDS  # type: ignore
 from hilbert import NUM_CURVES, parse_hilbert_key, probe_keys

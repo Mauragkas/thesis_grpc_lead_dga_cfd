@@ -4,10 +4,14 @@ import asyncio
 import logging
 import time
 
-import eval_pb2
-import eval_pb2_grpc
-
-from fitness import REJECT_FITNESS, EvaluationOutcome, FitnessEvaluator
+try:
+    from . import eval_pb2
+    from . import eval_pb2_grpc
+    from .fitness import REJECT_FITNESS, EvaluationOutcome, FitnessEvaluator
+except (ImportError, ValueError):
+    import eval_pb2
+    import eval_pb2_grpc
+    from fitness import REJECT_FITNESS, EvaluationOutcome, FitnessEvaluator
 
 
 class EvaluatorServicer(eval_pb2_grpc.EvaluatorServicer):

@@ -182,7 +182,9 @@ services:
 
   # ---------- GA orchestrator ----------
   orchestrator:
-    build: ./orchestrator
+    build:
+      context: .
+      dockerfile: orchestrator/Dockerfile
     environment:
       - RUST_LOG=info
       - RUST_LOG_STYLE=always
