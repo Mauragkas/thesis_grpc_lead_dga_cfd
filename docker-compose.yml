@@ -18,6 +18,14 @@ services:
       timeout: 3s
       retries: 20
       start_period: 5s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.5'
+          memory: 1024M
+        reservations:
+          cpus: '0.2'
+          memory: 128M
     depends_on:
       fluent-bit:
         condition: service_healthy
@@ -27,6 +35,10 @@ services:
       driver: fluentd
       options:
         fluentd-address: localhost:24224
+        fluentd-async: "true"
+        fluentd-buffer-limit: "1048576"
+        fluentd-retry-wait: "1s"
+        fluentd-max-retries: "10"
         tag: lead.node1
 
   lead-node2:
@@ -47,6 +59,14 @@ services:
       timeout: 3s
       retries: 20
       start_period: 5s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.5'
+          memory: 1024M
+        reservations:
+          cpus: '0.2'
+          memory: 128M
     depends_on:
       fluent-bit:
         condition: service_healthy
@@ -58,6 +78,10 @@ services:
       driver: fluentd
       options:
         fluentd-address: localhost:24224
+        fluentd-async: "true"
+        fluentd-buffer-limit: "1048576"
+        fluentd-retry-wait: "1s"
+        fluentd-max-retries: "10"
         tag: lead.node2
 
   lead-node3:
@@ -78,6 +102,14 @@ services:
       timeout: 3s
       retries: 20
       start_period: 5s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.5'
+          memory: 1024M
+        reservations:
+          cpus: '0.2'
+          memory: 128M
     depends_on:
       fluent-bit:
         condition: service_healthy
@@ -89,6 +121,10 @@ services:
       driver: fluentd
       options:
         fluentd-address: localhost:24224
+        fluentd-async: "true"
+        fluentd-buffer-limit: "1048576"
+        fluentd-retry-wait: "1s"
+        fluentd-max-retries: "10"
         tag: lead.node3
 
   # ---------- Surrogate modeling node (MLP) ----------
@@ -112,6 +148,14 @@ services:
       timeout: 3s
       retries: 20
       start_period: 5s
+    deploy:
+      resources:
+        limits:
+          cpus: '4.0'
+          memory: 4096M
+        reservations:
+          cpus: '1.0'
+          memory: 1024M
     depends_on:
       fluent-bit:
         condition: service_healthy
@@ -121,6 +165,10 @@ services:
       driver: fluentd
       options:
         fluentd-address: localhost:24224
+        fluentd-async: "true"
+        fluentd-buffer-limit: "1048576"
+        fluentd-retry-wait: "1s"
+        fluentd-max-retries: "10"
         tag: surrogate.node
 
   # ---------- GA orchestrator ----------
@@ -137,6 +185,14 @@ services:
       - TIER_K_NEIGHBORS=15
       - N_WORKERS=${N_WORKERS:-1}
       - GA_SEED=${GA_SEED:-42}
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2048M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
     depends_on:
       fluent-bit:
         condition: service_healthy
@@ -153,6 +209,10 @@ services:
       driver: fluentd
       options:
         fluentd-address: localhost:24224
+        fluentd-async: "true"
+        fluentd-buffer-limit: "1048576"
+        fluentd-retry-wait: "1s"
+        fluentd-max-retries: "10"
         tag: orchestrator.main
 
   # ---------- worker(s) ----------
@@ -168,11 +228,19 @@ services:
       - NUMEXPR_NUM_THREADS=1
       - VECLIB_MAXIMUM_THREADS=1
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"import socket; s=socket.socket(); s.settimeout(2); s.connect(('127.0.0.1',50051)); s.close()\""]
+      test: ["CMD", "/usr/local/bin/grpc_health_probe", "-addr=:50051"]
       interval: 3s
       timeout: 3s
       retries: 20
       start_period: 5s
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2048M
+        reservations:
+          cpus: '0.5'
+          memory: 512M
     depends_on:
       fluent-bit:
         condition: service_healthy
@@ -182,6 +250,10 @@ services:
       driver: fluentd
       options:
         fluentd-address: localhost:24224
+        fluentd-async: "true"
+        fluentd-buffer-limit: "1048576"
+        fluentd-retry-wait: "1s"
+        fluentd-max-retries: "10"
         tag: worker.main
 
   # ---------- Envoy load balancer ----------
@@ -191,6 +263,14 @@ services:
       - ./envoy.yaml:/etc/envoy/envoy.yaml:ro
     ports:
       - "50051:50051"
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
     depends_on:
       worker:
         condition: service_healthy
@@ -222,24 +302,42 @@ services:
       timeout: 5s
       retries: 30
       start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2048M
+        reservations:
+          cpus: '0.5'
+          memory: 512M
     networks:
       - default
 
   fluent-bit:
-    image: fluent/fluent-bit:3.0
+    image: fluent/fluent-bit:3.0-debug
     container_name: fluent-bit
     ports:
       - "24224:24224"
+      - "2020:2020"
     volumes:
       - ./fluent-bit.conf:/fluent-bit/etc/fluent-bit.conf:ro
     healthcheck:
-      test: ["CMD", "/fluent-bit/bin/fluent-bit", "--version"]
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:2020/api/v1/health"]
       interval: 3s
       timeout: 3s
-      retries: 10
+      retries: 15
       start_period: 5s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.1'
+          memory: 64M
     depends_on:
-      - kafka
+      kafka:
+        condition: service_healthy
     networks:
       - default
 
@@ -254,6 +352,14 @@ services:
       - BUFFER_CAP=10000
     ports:
       - "3000:3000"
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
     depends_on:
       kafka:
         condition: service_healthy

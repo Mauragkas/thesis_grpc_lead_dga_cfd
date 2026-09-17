@@ -24,11 +24,19 @@ services:
       timeout: 5s
       retries: 30
       start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2048M
+        reservations:
+          cpus: '0.5'
+          memory: 512M
     networks:
       - default
 
   fluent-bit:
-    image: fluent/fluent-bit:3.0
+    image: fluent/fluent-bit:3.0-debug
     container_name: fluent-bit
     ports:
       - "24224:24224"
@@ -36,11 +44,19 @@ services:
     volumes:
       - ../fluent-bit.conf:/fluent-bit/etc/fluent-bit.conf:ro
     healthcheck:
-      test: ["CMD-SHELL", "echo > /dev/tcp/127.0.0.1/24224 2>/dev/null"]
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:2020/api/v1/health"]
       interval: 3s
       timeout: 3s
       retries: 15
       start_period: 5s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.1'
+          memory: 64M
     depends_on:
       kafka:
         condition: service_healthy
@@ -58,6 +74,14 @@ services:
       - BUFFER_CAP=10000
     ports:
       - "3000:3000"
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
     depends_on:
       kafka:
         condition: service_healthy

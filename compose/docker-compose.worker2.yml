@@ -1,7 +1,6 @@
 services:
   worker2:
     build: ../worker
-    # container_name: worker2
     environment:
       - WORKER_ID=${WORKER_ID:-worker2}
       - LOG_LEVEL=${LOG_LEVEL:-DEBUG}
@@ -13,17 +12,29 @@ services:
       - VECLIB_MAXIMUM_THREADS=1
       - LEAD_ENDPOINT=http://lead-node1:50051   # register with the DHT
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"import socket; s=socket.socket(); s.settimeout(2); s.connect(('127.0.0.1',50051)); s.close()\""]
+      test: ["CMD", "/usr/local/bin/grpc_health_probe", "-addr=:50051"]
       interval: 3s
       timeout: 3s
       retries: 20
       start_period: 5s
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2048M
+        reservations:
+          cpus: '0.5'
+          memory: 512M
     networks:
       - default
     logging:
       driver: fluentd
       options:
         fluentd-address: localhost:24224
+        fluentd-async: "true"
+        fluentd-buffer-limit: "1048576"
+        fluentd-retry-wait: "1s"
+        fluentd-max-retries: "10"
         tag: worker2.main
 
   load-balancer2:
@@ -34,6 +45,14 @@ services:
     ports:
       - "50052:50051"           # host-mapped: keep envoy's internal port at 50051,
                                 # but expose on a new host port to avoid conflict
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
     depends_on:
       worker2:
         condition: service_healthy
@@ -57,6 +76,14 @@ services:
       # Migration config
       - MIGRATION_INTERVAL=5
       - MIGRATION_COUNT=3
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2048M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
     depends_on:
       load-balancer2:
         condition: service_started
@@ -67,6 +94,10 @@ services:
       driver: fluentd
       options:
         fluentd-address: localhost:24224
+        fluentd-async: "true"
+        fluentd-buffer-limit: "1048576"
+        fluentd-retry-wait: "1s"
+        fluentd-max-retries: "10"
         tag: orchestrator2.main
 
 networks:

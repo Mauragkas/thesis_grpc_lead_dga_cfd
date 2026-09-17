@@ -20,8 +20,14 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
 FROM debian:bookworm-slim
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libssl3 ca-certificates curl \
- && rm -rf /var/lib/apt/lists/*
+ && rm -rf /var/lib/apt/lists/* \
+ && groupadd -g 10001 appgroup \
+ && useradd -u 10001 -g appgroup -s /bin/sh -m appuser
+
 WORKDIR /app
-COPY --from=builder /app/lead_node /app/lead_node
+COPY --from=builder --chown=appuser:appgroup /app/lead_node /app/lead_node
+
+USER appuser:appgroup
+
 EXPOSE 8080 50051
 CMD ["./lead_node"]

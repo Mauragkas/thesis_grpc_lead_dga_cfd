@@ -8,6 +8,8 @@ from datetime import datetime, timezone
 
 import grpc
 
+from grpc_health.v1 import health, health_pb2, health_pb2_grpc
+
 import eval_pb2_grpc
 from aero import AerosandboxAeroEvaluator
 from config import GENE_BOUNDS, load_config
@@ -74,6 +76,10 @@ async def serve() -> None:
     )
 
     server = grpc.aio.server()
+    health_servicer = health.aio.HealthServer()
+    health_pb2_grpc.add_HealthServicer_to_server(health_servicer, server)
+    await health_servicer.set("", health_pb2.HealthCheckResponse.SERVING)
+
     eval_pb2_grpc.add_EvaluatorServicer_to_server(
         EvaluatorServicer(
             fitness_evaluator=fitness_evaluator,

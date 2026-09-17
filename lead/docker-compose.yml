@@ -17,6 +17,14 @@ services:
       timeout: 3s
       retries: 20
       start_period: 5s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.5'
+          memory: 1024M
+        reservations:
+          cpus: '0.2'
+          memory: 128M
     networks:
       - lead-net
 
@@ -38,6 +46,14 @@ services:
       timeout: 3s
       retries: 20
       start_period: 5s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.5'
+          memory: 1024M
+        reservations:
+          cpus: '0.2'
+          memory: 128M
     depends_on:
       node1:
         condition: service_healthy
@@ -62,6 +78,14 @@ services:
       timeout: 3s
       retries: 20
       start_period: 5s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.5'
+          memory: 1024M
+        reservations:
+          cpus: '0.2'
+          memory: 128M
     depends_on:
       node1:
         condition: service_healthy
