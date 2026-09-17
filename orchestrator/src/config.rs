@@ -57,6 +57,14 @@ pub struct TransportConfig {
     pub request_timeout: Duration,
     pub keep_alive_timeout: Duration,
     pub tcp_keepalive: Option<Duration>,
+    pub circuit_breaker_failure_threshold: usize,
+    pub circuit_breaker_recovery_timeout: Duration,
+    pub circuit_breaker_half_open_probes: usize,
+    pub max_individual_retries: usize,
+    pub initial_retry_backoff: Duration,
+    pub max_retry_backoff: Duration,
+    pub retry_jitter_factor: f64,
+    pub fallback_penalty_on_exhaustion: bool,
 }
 
 /// Gene-store tunables. SRP: holds config only.
@@ -92,6 +100,14 @@ impl Default for TransportConfig {
             request_timeout: Duration::from_secs(300),
             keep_alive_timeout: Duration::from_secs(10),
             tcp_keepalive: Some(Duration::from_secs(30)),
+            circuit_breaker_failure_threshold: 5,
+            circuit_breaker_recovery_timeout: Duration::from_millis(1500),
+            circuit_breaker_half_open_probes: 2,
+            max_individual_retries: 5,
+            initial_retry_backoff: Duration::from_millis(100),
+            max_retry_backoff: Duration::from_millis(3000),
+            retry_jitter_factor: 0.25,
+            fallback_penalty_on_exhaustion: false,
         }
     }
 }
@@ -257,7 +273,33 @@ where
         );
     }
 
-    (ga, TransportConfig::default(), store, lead, surrogate, tier, ring, migration)
+    let mut transport = TransportConfig::default();
+    if let Some(raw) = env_map.get("CIRCUIT_BREAKER_FAILURE_THRESHOLD") {
+        if let Ok(val) = raw.parse::<usize>() {
+            info!("CIRCUIT_BREAKER_FAILURE_THRESHOLD override: {val}");
+            transport.circuit_breaker_failure_threshold = val;
+        }
+    }
+    if let Some(raw) = env_map.get("CIRCUIT_BREAKER_RECOVERY_TIMEOUT_MS") {
+        if let Ok(ms) = raw.parse::<u64>() {
+            info!("CIRCUIT_BREAKER_RECOVERY_TIMEOUT_MS override: {ms}ms");
+            transport.circuit_breaker_recovery_timeout = Duration::from_millis(ms);
+        }
+    }
+    if let Some(raw) = env_map.get("MAX_INDIVIDUAL_RETRIES") {
+        if let Ok(val) = raw.parse::<usize>() {
+            info!("MAX_INDIVIDUAL_RETRIES override: {val}");
+            transport.max_individual_retries = val;
+        }
+    }
+    if let Some(raw) = env_map.get("FALLBACK_PENALTY_ON_EXHAUSTION") {
+        if let Ok(val) = raw.parse::<bool>() {
+            info!("FALLBACK_PENALTY_ON_EXHAUSTION override: {val}");
+            transport.fallback_penalty_on_exhaustion = val;
+        }
+    }
+
+    (ga, transport, store, lead, surrogate, tier, ring, migration)
 }
 
 /// Reads overrides from process environment. Convenience wrapper around `config_from_vars`.

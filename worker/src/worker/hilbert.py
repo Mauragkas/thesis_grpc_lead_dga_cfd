@@ -1,14 +1,8 @@
-"""
-Multi-probe Hilbert curve embeddings for order-preserving DHT keys.
+"""Multi-probe Hilbert curve embeddings for order-preserving DHT keys.
 
-Maps a multi-dimensional config point to a 1D scalar such that nearby points
-in feature space map to nearby scalars. Used as a hex prefix on DHT keys so
-that lexicographic /range queries approximate Euclidean nearest-neighbor search.
-
-Multi-probe: each config is indexed under NUM_CURVES Hilbert curves built on
-rotated coordinate axes (deterministic dimension permutations). Queries fan
-out to all curves and merge candidates, recovering neighbors that sit far from
-the target in one curve's 1D order but close in another's.
+Backed by the compiled Rust implementation (`hilbert_rs`) via PyO3/maturin
+to ensure identical spatial discretization, bit depth, coordinate permutations,
+and rounding between Python and Rust components.
 
 Key format: "{curve_hex}{hex_hilbert}|{canonical_json}"
 The curve id is the first hex digit, so each curve's keys form a contiguous
@@ -19,14 +13,29 @@ needs to know about curves.
 from __future__ import annotations
 
 import json
+import logging
 import random
 from typing import Any
 
+_logger = logging.getLogger(__name__)
+
+try:
+    import hilbert_rs
+
+    _HAS_RUST_EXTENSION = True
+except ImportError:
+    hilbert_rs = None  # type: ignore[assignment]
+    _HAS_RUST_EXTENSION = False
+    _logger.warning(
+        "hilbert_rs compiled extension not found; falling back to pure Python implementation. "
+        "Run 'uv run maturin develop -m ../hilbert/Cargo.toml' to compile the Rust Hilbert engine."
+    )
+
 # Bits per dimension. 10 dims x 16 bits = 160-bit index (40 hex digits).
-BITS = 16
+BITS: int = hilbert_rs.BITS if _HAS_RUST_EXTENSION else 16
 
 # Number of Hilbert curves (differently rotated coordinate axes).
-NUM_CURVES = 3
+NUM_CURVES: int = hilbert_rs.NUM_CURVES if _HAS_RUST_EXTENSION else 3
 
 _PERM_CACHE: dict[int, list[list[int]]] = {}
 
@@ -38,6 +47,9 @@ def hilbert_encode(point: list[int], bits: int, ndims: int) -> int:
     with 1 bit, this implementation visits (0,0)->0, (0,1)->1, (1,1)->2,
     (1,0)->3 — a valid 2x2 Hilbert orientation (up, right, down).
     """
+    if _HAS_RUST_EXTENSION:
+        return hilbert_rs.hilbert_encode(point, bits, ndims)
+
     X = list(point)
     M = 1 << (bits - 1)
 
@@ -51,7 +63,7 @@ def hilbert_encode(point: list[int], bits: int, ndims: int) -> int:
                 t = (X[0] ^ X[i]) & P
                 X[0] ^= t           # exchange
                 X[i] ^= t
-        Q >>= 1
+            Q >>= 1
 
     for i in range(1, ndims):
         X[i] ^= X[i - 1]
@@ -96,6 +108,9 @@ def config_hilbert(
     curve: int = 0,
 ) -> int:
     """Compute the Hilbert index for a config using the curve's dimension order."""
+    if _HAS_RUST_EXTENSION:
+        return hilbert_rs.config_hilbert(cfg, dims, bits=bits, curve=curve)
+
     perm = _permutations(len(dims))[curve]
     ndims = len(dims)
     max_val = (1 << bits) - 1
@@ -117,6 +132,9 @@ def probe_keys(
 
     Format: ``{curve_hex_digit}{hex_hilbert_index}|{canonical_json}``
     """
+    if _HAS_RUST_EXTENSION:
+        return hilbert_rs.probe_keys(cfg, dims, bits=bits)
+
     ndims = len(dims)
     hex_width = (ndims * bits + 3) // 4
     json_str = json.dumps(cfg, sort_keys=True, separators=(",", ":"))
@@ -129,5 +147,8 @@ def probe_keys(
 
 def parse_hilbert_key(key: str) -> dict[str, Any]:
     """Extract the config dict from a Hilbert-prefixed key."""
+    if _HAS_RUST_EXTENSION:
+        return hilbert_rs.parse_hilbert_key(key)
+
     _, _, json_str = key.partition("|")
     return json.loads(json_str)

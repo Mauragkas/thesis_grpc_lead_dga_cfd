@@ -7,10 +7,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     protobuf-compiler \
  && rm -rf /var/lib/apt/lists/*
 
-COPY Cargo.toml Cargo.lock* build.rs ./
-COPY proto ./proto
-COPY benches ./benches
-COPY src ./src
+COPY hilbert ./hilbert
+COPY orchestrator/Cargo.toml orchestrator/Cargo.lock* orchestrator/build.rs ./orchestrator/
+COPY orchestrator/proto ./orchestrator/proto
+COPY orchestrator/benches ./orchestrator/benches
+COPY orchestrator/src ./orchestrator/src
+
+WORKDIR /app/orchestrator
 
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/usr/local/cargo/git \

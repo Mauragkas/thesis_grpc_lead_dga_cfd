@@ -135,7 +135,7 @@ impl Evaluator for MultiTierEvaluator {
                 let tier2_inds: Vec<Vec<f64>> = tier2_indices.iter().map(|&idx| population[idx].clone()).collect();
                 match surr.predict_batch(&tier2_inds).await {
                     Ok(Some(preds)) if preds.len() == tier2_indices.len() => {
-                        for (&idx, fit) in tier2_indices.iter().zip(preds.into_iter()) {
+                        for (&idx, fit) in tier2_indices.iter().zip(preds) {
                             fitnesses[idx] = fit;
                         }
                         self.metrics.record_tier2_hit(tier2_indices.len());

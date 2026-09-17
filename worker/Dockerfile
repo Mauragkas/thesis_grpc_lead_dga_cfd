@@ -15,13 +15,14 @@ ADD --chmod=755 https://github.com/grpc-ecosystem/grpc-health-probe/releases/dow
 
 ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy
 
-# Install dependencies using frozen lockfile with uv cache mount
-COPY pyproject.toml uv.lock ./
+COPY pyproject.toml uv.lock README.md ./
+COPY src ./src
+COPY eval.proto ./worker/eval.proto
+
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev
 
-COPY eval.proto ./
-RUN .venv/bin/python -m grpc_tools.protoc -I. --python_out=. --grpc_python_out=. eval.proto
+RUN .venv/bin/python -m grpc_tools.protoc -I. --python_out=src --grpc_python_out=src worker/eval.proto
 
 FROM python:3.11-slim AS runner
 
@@ -37,12 +38,12 @@ COPY --from=builder /usr/local/bin/grpc_health_probe /usr/local/bin/grpc_health_
 COPY --from=builder --chown=appuser:appgroup /app/.venv /app/.venv
 ENV PATH="/app/.venv/bin:$PATH"
 
-COPY --from=builder --chown=appuser:appgroup /app/eval_pb2*.py ./
-COPY --chown=appuser:appgroup *.py ./
+COPY --from=builder --chown=appuser:appgroup /app/src ./src
+COPY --chown=appuser:appgroup pyproject.toml README.md ./
 
 USER appuser:appgroup
 
 HEALTHCHECK --interval=3s --timeout=3s --retries=20 --start-period=5s \
     CMD ["/usr/local/bin/grpc_health_probe", "-addr=:50051"]
 
-CMD ["python", "main.py"]
+CMD ["python", "-m", "worker.main"]

@@ -9,3 +9,4 @@ diff.txt
 AGENTS.md
 .gitignore
 .pytest_cache
+*eval_pb2*.py

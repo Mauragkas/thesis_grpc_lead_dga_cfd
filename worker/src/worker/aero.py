@@ -7,8 +7,12 @@ from typing import Protocol
 import aerosandbox as asb
 import numpy as np
 
-from config import WorkerConfig
-from geometry import calculate_total_mass_and_weight
+try:
+    from .config import WorkerConfig
+    from .geometry import calculate_total_mass_and_weight
+except (ImportError, ValueError):
+    from config import WorkerConfig
+    from geometry import calculate_total_mass_and_weight
 
 
 @dataclass(frozen=True)

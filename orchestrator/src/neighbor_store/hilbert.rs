@@ -61,12 +61,10 @@ where
         let query_futs = keys.iter().map(|key| self.store.range_query(key, k as u64));
         let results = futures::future::join_all(query_futs).await;
 
-        for res in results {
-            if let Ok(entries) = res {
-                for (k, v) in entries {
-                    if let Ok(payload) = serde_json::from_str::<GenePayload>(&v) {
-                        candidates.entry(k).or_insert(payload);
-                    }
+        for entries in results.into_iter().flatten() {
+            for (k, v) in entries {
+                if let Ok(payload) = serde_json::from_str::<GenePayload>(&v) {
+                    candidates.entry(k).or_insert(payload);
                 }
             }
         }

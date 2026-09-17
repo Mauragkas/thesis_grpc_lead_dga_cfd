@@ -63,7 +63,7 @@ fn bench_gene_store_knn(c: &mut Criterion) {
 
     let store_sizes = [100, 1000, 5000];
     let k = 10;
-    let query_genes = vec![0.5; 10];
+    let query_genes = [0.5; 10];
 
     for &size in &store_sizes {
         let store = InMemoryGeneStore::new(
@@ -112,7 +112,7 @@ fn bench_exact_lookup(c: &mut Criterion) {
         GenerationEvictor { max_age: 50 },
     );
     let hit_genes = vec![0.25; 10];
-    let miss_genes = vec![0.99; 10];
+    let miss_genes = [0.99; 10];
 
     rt.block_on(async {
         for i in 0..500 {

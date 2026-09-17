@@ -4,9 +4,14 @@ import logging
 from dataclasses import dataclass
 from typing import Sequence
 
-from aero import AeroEvaluator, AeroResult
-from config import BASELINE, GENE_BOUNDS, GeneBound, WorkerConfig
-from geometry import fuselage_volume_mm3, decode_genes
+try:
+    from .aero import AeroEvaluator, AeroResult
+    from .config import BASELINE, GENE_BOUNDS, GeneBound, WorkerConfig
+    from .geometry import fuselage_volume_mm3, decode_genes
+except (ImportError, ValueError):
+    from aero import AeroEvaluator, AeroResult
+    from config import BASELINE, GENE_BOUNDS, GeneBound, WorkerConfig
+    from geometry import fuselage_volume_mm3, decode_genes
 
 REJECT_FITNESS = -1e9
 

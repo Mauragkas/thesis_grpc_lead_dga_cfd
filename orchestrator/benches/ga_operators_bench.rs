@@ -33,9 +33,11 @@ fn bench_random_population_generation(c: &mut Criterion) {
     let pop_sizes = [50, 200, 1000];
 
     for &pop_size in &pop_sizes {
-        let mut cfg = GaConfig::default();
-        cfg.pop_size = pop_size;
-        cfg.genes_len = 10;
+        let cfg = GaConfig {
+            pop_size,
+            genes_len: 10,
+            ..Default::default()
+        };
         let mut rng = StdRng::seed_from_u64(42);
 
         group.bench_with_input(BenchmarkId::new("pop_size", pop_size), &cfg, |b, c| {
@@ -65,9 +67,11 @@ fn bench_survivor_selection(c: &mut Criterion) {
     let pop_sizes = [100, 500, 2000];
 
     for &pop_size in &pop_sizes {
-        let mut cfg = GaConfig::default();
-        cfg.pop_size = pop_size;
-        cfg.elite_frac = 0.5;
+        let cfg = GaConfig {
+            pop_size,
+            elite_frac: 0.5,
+            ..Default::default()
+        };
 
         let population: Vec<Vec<f64>> = (0..pop_size).map(|_| vec![0.5; 10]).collect();
         let fitnesses: Vec<f64> = (0..pop_size)
@@ -99,9 +103,11 @@ fn bench_offspring_generation(c: &mut Criterion) {
     let mut group = c.benchmark_group("ga_next_generation");
 
     let pop_size = 100;
-    let mut cfg = GaConfig::default();
-    cfg.pop_size = pop_size;
-    cfg.mut_sigma = 0.08;
+    let cfg = GaConfig {
+        pop_size,
+        mut_sigma: 0.08,
+        ..Default::default()
+    };
 
     let survivors: Vec<Vec<f64>> = (0..50).map(|_| vec![0.5; 10]).collect();
     let normal = Normal::new(0.0, cfg.mut_sigma).unwrap();

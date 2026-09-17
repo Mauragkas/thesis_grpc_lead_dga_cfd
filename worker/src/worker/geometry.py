@@ -4,7 +4,10 @@ from dataclasses import dataclass
 from typing import Sequence
 import numpy as np
 
-from config import BASELINE, GeneBound
+try:
+    from .config import BASELINE, GeneBound
+except (ImportError, ValueError):
+    from config import BASELINE, GeneBound
 
 
 @dataclass(frozen=True)
