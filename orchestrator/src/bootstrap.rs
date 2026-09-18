@@ -265,8 +265,11 @@ pub async fn run() -> Result<(), Box<Status>> {
 
     info!("Starting GA run with seed {}", ga_cfg.seed);
     match runner.run(&mut rng).await {
-        Ok(best) => {
-            info!("GA run completed. Best fitness: {best:.4}");
+        Ok(result) => {
+            info!(
+                "GA run completed. Best fitness: {:.4}; best genome: {:?}",
+                result.best_fitness, result.best_genome
+            );
             Ok(())
         }
         Err(e) => {

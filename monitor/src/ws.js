@@ -59,15 +59,28 @@ function attachWebSocket(server, store) {
     return true;
   }
 
+  // Candidate broadcast listener
+  store.onCandidate((candidate) => {
+    if (clients.size === 0) return;
+    const payload = JSON.stringify({ type: 'candidate', candidate });
+    for (const ws of clients) {
+      if (ws.readyState === ws.OPEN) ws.send(payload);
+    }
+  });
+
   // ── Connection handler ────────────────────────────────────────────────────
 
   wss.on('connection', (ws) => {
     ws.filter = null;
     clients.add(ws);
 
-    // Send initial hello + current stats
+    // Send initial hello + current stats + current candidate
     ws.send(JSON.stringify({ type: 'hello', ts: Date.now() }));
     ws.send(JSON.stringify({ type: 'stats', ...store.stats() }));
+    const initialCandidate = store.getLatestCandidate();
+    if (initialCandidate) {
+      ws.send(JSON.stringify({ type: 'candidate', candidate: initialCandidate }));
+    }
 
     ws.on('message', (data) => {
       let msg;

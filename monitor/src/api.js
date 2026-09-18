@@ -1,3 +1,5 @@
+const { decodeGenes, buildPlaneMesh, meshToSTL } = require('./planeGeometry');
+
 function buildApi(app, store) {
   app.get('/health', (_req, res) => {
     res.json({ ok: true, ts: Date.now() });
@@ -9,6 +11,47 @@ function buildApi(app, store) {
 
   app.get('/sources', (_req, res) => {
     res.json(store.sources());
+  });
+
+  app.get('/api/candidate/latest', (_req, res) => {
+    const candidate = store.getLatestCandidate();
+    if (!candidate) {
+      return res.status(404).json({ error: 'No candidate received yet' });
+    }
+    res.json(candidate);
+  });
+
+  app.get('/api/candidate/stl', (_req, res) => {
+    const candidate = store.getLatestCandidate();
+    let params;
+    let filename = 'aircraft.stl';
+    if (candidate && candidate.decoded) {
+      params = candidate.decoded;
+      filename = `candidate_gen_${candidate.gen || 0}.stl`;
+    } else {
+      params = decodeGenes([]);
+    }
+    const mesh = buildPlaneMesh(params);
+    const stl = meshToSTL(mesh, `aircraft_gen_${candidate?.gen || 0}`);
+    res.setHeader('Content-Type', 'model/stl');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(stl);
+  });
+
+  app.post('/api/candidate', (req, res) => {
+    const { genome, gen, fitness } = req.body;
+    if (!Array.isArray(genome)) {
+      return res.status(400).json({ error: 'genome array required' });
+    }
+    const candidate = {
+      gen: gen || 0,
+      fitness: fitness !== undefined ? Number(fitness) : null,
+      genome,
+      decoded: decodeGenes(genome),
+      ts: Date.now(),
+    };
+    store.setLatestCandidate(candidate);
+    res.json({ ok: true, candidate });
   });
 
   /**

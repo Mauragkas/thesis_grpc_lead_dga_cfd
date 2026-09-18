@@ -173,15 +173,129 @@
       opacity: 0.85;
     }
 
-    /* ── Log area ────────────────────────────────────────────────── */
+    /* ── Main Workspace (Logs + 3D Plane Split) ─────────────────── */
+    #workspace {
+      flex: 1;
+      display: flex;
+      min-height: 0;
+      position: relative;
+      overflow: hidden;
+    }
     #log-area {
       flex: 1;
+      height: 100%;
       overflow-y: auto;
       overflow-x: hidden;
       padding: 0;
-      /* smooth scroll for auto-follow */
       scroll-behavior: auto;
+      min-width: 280px;
     }
+    #plane-panel {
+      width: 480px;
+      min-width: 360px;
+      max-width: 60vw;
+      height: 100%;
+      background: var(--panel2);
+      border-left: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+      position: relative;
+    }
+    #plane-panel.hidden {
+      display: none;
+    }
+    .plane-panel-hdr {
+      height: 36px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 12px;
+      background: var(--panel);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+      font-size: 11px;
+    }
+    .plane-hdr-left {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      overflow: hidden;
+    }
+    .plane-title {
+      font-weight: 700;
+      color: var(--text);
+      white-space: nowrap;
+    }
+    .plane-badge {
+      background: #1e3a5f;
+      color: var(--accent);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 1px 5px;
+      font-size: 10px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    .plane-badge.fit {
+      color: #4ade80;
+    }
+    .plane-hdr-actions {
+      display: flex;
+      gap: 5px;
+      align-items: center;
+    }
+    .plane-hdr-actions button {
+      padding: 2px 7px;
+      font-size: 10.5px;
+      height: 22px;
+    }
+    #plane-canvas-wrap {
+      flex: 1;
+      min-height: 200px;
+      position: relative;
+      background: #090e1a;
+      overflow: hidden;
+    }
+    #plane-canvas-wrap canvas {
+      width: 100% !important;
+      height: 100% !important;
+      display: block;
+    }
+    #plane-loading-overlay {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      color: var(--muted2);
+      font-size: 12px;
+      background: rgba(9, 14, 26, 0.88);
+      z-index: 5;
+    }
+    #plane-params-hud {
+      max-height: 155px;
+      overflow-y: auto;
+      background: var(--panel);
+      border-top: 1px solid var(--border);
+      padding: 6px 12px;
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 3px 12px;
+      font-size: 11px;
+      flex-shrink: 0;
+    }
+    .hud-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      padding: 1px 0;
+      border-bottom: 1px dashed rgba(255,255,255,0.06);
+    }
+    .hud-label { color: var(--muted2); font-size: 10.5px; }
+    .hud-val { color: var(--accent); font-weight: 600; font-size: 11px; }
 
     /* sentinel for IntersectionObserver */
     .sentinel { height: 1px; width: 100%; }
@@ -318,6 +432,7 @@
   <button id="btn-clear">Clear</button>
   <button id="btn-ts-toggle" title="toggle timestamp format">Rel. time</button>
   <button id="btn-export" title="export visible logs as NDJSON">Export NDJSON</button>
+  <button id="btn-toggle-3d" class="active" title="Toggle 3D Plane Representation">✈️ 3D Plane</button>
   <span id="count">0 shown</span>
 </div>
 
@@ -350,22 +465,51 @@
   </div>
 </div>
 
-<!-- ── Log area ────────────────────────────────────────────────────────── -->
-<div id="log-area">
-  <!-- top sentinel: when visible → load-older -->
-  <div class="sentinel" id="sentinel-top"></div>
+<!-- ── Workspace (Logs + 3D Plane Split) ───────────────────────────────── -->
+<div id="workspace">
+  <!-- Log area -->
+  <div id="log-area">
+    <!-- top sentinel: when visible → load-older -->
+    <div class="sentinel" id="sentinel-top"></div>
 
-  <!-- banner shown while fetching older history -->
-  <div id="older-banner">
-    <div class="spinner"></div>
-    <span id="older-text">↑ Load older logs</span>
+    <!-- banner shown while fetching older history -->
+    <div id="older-banner">
+      <div class="spinner"></div>
+      <span id="older-text">↑ Load older logs</span>
+    </div>
+
+    <!-- log rows injected here (newest at bottom by default, prepend for older) -->
+    <div id="log-list"></div>
+
+    <!-- bottom sentinel: tracks whether user is near bottom (auto-follow) -->
+    <div class="sentinel" id="sentinel-bottom"></div>
   </div>
 
-  <!-- log rows injected here (newest at bottom by default, prepend for older) -->
-  <div id="log-list"></div>
-
-  <!-- bottom sentinel: tracks whether user is near bottom (auto-follow) -->
-  <div class="sentinel" id="sentinel-bottom"></div>
+  <!-- 3D Plane Viewer Panel -->
+  <div id="plane-panel">
+    <div class="plane-panel-hdr">
+      <div class="plane-hdr-left">
+        <span class="plane-title">✈️ 3D Model</span>
+        <span class="plane-badge" id="plane-gen-badge">Gen: —</span>
+        <span class="plane-badge fit" id="plane-fit-badge">Best: —</span>
+      </div>
+      <div class="plane-hdr-actions">
+        <button id="btn-wireframe" title="Toggle Wireframe">Wireframe</button>
+        <button id="btn-reset-cam" title="Reset Camera View">⟲ Reset</button>
+        <button id="btn-download-stl" title="Download STL File">⬇ STL</button>
+        <button id="btn-close-3d" title="Close 3D View">✕</button>
+      </div>
+    </div>
+    <div id="plane-canvas-wrap">
+      <div id="plane-loading-overlay">
+        <div style="font-size: 24px;">✈️</div>
+        <div>Waiting for candidate genome...</div>
+      </div>
+    </div>
+    <div id="plane-params-hud">
+      <!-- HUD injected dynamically -->
+    </div>
+  </div>
 </div>
 
 <!-- ── Script ──────────────────────────────────────────────────────────── -->
@@ -465,7 +609,13 @@ function shortSrc(src) {
 }
 
 function extractMsg(log) {
-  return log.message || log.msg || log.fields?.message || JSON.stringify(log);
+  if (log.message) return log.message;
+  if (log.msg) return log.msg;
+  if (log.fields?.message) return log.fields.message;
+  if (log.fields?.msg) return log.fields.msg;
+  if (typeof log.log === 'string' && log.log.trim()) return log.log.trim();
+  if (log.raw) return String(log.raw);
+  return JSON.stringify(log);
 }
 
 // ── Filter logic ───────────────────────────────────────────────────────────
@@ -473,7 +623,7 @@ function passesFilter(log) {
   if (activeSource && log.source !== activeSource) return false;
   if (filter.level) {
     const want = filter.level.toUpperCase();
-    const got  = String(log.level || '').toUpperCase();
+    const got  = String(log.level || 'INFO').toUpperCase();
     if (want === 'ERROR') {
       if (!['ERROR','CRIT','ALERT','EMERG'].includes(got)) return false;
     } else if (want === 'WARN') {
@@ -489,9 +639,9 @@ function passesFilter(log) {
 
 // ── Row rendering ──────────────────────────────────────────────────────────
 function makeRow(log) {
-  const lvl  = String(log.level || '').toUpperCase();
+  const lvl  = String(log.level || 'INFO').toUpperCase();
   const msg  = extractMsg(log);
-  const tgt  = log.target || log.name || '';
+  const tgt  = log.target || log.name || log.source_tag || '';
   const src  = log.source || '';
 
   // Build meta pills for detail panel
@@ -870,7 +1020,15 @@ function connect() {
       return;
     }
 
+    if (msg.type === 'candidate') {
+      window.onCandidateUpdate?.(msg.candidate);
+      return;
+    }
+
     // Live log
+    if (msg.candidate) {
+      window.onCandidateUpdate?.(msg.candidate);
+    }
     addLiveLogs([msg]);
   };
 
@@ -884,5 +1042,266 @@ function connect() {
 // ── Bootstrap ──────────────────────────────────────────────────────────────
 connect();
 </script>
+
+<!-- ── Plane Geometry & Three.js 3D Visualization ────────────────────── -->
+<script src="/planeGeometry.js"></script>
+<script type="importmap">
+{
+  "imports": {
+    "three": "/vendor/three/build/three.module.js",
+    "three/addons/": "/vendor/three/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+let scene, camera, renderer, controls, planeMeshGroup;
+let isWireframe = false;
+let currentCandidate = null;
+
+function init3DViewer() {
+  const container = document.getElementById('plane-canvas-wrap');
+  if (!container) return;
+
+  scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x090e1a);
+
+  // Camera
+  const width = container.clientWidth || 400;
+  const height = container.clientHeight || 300;
+  camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 2000);
+  camera.position.set(220, 200, 280);
+
+  // WebGL Renderer
+  renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  renderer.setSize(width, height);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.shadowMap.enabled = true;
+  container.appendChild(renderer.domElement);
+
+  // Controls
+  controls = new OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.05;
+  controls.target.set(130, 0, 0);
+
+  // Lighting
+  const ambientLight = new THREE.AmbientLight(0xffffff, 0.75);
+  scene.add(ambientLight);
+
+  const sunLight1 = new THREE.DirectionalLight(0x38bdf8, 1.4);
+  sunLight1.position.set(250, 350, 250);
+  scene.add(sunLight1);
+
+  const fillLight = new THREE.DirectionalLight(0xffedd5, 0.85);
+  fillLight.position.set(-200, -200, -150);
+  scene.add(fillLight);
+
+  // Floor grid & axes
+  const gridHelper = new THREE.GridHelper(600, 24, 0x1e3a5f, 0x111c30);
+  gridHelper.position.set(130, -45, 0);
+  scene.add(gridHelper);
+
+  const axesHelper = new THREE.AxesHelper(60);
+  axesHelper.position.set(0, -45, 0);
+  scene.add(axesHelper);
+
+  planeMeshGroup = new THREE.Group();
+  scene.add(planeMeshGroup);
+
+  // Resize handling
+  window.addEventListener('resize', onWindowResize);
+  const ro = new ResizeObserver(() => onWindowResize());
+  ro.observe(container);
+
+  // Render loop
+  function animate() {
+    requestAnimationFrame(animate);
+    controls.update();
+    renderer.render(scene, camera);
+  }
+  animate();
+
+  // If a candidate arrived before 3D was initialized, render it now
+  if (window._pendingCandidate) {
+    updatePlane3D(window._pendingCandidate);
+  } else {
+    // Check if backend already has a candidate stored
+    fetch('/api/candidate/latest')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((cand) => {
+        if (cand) updatePlane3D(cand);
+      })
+      .catch(() => {});
+  }
+}
+
+function onWindowResize() {
+  const container = document.getElementById('plane-canvas-wrap');
+  if (!container || !renderer || !camera) return;
+  const width = container.clientWidth;
+  const height = container.clientHeight;
+  if (width === 0 || height === 0) return;
+  camera.aspect = width / height;
+  camera.updateProjectionMatrix();
+  renderer.setSize(width, height);
+}
+
+function updatePlane3D(candidate) {
+  if (!candidate || !candidate.genome) return;
+  currentCandidate = candidate;
+  window._currentCandidate = candidate;
+
+  const overlay = document.getElementById('plane-loading-overlay');
+  if (overlay) overlay.style.display = 'none';
+
+  const genBadge = document.getElementById('plane-gen-badge');
+  if (genBadge) genBadge.textContent = `Gen: ${candidate.gen ?? '—'}`;
+
+  const fitBadge = document.getElementById('plane-fit-badge');
+  if (fitBadge) {
+    const fitVal =
+      candidate.fitness !== null && candidate.fitness !== undefined
+        ? candidate.fitness.toFixed(2)
+        : '—';
+    fitBadge.textContent = `Best: ${fitVal}`;
+  }
+
+  // Update parameters HUD
+  const params = candidate.decoded || window.PlaneGeometry.decodeGenes(candidate.genome);
+  renderParamsHud(params);
+
+  // Wait if Three.js not yet ready
+  if (!planeMeshGroup) {
+    window._pendingCandidate = candidate;
+    return;
+  }
+
+  // Clear previous mesh
+  while (planeMeshGroup.children.length > 0) {
+    const child = planeMeshGroup.children.pop();
+    if (child.geometry) child.geometry.dispose();
+    if (child.material) {
+      if (Array.isArray(child.material)) child.material.forEach((m) => m.dispose());
+      else child.material.dispose();
+    }
+  }
+
+  // Build new plane mesh
+  const meshData = window.PlaneGeometry.buildPlaneMesh(params);
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.BufferAttribute(meshData.positions, 3));
+  geometry.setIndex(new THREE.BufferAttribute(meshData.indices, 1));
+  geometry.computeVertexNormals();
+
+  const material = new THREE.MeshStandardMaterial({
+    color: 0xfacc15, // Aeronautics yellow
+    roughness: 0.32,
+    metalness: 0.2,
+    wireframe: isWireframe,
+    side: THREE.DoubleSide,
+  });
+
+  const mesh = new THREE.Mesh(geometry, material);
+  planeMeshGroup.add(mesh);
+
+  // Reposition target to fuselage midpoint
+  const midX = (params.fuse_length || 250) / 2;
+  controls.target.set(midX, 0, 0);
+}
+
+function renderParamsHud(p) {
+  const hud = document.getElementById('plane-params-hud');
+  if (!hud || !p) return;
+  hud.innerHTML = `
+    <div class="hud-row"><span class="hud-label">Wingspan (b)</span><span class="hud-val">${(p.wing_span * 2).toFixed(1)} mm</span></div>
+    <div class="hud-row"><span class="hud-label">Root Chord</span><span class="hud-val">${p.wing_root_chord.toFixed(1)} mm</span></div>
+    <div class="hud-row"><span class="hud-label">Tip Chord</span><span class="hud-val">${p.wing_tip_chord.toFixed(1)} mm</span></div>
+    <div class="hud-row"><span class="hud-label">Sweep (LE)</span><span class="hud-val">${p.wing_sweep.toFixed(1)}°</span></div>
+    <div class="hud-row"><span class="hud-label">Dihedral</span><span class="hud-val">${p.wing_dihedral.toFixed(1)}°</span></div>
+    <div class="hud-row"><span class="hud-label">Tip Twist</span><span class="hud-val">${p.wing_twist >= 0 ? '+' : ''}${p.wing_twist.toFixed(1)}°</span></div>
+    <div class="hud-row"><span class="hud-label">Wing Pos (X)</span><span class="hud-val">${p.wing_x_pos.toFixed(1)} mm</span></div>
+    <div class="hud-row"><span class="hud-label">Airfoil</span><span class="hud-val">NACA ${Math.round(p.naca_m)}${Math.round(p.naca_p)}${Math.round(p.naca_t)}</span></div>
+    <div class="hud-row"><span class="hud-label">Fuselage Length</span><span class="hud-val">${p.fuse_length.toFixed(1)} mm</span></div>
+    <div class="hud-row"><span class="hud-label">Fuselage Diam.</span><span class="hud-val">${p.fuse_max_diam.toFixed(1)} mm</span></div>
+  `;
+}
+
+// Global hook for websocket handler
+window.onCandidateUpdate = updatePlane3D;
+
+// Button handlers
+document.getElementById('btn-wireframe')?.addEventListener('click', (e) => {
+  isWireframe = !isWireframe;
+  e.target.classList.toggle('active', isWireframe);
+  if (planeMeshGroup && planeMeshGroup.children[0]) {
+    planeMeshGroup.children[0].material.wireframe = isWireframe;
+  }
+});
+
+document.getElementById('btn-reset-cam')?.addEventListener('click', () => {
+  if (!camera || !controls) return;
+  const p = currentCandidate?.decoded || window.PlaneGeometry?.BASELINE;
+  const midX = p ? p.fuse_length / 2 : 130;
+  controls.target.set(midX, 0, 0);
+  camera.position.set(midX + 100, 180, 250);
+  controls.update();
+});
+
+document.getElementById('btn-download-stl')?.addEventListener('click', () => {
+  if (!currentCandidate) {
+    // If no candidate received yet, export baseline
+    const baselineParams = window.PlaneGeometry.BASELINE;
+    const mesh = window.PlaneGeometry.buildPlaneMesh(baselineParams);
+    const stlStr = window.PlaneGeometry.meshToSTL(mesh, 'aircraft_baseline');
+    downloadStlFile(stlStr, 'aircraft_baseline.stl');
+    return;
+  }
+  const params = currentCandidate.decoded || window.PlaneGeometry.decodeGenes(currentCandidate.genome);
+  const mesh = window.PlaneGeometry.buildPlaneMesh(params);
+  const genNum = currentCandidate.gen ?? 0;
+  const stlStr = window.PlaneGeometry.meshToSTL(mesh, `aircraft_gen_${genNum}`);
+  downloadStlFile(stlStr, `best_candidate_gen_${genNum}.stl`);
+});
+
+function downloadStlFile(stlStr, filename) {
+  const blob = new Blob([stlStr], { type: 'model/stl' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// Toggle 3D panel button
+const btn3d = document.getElementById('btn-toggle-3d');
+const planePanel = document.getElementById('plane-panel');
+const btnClose3d = document.getElementById('btn-close-3d');
+
+function toggle3D(show) {
+  const isHidden = planePanel.classList.toggle(
+    'hidden',
+    typeof show === 'boolean' ? !show : undefined
+  );
+  if (btn3d) btn3d.classList.toggle('active', !isHidden);
+  setTimeout(() => onWindowResize(), 150);
+}
+
+btn3d?.addEventListener('click', () => toggle3D());
+btnClose3d?.addEventListener('click', () => toggle3D(false));
+
+// Initialize viewer once DOM ready
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', init3DViewer);
+} else {
+  init3DViewer();
+}
+</script>
 </body>
 </html>
+

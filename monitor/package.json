@@ -5,11 +5,13 @@
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
-    "dev": "node --watch src/server.js"
+    "dev": "node --watch src/server.js",
+    "test": "node test/consumer.test.js"
   },
   "dependencies": {
     "express": "^4.19.2",
     "kafkajs": "^2.2.4",
+    "three": "^0.186.0",
     "ws": "^8.18.0"
   },
   "engines": {

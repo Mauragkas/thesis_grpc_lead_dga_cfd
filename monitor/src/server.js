@@ -19,6 +19,8 @@ async function main() {
 
   app.use(express.json());
   app.use(express.static(path.join(__dirname, '..', 'public')));
+  app.use('/vendor/three', express.static(path.join(__dirname, '..', 'node_modules', 'three')));
+  app.get('/planeGeometry.js', (_req, res) => res.sendFile(path.resolve(__dirname, 'planeGeometry.js')));
 
   buildApi(app, store);
 
@@ -40,6 +42,9 @@ async function main() {
     groupId: process.env.KAFKA_GROUP_ID || 'monitor-group',
     onLog: (log) => {
       store.push(log);
+      if (log.candidate) {
+        store.setLatestCandidate(log.candidate);
+      }
       broadcast(log);
     },
   }).catch((err) => console.error('consumer fatal:', err));
