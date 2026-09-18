@@ -38,12 +38,27 @@ impl Default for TierConfig {
 pub struct GaConfig {
     pub pop_size: usize,
     pub genes_len: usize,
-    pub generations: usize,
+    /// Maximum generations to run (safety upper bound).
+    pub max_generations: usize,
+    /// Minimum generations to run before allowing early stopping.
+    pub min_generations: usize,
+    /// Number of consecutive generations without significant improvement (> min_improvement)
+    /// before stopping. Set to 0 to disable early stopping.
+    pub stagnation_patience: usize,
+    /// Minimum absolute improvement in best fitness required to count as progress.
+    pub min_improvement: f64,
     pub mut_sigma: f64,
     pub elite_frac: f64,
     pub batch_size: usize,
     pub seed: u64,
     pub eval_endpoint: String,
+}
+
+impl GaConfig {
+    /// Convenience alias for `max_generations` for backward compatibility.
+    pub fn generations(&self) -> usize {
+        self.max_generations
+    }
 }
 
 /// Transport-level tunables, kept separate so transport code owns them.
@@ -79,7 +94,10 @@ impl Default for GaConfig {
         Self {
             pop_size: 60,
             genes_len: 10,
-            generations: 10,
+            max_generations: 100,
+            min_generations: 10,
+            stagnation_patience: 10,
+            min_improvement: 0.001,
             mut_sigma: 0.08,
             elite_frac: 0.5,
             batch_size: 1,
@@ -169,6 +187,80 @@ where
         }
     } else {
         info!("GA_SEED not set; using default {}", ga.seed);
+    }
+
+    if let Some(raw) = env_map
+        .get("MAX_GENERATIONS")
+        .or_else(|| env_map.get("GA_MAX_GENERATIONS"))
+        .or_else(|| env_map.get("GA_GENERATIONS"))
+        .or_else(|| env_map.get("GENERATIONS"))
+    {
+        match raw.parse::<usize>() {
+            Ok(gens) => {
+                info!("MAX_GENERATIONS override: {gens}");
+                ga.max_generations = gens;
+            }
+            Err(_) => warn!("Ignoring invalid MAX_GENERATIONS '{raw}': not a valid usize"),
+        }
+    } else {
+        info!(
+            "MAX_GENERATIONS not set; using default {}",
+            ga.max_generations
+        );
+    }
+
+    if let Some(raw) = env_map
+        .get("MIN_GENERATIONS")
+        .or_else(|| env_map.get("GA_MIN_GENERATIONS"))
+    {
+        match raw.parse::<usize>() {
+            Ok(gens) => {
+                info!("MIN_GENERATIONS override: {gens}");
+                ga.min_generations = gens;
+            }
+            Err(_) => warn!("Ignoring invalid MIN_GENERATIONS '{raw}': not a valid usize"),
+        }
+    } else {
+        info!(
+            "MIN_GENERATIONS not set; using default {}",
+            ga.min_generations
+        );
+    }
+
+    if let Some(raw) = env_map
+        .get("STAGNATION_PATIENCE")
+        .or_else(|| env_map.get("GA_STAGNATION_PATIENCE"))
+    {
+        match raw.parse::<usize>() {
+            Ok(patience) => {
+                info!("STAGNATION_PATIENCE override: {patience}");
+                ga.stagnation_patience = patience;
+            }
+            Err(_) => warn!("Ignoring invalid STAGNATION_PATIENCE '{raw}': not a valid usize"),
+        }
+    } else {
+        info!(
+            "STAGNATION_PATIENCE not set; using default {}",
+            ga.stagnation_patience
+        );
+    }
+
+    if let Some(raw) = env_map
+        .get("MIN_IMPROVEMENT")
+        .or_else(|| env_map.get("GA_MIN_IMPROVEMENT"))
+    {
+        match raw.parse::<f64>() {
+            Ok(imp) => {
+                info!("MIN_IMPROVEMENT override: {imp}");
+                ga.min_improvement = imp;
+            }
+            Err(_) => warn!("Ignoring invalid MIN_IMPROVEMENT '{raw}': not a valid f64"),
+        }
+    } else {
+        info!(
+            "MIN_IMPROVEMENT not set; using default {}",
+            ga.min_improvement
+        );
     }
 
     let mut store = GeneStoreConfig::default();

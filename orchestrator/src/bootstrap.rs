@@ -202,10 +202,13 @@ pub async fn run() -> Result<(), Box<Status>> {
         config_from_env();
 
     info!(
-        "GA config: pop_size={}, genes_len={}, generations={}, mut_sigma={}, elite_frac={}, batch_size={}, seed={}",
+        "GA config: pop_size={}, genes_len={}, max_generations={}, min_generations={}, stagnation_patience={}, min_improvement={}, mut_sigma={}, elite_frac={}, batch_size={}, seed={}",
         ga_cfg.pop_size,
         ga_cfg.genes_len,
-        ga_cfg.generations,
+        ga_cfg.max_generations,
+        ga_cfg.min_generations,
+        ga_cfg.stagnation_patience,
+        ga_cfg.min_improvement,
         ga_cfg.mut_sigma,
         ga_cfg.elite_frac,
         ga_cfg.batch_size,
