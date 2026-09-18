@@ -5,18 +5,21 @@ Core generational loop execution and pure genetic operators.
 ## Files and Code Structure
 
 ### 1. `algorithm.rs`
+- **`ProgressTracker`**:
+  - Encapsulates convergence/stagnation detection (`patience`, `min_improvement`, `min_generations`).
+  - Tracks all-time best milestones and halts the generational loop when improvement falls below the progress threshold for `stagnation_patience` consecutive generations.
 - **`GaRunner<'a>`**:
   - **Fields**:
-    - `pub cfg: &'a GaConfig`: GA tunables (population size, mutation sigma, generations).
+    - `pub cfg: &'a GaConfig`: GA tunables (population size, mutation sigma, max generations, patience, tolerance).
     - `pub evaluator: &'a dyn Evaluator`: Evaluation port.
     - `pub store: &'a dyn GeneStore`: Local exact cache and eviction port.
     - `pub neighbor_store: Option<&'a dyn NeighborStore>`: Optional LEAD DHT multi-probe index.
     - `pub migration: Option<&'a dyn MigrationHook>`: Optional island-model migration hook.
   - **Methods**:
-    - `pub async fn run(&self, rng: &mut StdRng) -> Result<f64, tonic::Status>`:
+    - `pub async fn run(&self, rng: &mut StdRng) -> Result<GaResult, tonic::Status>`:
       Executes the full generational lifecycle:
       1. Generates initial random population (`random_population`).
-      2. In each generation:
+      2. In each generation (up to `max_generations`):
          - Drains immigrants from `migration` and appends them to population.
          - Queries `store.lookup_exact` to find cached fitness values.
          - Filters uncached individuals and invokes `evaluator.evaluate_population`.
@@ -24,8 +27,9 @@ Core generational loop execution and pure genetic operators.
          - Evicts expired records via `store.evict_expired(gen)`.
          - Computes generation best, average, and updates `best_ever`.
          - Emigrates top individuals via `migration.maybe_emigrate`.
+         - Evaluates convergence via `ProgressTracker::update(best_ever, gen)`. If stagnant, breaks loop early.
          - Selects survivors (`select_survivors`) and breeds next generation (`next_generation`).
-      3. Returns the highest fitness achieved (`best_ever`).
+      3. Returns the `GaResult` with highest fitness achieved (`best_ever`) and candidate genome.
 
 ---
 

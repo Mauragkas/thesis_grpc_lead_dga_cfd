@@ -41,6 +41,62 @@ pub fn find_best_candidate<'b>(
         })
 }
 
+/// Tracks generational progress and detects stagnation/convergence.
+/// SRP: encapsulates convergence detection without mixing with evaluation or migration.
+#[derive(Debug, Clone)]
+pub struct ProgressTracker {
+    patience: usize,
+    min_improvement: f64,
+    min_generations: usize,
+    last_improvement_fitness: f64,
+    stagnant_generations: usize,
+}
+
+impl ProgressTracker {
+    pub fn new(patience: usize, min_improvement: f64, min_generations: usize) -> Self {
+        Self {
+            patience,
+            min_improvement,
+            min_generations,
+            last_improvement_fitness: f64::NEG_INFINITY,
+            stagnant_generations: 0,
+        }
+    }
+
+    /// Records the current best fitness and generation index.
+    /// Returns `true` if early stopping condition is met (stagnated for >= patience generations
+    /// and current_gen >= min_generations).
+    pub fn update(&mut self, current_best: f64, current_gen: usize) -> bool {
+        if self.patience == 0 {
+            // Patience of 0 disables early stopping.
+            return false;
+        }
+
+        if current_best > self.last_improvement_fitness + self.min_improvement {
+            self.last_improvement_fitness = current_best;
+            self.stagnant_generations = 0;
+            false
+        } else {
+            self.stagnant_generations += 1;
+            self.is_stagnant(current_gen)
+        }
+    }
+
+    pub fn stagnant_generations(&self) -> usize {
+        self.stagnant_generations
+    }
+
+    pub fn last_improvement_fitness(&self) -> f64 {
+        self.last_improvement_fitness
+    }
+
+    pub fn is_stagnant(&self, current_gen: usize) -> bool {
+        self.patience > 0
+            && self.stagnant_generations >= self.patience
+            && current_gen >= self.min_generations
+    }
+}
+
 /// SRP: orchestrates the generational loop. Depends on the `Evaluator`,
 /// `GeneStore`, `NeighborStore`, and `MigrationHook` abstractions (DIP), never on concrete
 /// impls directly.
@@ -56,10 +112,13 @@ impl<'a> GaRunner<'a> {
     pub async fn run(&self, rng: &mut StdRng) -> Result<GaResult, Status> {
         let start = Instant::now();
         info!(
-            "GA run starting: pop_size={}, genes_len={}, generations={}, mut_sigma={}, elite_frac={}, batch_size={}",
+            "GA run starting: pop_size={}, genes_len={}, max_generations={}, min_generations={}, stagnation_patience={}, min_improvement={}, mut_sigma={}, elite_frac={}, batch_size={}",
             self.cfg.pop_size,
             self.cfg.genes_len,
-            self.cfg.generations,
+            self.cfg.max_generations,
+            self.cfg.min_generations,
+            self.cfg.stagnation_patience,
+            self.cfg.min_improvement,
             self.cfg.mut_sigma,
             self.cfg.elite_frac,
             self.cfg.batch_size
@@ -68,9 +127,14 @@ impl<'a> GaRunner<'a> {
         let mut best_ever = f64::NEG_INFINITY;
         let mut best_genome = Vec::new();
         let normal = Normal::new(0.0, self.cfg.mut_sigma).unwrap();
+        let mut tracker = ProgressTracker::new(
+            self.cfg.stagnation_patience,
+            self.cfg.min_improvement,
+            self.cfg.min_generations,
+        );
 
-        for gen in 1..=self.cfg.generations {
-            info!("Evaluating generation {gen}/{}...", self.cfg.generations);
+        for gen in 1..=self.cfg.max_generations {
+            info!("Evaluating generation {gen}/{}...", self.cfg.max_generations);
 
             self.integrate_immigrants(&mut population, gen).await;
 
@@ -87,6 +151,19 @@ impl<'a> GaRunner<'a> {
             );
 
             self.handle_emigration(gen, &population, &fitnesses).await;
+
+            if tracker.update(best_ever, gen) {
+                info!(
+                    gen = gen,
+                    best_fitness = best_ever,
+                    stagnant_generations = tracker.stagnant_generations(),
+                    "GA converged: no significant progress (> {}) for {} consecutive generations. Stopping at generation {gen}/{}.",
+                    self.cfg.min_improvement,
+                    tracker.stagnant_generations(),
+                    self.cfg.max_generations
+                );
+                break;
+            }
 
             population = self.advance_population(&population, &fitnesses, rng, &normal);
         }

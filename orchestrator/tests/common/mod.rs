@@ -155,7 +155,10 @@ pub fn small_config() -> orchestrator::config::GaConfig {
     orchestrator::config::GaConfig {
         pop_size: 6,
         genes_len: 4,
-        generations: 3,
+        max_generations: 3,
+        min_generations: 1,
+        stagnation_patience: 10,
+        min_improvement: 0.001,
         mut_sigma: 0.05,
         elite_frac: 0.5,
         batch_size: 2,

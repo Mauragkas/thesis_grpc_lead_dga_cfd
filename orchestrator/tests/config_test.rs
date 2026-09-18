@@ -12,7 +12,11 @@ fn defaults_are_sane() {
     let ga = GaConfig::default();
     assert!(ga.pop_size > 0);
     assert!(ga.genes_len > 0);
-    assert!(ga.generations > 0);
+    assert!(ga.max_generations > 0);
+    assert!(ga.generations() > 0);
+    assert!(ga.min_generations > 0);
+    assert!(ga.stagnation_patience > 0);
+    assert!(ga.min_improvement > 0.0);
     assert!(ga.elite_frac > 0.0 && ga.elite_frac <= 1.0);
     assert!(ga.batch_size > 0);
     assert!(!ga.eval_endpoint.is_empty());
@@ -51,6 +55,10 @@ fn config_from_vars_uses_defaults_when_empty() {
     let (ga, _t, store, lead, surrogate, tier, ring, migration) = config_from_vars(empty_vars);
     assert_eq!(ga.eval_endpoint, "load-balancer:50051");
     assert_eq!(ga.seed, 42);
+    assert_eq!(ga.max_generations, 100);
+    assert_eq!(ga.min_generations, 10);
+    assert_eq!(ga.stagnation_patience, 10);
+    assert_eq!(ga.min_improvement, 0.001);
     assert_eq!(store.max_age_generations, 5);
     assert!(lead.endpoint.is_none());
     assert!(surrogate.endpoint.is_none());
@@ -69,6 +77,10 @@ fn config_from_vars_reads_overrides() {
     let vars = [
         ("EVAL_ENDPOINT", "worker:9999"),
         ("GA_SEED", "123"),
+        ("MAX_GENERATIONS", "50"),
+        ("MIN_GENERATIONS", "5"),
+        ("STAGNATION_PATIENCE", "8"),
+        ("MIN_IMPROVEMENT", "0.005"),
         ("GENE_STORE_MAX_AGE", "17"),
         ("LEAD_ENDPOINT", "lead-1:2001"),
         ("SURROGATE_ENDPOINT", "surrogate-1:50054"),
@@ -85,6 +97,10 @@ fn config_from_vars_reads_overrides() {
     let (ga, _t, store, lead, surrogate, tier, ring, migration) = config_from_vars(vars);
     assert_eq!(ga.eval_endpoint, "worker:9999");
     assert_eq!(ga.seed, 123);
+    assert_eq!(ga.max_generations, 50);
+    assert_eq!(ga.min_generations, 5);
+    assert_eq!(ga.stagnation_patience, 8);
+    assert_eq!(ga.min_improvement, 0.005);
     assert_eq!(store.max_age_generations, 17);
     assert_eq!(lead.endpoint.as_deref(), Some("lead-1:2001"));
     assert_eq!(surrogate.endpoint.as_deref(), Some("surrogate-1:50054"));
@@ -99,15 +115,38 @@ fn config_from_vars_reads_overrides() {
 }
 
 #[test]
+fn config_from_vars_reads_alternative_generation_env_names() {
+    let vars = [
+        ("GA_GENERATIONS", "75"),
+        ("GA_MIN_GENERATIONS", "12"),
+        ("GA_STAGNATION_PATIENCE", "15"),
+        ("GA_MIN_IMPROVEMENT", "0.0002"),
+    ];
+    let (ga, _, _, _, _, _, _, _) = config_from_vars(vars);
+    assert_eq!(ga.max_generations, 75);
+    assert_eq!(ga.min_generations, 12);
+    assert_eq!(ga.stagnation_patience, 15);
+    assert_eq!(ga.min_improvement, 0.0002);
+}
+
+#[test]
 fn config_from_vars_ignores_invalid_numerical_values() {
     let vars = [
         ("GA_SEED", "not-a-number"),
+        ("MAX_GENERATIONS", "not-a-number"),
+        ("MIN_GENERATIONS", "bad"),
+        ("STAGNATION_PATIENCE", "invalid"),
+        ("MIN_IMPROVEMENT", "bad-float"),
         ("GENE_STORE_MAX_AGE", "invalid"),
         ("MIGRATION_INTERVAL", "bad"),
         ("MIGRATION_COUNT", "also-bad"),
     ];
     let (ga, _, store, _, _, _, _, migration) = config_from_vars(vars);
     assert_eq!(ga.seed, 42); // falls back to default
+    assert_eq!(ga.max_generations, 100);
+    assert_eq!(ga.min_generations, 10);
+    assert_eq!(ga.stagnation_patience, 10);
+    assert_eq!(ga.min_improvement, 0.001);
     assert_eq!(store.max_age_generations, 5);
     assert_eq!(migration.interval_generations, 5);
     assert_eq!(migration.migrant_count, 3);
