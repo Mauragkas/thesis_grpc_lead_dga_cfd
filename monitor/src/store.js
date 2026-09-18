@@ -19,6 +19,10 @@ function createStore({ capPerSource = 10000 } = {}) {
   // Subscriber set for push notifications
   const subscribers = new Set();
 
+  // Track latest best candidate across generations
+  let latestCandidate = null;
+  const candidateSubscribers = new Set();
+
   // ── Helpers ──────────────────────────────────────────────────────────────
 
   function bucket(source) {
@@ -152,7 +156,34 @@ function createStore({ capPerSource = 10000 } = {}) {
     return Array.from(buckets.keys());
   }
 
-  return { push, subscribe, unsubscribe, query, queryBefore, stats, sources };
+  function setLatestCandidate(cand) {
+    latestCandidate = cand;
+    for (const fn of candidateSubscribers) {
+      try { fn(cand); } catch { /* ignore subscriber errors */ }
+    }
+  }
+
+  function getLatestCandidate() {
+    return latestCandidate;
+  }
+
+  function onCandidate(fn) {
+    candidateSubscribers.add(fn);
+    return () => candidateSubscribers.delete(fn);
+  }
+
+  return {
+    push,
+    subscribe,
+    unsubscribe,
+    query,
+    queryBefore,
+    stats,
+    sources,
+    setLatestCandidate,
+    getLatestCandidate,
+    onCandidate,
+  };
 }
 
 module.exports = { createStore };

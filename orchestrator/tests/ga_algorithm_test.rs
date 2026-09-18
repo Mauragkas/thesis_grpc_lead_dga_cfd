@@ -36,7 +36,8 @@ async fn runner_returns_best_fitness_on_happy_path() {
     };
     let best = runner.run(&mut rng).await.unwrap();
     // best ever should be the max of the supplied fitnesses
-    assert!((best - (pop as f64)).abs() < 1e-9);
+    assert!((best.best_fitness - (pop as f64)).abs() < 1e-9);
+    assert_eq!(best.best_genome.len(), cfg.genes_len);
     assert!(evaluator.call_count() > 0);
 }
 
@@ -92,7 +93,8 @@ async fn runner_with_multi_tier_evaluator_exact_cache_hits() {
         migration: None,
     };
     let best = runner.run(&mut rng).await.unwrap();
-    assert!(best >= 100.0);
+    assert!(best.best_fitness >= 100.0);
+    assert_eq!(best.best_genome.len(), cfg.genes_len);
     let snap = multi_tier.metrics.snapshot();
     assert!(snap.tier1_exact_hits > 0);
 }
@@ -144,4 +146,30 @@ async fn runner_with_multi_tier_stores_newly_evaluated_individuals() {
     runner.run(&mut rng).await.unwrap();
     // At minimum, generation 1 evaluates initial population uncached and stores them.
     assert!(store.store_calls.load(std::sync::atomic::Ordering::SeqCst) >= cfg.pop_size);
+}
+
+#[tokio::test]
+async fn runner_tracks_and_returns_best_candidate_genome() {
+    let cfg = small_config();
+    let mut rng = seeded_rng(&cfg);
+    let initial_pop = orchestrator::ga::operators::random_population(&mut rng, &cfg);
+    let expected_best_genome = initial_pop[0].clone();
+
+    // Assign highest fitness to index 0
+    let mut fitnesses = vec![10.0; cfg.pop_size];
+    fitnesses[0] = 999.0;
+    let evaluator = MockEvaluator::new(fitnesses);
+    let store = MockGeneStore::empty();
+
+    let mut runner_rng = seeded_rng(&cfg);
+    let runner = GaRunner {
+        cfg: &cfg,
+        evaluator: &evaluator,
+        store: &store,
+        neighbor_store: None,
+        migration: None,
+    };
+    let result = runner.run(&mut runner_rng).await.unwrap();
+    assert!((result.best_fitness - 999.0).abs() < 1e-9);
+    assert_eq!(result.best_genome, expected_best_genome);
 }

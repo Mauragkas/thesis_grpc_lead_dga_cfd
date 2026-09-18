@@ -10,6 +10,37 @@ use std::time::Instant;
 use tonic::Status;
 use tracing::{error, info, warn};
 
+/// Result of a completed GA run containing the best candidate found.
+#[derive(Debug, Clone, PartialEq)]
+pub struct GaResult {
+    /// Best fitness achieved across all evaluated generations.
+    pub best_fitness: f64,
+    /// Genome (normalized gene vector) of the best candidate.
+    pub best_genome: Vec<f64>,
+}
+
+impl std::ops::Deref for GaResult {
+    type Target = f64;
+
+    fn deref(&self) -> &Self::Target {
+        &self.best_fitness
+    }
+}
+
+/// Finds the best individual and its fitness from a population and corresponding fitnesses.
+pub fn find_best_candidate<'b>(
+    population: &'b [Vec<f64>],
+    fitnesses: &[f64],
+) -> Option<(&'b [f64], f64)> {
+    fitnesses
+        .iter()
+        .enumerate()
+        .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
+        .and_then(|(idx, &fitness)| {
+            population.get(idx).map(|ind| (ind.as_slice(), fitness))
+        })
+}
+
 /// SRP: orchestrates the generational loop. Depends on the `Evaluator`,
 /// `GeneStore`, `NeighborStore`, and `MigrationHook` abstractions (DIP), never on concrete
 /// impls directly.
@@ -22,7 +53,7 @@ pub struct GaRunner<'a> {
 }
 
 impl<'a> GaRunner<'a> {
-    pub async fn run(&self, rng: &mut StdRng) -> Result<f64, Status> {
+    pub async fn run(&self, rng: &mut StdRng) -> Result<GaResult, Status> {
         let start = Instant::now();
         info!(
             "GA run starting: pop_size={}, genes_len={}, generations={}, mut_sigma={}, elite_frac={}, batch_size={}",
@@ -35,6 +66,7 @@ impl<'a> GaRunner<'a> {
         );
         let mut population = random_population(rng, self.cfg);
         let mut best_ever = f64::NEG_INFINITY;
+        let mut best_genome = Vec::new();
         let normal = Normal::new(0.0, self.cfg.mut_sigma).unwrap();
 
         for gen in 1..=self.cfg.generations {
@@ -46,7 +78,13 @@ impl<'a> GaRunner<'a> {
 
             self.store.evict_expired(gen).await;
 
-            self.record_generation_stats(gen, &fitnesses, &mut best_ever);
+            self.record_generation_stats(
+                gen,
+                &population,
+                &fitnesses,
+                &mut best_ever,
+                &mut best_genome,
+            );
 
             self.handle_emigration(gen, &population, &fitnesses).await;
 
@@ -54,9 +92,16 @@ impl<'a> GaRunner<'a> {
         }
 
         let elapsed = start.elapsed().as_secs_f64();
-        info!("GA run finished in {elapsed:.2}s; best fitness: {best_ever:.4}");
-        println!("Finished GA run in {elapsed:.2}s. Best fitness: {best_ever:.4}");
-        Ok(best_ever)
+        info!(
+            elapsed = elapsed,
+            best_fitness = best_ever,
+            best_genome = ?best_genome,
+            "Finished GA run in {elapsed:.2}s. Best fitness: {best_ever:.4}; best genome: {best_genome:?}"
+        );
+        Ok(GaResult {
+            best_fitness: best_ever,
+            best_genome,
+        })
     }
 
     /// Drains incoming immigrants and replaces the tail of the population.
@@ -91,23 +136,38 @@ impl<'a> GaRunner<'a> {
             })
     }
 
-    /// Records generation fitness metrics to stdout and logs.
+    /// Records generation fitness metrics to stdout and logs, updating best candidate if improved.
     fn record_generation_stats(
         &self,
         gen: usize,
+        population: &[Vec<f64>],
         fitnesses: &[f64],
         best_ever: &mut f64,
+        best_genome: &mut Vec<f64>,
     ) {
-        let best = fitnesses.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
-        let avg = fitnesses.iter().sum::<f64>() / fitnesses.len() as f64;
-        *best_ever = (*best_ever).max(best);
-        println!(
-            "Gen {}/{} | Best: {:.4} | Avg: {:.4} | BestEver: {:.4}",
-            gen, self.cfg.generations, best, avg, *best_ever
-        );
+        let candidate = find_best_candidate(population, fitnesses);
+        let gen_best_fitness = candidate.map(|(_, f)| f).unwrap_or(f64::NEG_INFINITY);
+
+        let avg = if fitnesses.is_empty() {
+            0.0
+        } else {
+            fitnesses.iter().sum::<f64>() / fitnesses.len() as f64
+        };
+
+        if let Some((genes, fitness)) = candidate {
+            if fitness > *best_ever || best_genome.is_empty() {
+                *best_ever = fitness;
+                *best_genome = genes.to_vec();
+            }
+        }
+
         info!(
-            "Gen {gen}: best={best:.4}, avg={avg:.4}, best_ever={:.4}",
-            *best_ever
+            gen = gen,
+            best = gen_best_fitness,
+            avg = avg,
+            best_ever = *best_ever,
+            best_genome = ?best_genome,
+            "Gen {gen}: best={gen_best_fitness:.4}, avg={avg:.4}, best_ever={best_ever:.4}, best_genome={best_genome:?}"
         );
     }
 
