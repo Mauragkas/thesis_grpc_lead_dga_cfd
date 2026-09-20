@@ -64,16 +64,19 @@ class FitnessEvaluator:
 
         alpha_penalty = self._config.w_alpha * abs(aero.alpha_trim)
         stability_penalty = self._config.w_stability * max(0.0, aero.cm_alpha) ** 2
-        fitness = aero.ld - alpha_penalty - stability_penalty
+        moment_penalty = getattr(self._config, "w_moment", 30.0) * (aero.cm_trim**2)
+        fitness = aero.ld - alpha_penalty - stability_penalty - moment_penalty
 
         self._logger.debug(
-            "fit=%.4f ld=%.3f alpha=%.2f cm_alpha=%.3f alpha_pen=%.3f stab_pen=%.3f v_fuse=%.0f",
+            "fit=%.4f ld=%.3f alpha=%.2f cm_alpha=%.3f cm_trim=%.3f alpha_pen=%.3f stab_pen=%.3f mom_pen=%.3f v_fuse=%.0f",
             fitness,
             aero.ld,
             aero.alpha_trim,
             aero.cm_alpha,
+            aero.cm_trim,
             alpha_penalty,
             stability_penalty,
+            moment_penalty,
             v_fuse,
         )
 

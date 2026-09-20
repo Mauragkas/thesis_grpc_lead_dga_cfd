@@ -1,3 +1,4 @@
+import pytest
 from config import BASELINE, WorkerConfig
 from fitness import REJECT_FITNESS, EvaluationOutcome, FitnessEvaluator
 from aero import AeroResult
@@ -44,10 +45,23 @@ def test_scores_using_ld_minus_penalties():
     assert outcome.rejected is False
     alpha_pen = 0.5 * abs(AERO_OK.alpha_trim)
     stab_pen = 20.0 * max(0.0, AERO_OK.cm_alpha) ** 2
-    expected = AERO_OK.ld - alpha_pen - stab_pen
+    mom_pen = 30.0 * (AERO_OK.cm_trim**2)
+    expected = AERO_OK.ld - alpha_pen - stab_pen - mom_pen
     assert outcome.fitness == expected
     assert outcome.aero == AERO_OK
     assert outcome.fuselage_volume_mm3 > 0.0
+
+
+def test_scores_penalizes_out_of_trim_moment():
+    untrimmed = AeroResult(ld=12.0, alpha_trim=3.0, cm_alpha=-2.0, cm_trim=-0.2)
+    ev = make_evaluator(aero_result=untrimmed, v_min=1.0)
+    outcome = ev.evaluate_genes([0.5] * 10)
+    assert outcome.rejected is False
+    alpha_pen = 0.5 * 3.0
+    stab_pen = 0.0  # cm_alpha < 0 is stable
+    mom_pen = 30.0 * ((-0.2) ** 2)
+    expected = 12.0 - alpha_pen - stab_pen - mom_pen
+    assert outcome.fitness == pytest.approx(expected)
 
 
 def test_rejected_outcome_carries_volume():
