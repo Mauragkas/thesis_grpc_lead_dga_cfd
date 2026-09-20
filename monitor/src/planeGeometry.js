@@ -8,31 +8,31 @@ const GENE_BOUNDS = [
   { name: 'wing_root_chord', low: 35.0,  high: 75.0,  unit: 'mm' },
   { name: 'wing_tip_chord',  low: 10.0,  high: 45.0,  unit: 'mm' },
   { name: 'wing_sweep',      low: 0.0,   high: 25.0,  unit: '°' },
-  { name: 'wing_dihedral',   low: 0.0,   high: 10.0,  unit: '°' },
-  { name: 'wing_twist',      low: -6.0,  high: 2.0,   unit: '°' },
+  { name: 'wing_dihedral',   low: 0.0,   high: 4.0,   unit: '°' },
+  { name: 'wing_twist',      low: -4.0,  high: 0.0,   unit: '°' },
   { name: 'wing_x_pos',      low: 55.0,  high: 95.0,  unit: 'mm' },
   { name: 'naca_m',          low: 0.0,   high: 5.0,   unit: '%' },
   { name: 'fuse_length',     low: 200.0, high: 350.0, unit: 'mm' },
-  { name: 'fuse_max_diam',   low: 8.0,   high: 16.0,  unit: 'mm' },
+  { name: 'fuse_max_diam',   low: 14.0,  high: 32.0,  unit: 'mm' },
 ];
 
 const BASELINE = {
   fuse_length: 250.0,
-  fuse_max_diam: 10.0,
+  fuse_max_diam: 20.0,
   nose_ratio: 0.25,
   tail_ratio: 0.35,
   wing_span: 140.0,
   wing_root_chord: 55.0,
   wing_tip_chord: 25.0,
   wing_sweep: 12.0,
-  wing_dihedral: 4.0,
-  wing_twist: -3.0,
+  wing_dihedral: 2.5,
+  wing_twist: -2.0,
   wing_x_pos: 75.0,
   wing_z_pos: -2.0,
   naca_m: 2.0,
   naca_p: 4.0,
   naca_t: 12.0,
-  tail_x_pos: 210.0,
+  tail_x_pos: 205.0,
   v_stab_height: 45.0,
   v_stab_root: 35.0,
   v_stab_tip: 18.0,
@@ -49,6 +49,9 @@ function decodeGenes(genes) {
     const u = Math.max(0.0, Math.min(1.0, Number(genes[i]) || 0.0));
     params[bound.name] = bound.low + (bound.high - bound.low) * u;
   }
+  // Place tail root at the end of the fuselage (-10mm margin from the trailing tip)
+  const tailChord = Math.max(params.v_stab_root || 35.0, params.h_stab_root || 28.0);
+  params.tail_x_pos = params.fuse_length - tailChord - 10.0;
   return params;
 }
 

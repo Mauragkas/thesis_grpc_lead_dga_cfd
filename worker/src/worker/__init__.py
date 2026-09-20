@@ -5,11 +5,17 @@ from .config import BASELINE, GENE_BOUNDS, WorkerConfig, load_config
 from .fitness import REJECT_FITNESS, EvaluationOutcome, FitnessEvaluator
 from .geometry import (
     Fuselage,
+    calculate_center_of_gravity,
+    calculate_mass_breakdown,
     calculate_total_mass_and_weight,
     decode_genes,
     fuselage_from_params,
     fuselage_volume_mm3,
     wing_panel_volume,
+)
+from .slender_aerodynamics import (
+    get_fuselage_drag_coefficient,
+    get_fuselage_wetted_area,
 )
 from .hilbert import (
     BITS,
@@ -33,11 +39,15 @@ __all__ = [
     "EvaluationOutcome",
     "FitnessEvaluator",
     "Fuselage",
+    "calculate_center_of_gravity",
+    "calculate_mass_breakdown",
     "calculate_total_mass_and_weight",
     "decode_genes",
     "fuselage_from_params",
     "fuselage_volume_mm3",
     "wing_panel_volume",
+    "get_fuselage_drag_coefficient",
+    "get_fuselage_wetted_area",
     "BITS",
     "NUM_CURVES",
     "config_hilbert",
