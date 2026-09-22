@@ -4,12 +4,15 @@ services:
     environment:
       - WORKER_ID=${WORKER_ID:-worker}
       - LOG_LEVEL=${LOG_LEVEL:-DEBUG}
+      - LOG_DIR=/var/log/app
       - V_MIN_FUSE_MM3=20000.0
       - OMP_NUM_THREADS=1
       - OPENBLAS_NUM_THREADS=1
       - MKL_NUM_THREADS=1
       - NUMEXPR_NUM_THREADS=1
       - VECLIB_MAXIMUM_THREADS=1
+    volumes:
+      - app-logs:/var/log/app
     healthcheck:
       test: ["CMD", "/usr/local/bin/grpc_health_probe", "-addr=:50051"]
       interval: 3s
@@ -26,15 +29,6 @@ services:
           memory: 512M
     networks:
       - default
-    logging:
-      driver: fluentd
-      options:
-        fluentd-address: localhost:24224
-        fluentd-async: "true"
-        fluentd-buffer-limit: "1048576"
-        fluentd-retry-wait: "1s"
-        fluentd-max-retries: "10"
-        tag: worker.main
 
   load-balancer:
     image: envoyproxy/envoy:v1.28-latest
@@ -61,6 +55,8 @@ services:
     container_name: surrogate_node
     environment:
       - RUST_LOG=info
+      - LOG_DIR=/var/log/app
+      - CONTAINER_NAME=surrogate_node
       - GRPC_BIND=0.0.0.0:50054
       - WINDOW_SIZE=1000
       - RETRAIN_INTERVAL=20
@@ -68,6 +64,8 @@ services:
       - MLP_EPOCHS=250
       - MLP_LR=0.001
       - MLP_BATCH_SIZE=32
+    volumes:
+      - app-logs:/var/log/app
     ports:
       - "50054:50054"
     healthcheck:
@@ -86,23 +84,17 @@ services:
           memory: 1024M
     networks:
       - default
-    logging:
-      driver: fluentd
-      options:
-        fluentd-address: localhost:24224
-        fluentd-async: "true"
-        fluentd-buffer-limit: "1048576"
-        fluentd-retry-wait: "1s"
-        fluentd-max-retries: "10"
-        tag: surrogate.node
 
   orchestrator:
     build:
       context: ..
       dockerfile: orchestrator/Dockerfile
+    container_name: orchestrator
     environment:
       - RUST_LOG=info
       - RUST_LOG_STYLE=always
+      - LOG_DIR=/var/log/app
+      - CONTAINER_NAME=orchestrator
       - EVAL_ENDPOINT=load-balancer:50051
       - LEAD_ENDPOINT=http://lead-node1:50051
       - SURROGATE_ENDPOINT=http://surrogate-node:50054
@@ -115,6 +107,8 @@ services:
       - RING_SELF_ADDRESS=orchestrator:50060
       - MIGRATION_INTERVAL=5
       - MIGRATION_COUNT=3
+    volumes:
+      - app-logs:/var/log/app
     ports:
       - "50060:50060"
     deploy:
@@ -133,15 +127,11 @@ services:
     restart: "no"
     networks:
       - default
-    logging:
-      driver: fluentd
-      options:
-        fluentd-address: localhost:24224
-        fluentd-async: "true"
-        fluentd-buffer-limit: "1048576"
-        fluentd-retry-wait: "1s"
-        fluentd-max-retries: "10"
-        tag: orchestrator.main
+
+volumes:
+  app-logs:
+    external: true
+    name: app-logs
 
 networks:
   default:

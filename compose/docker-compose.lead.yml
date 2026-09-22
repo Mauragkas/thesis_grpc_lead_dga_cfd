@@ -9,8 +9,11 @@ services:
       - SELF_URI=http://lead-node1:50051
       - VIRTUAL_NODE_COUNT=20
       - LEAD_STORAGE_PATH=/data/lead
+      - LOG_DIR=/var/log/app
+      - CONTAINER_NAME=lead_node1
     volumes:
       - lead_node1_data:/data/lead
+      - app-logs:/var/log/app
     ports:
       - "2001:2001"      # HTTP API (host debugging)
       - "50061:50051"    # gRPC (host-mapped for possible external access)
@@ -30,15 +33,6 @@ services:
           memory: 128M
     networks:
       - default
-    logging:
-      driver: fluentd
-      options:
-        fluentd-address: localhost:24224
-        fluentd-async: "true"
-        fluentd-buffer-limit: "1048576"
-        fluentd-retry-wait: "1s"
-        fluentd-max-retries: "10"
-        tag: lead.node1
 
   lead-node2:
     build: ../lead
@@ -51,8 +45,11 @@ services:
       - JOIN_URI=http://lead-node1:50051
       - VIRTUAL_NODE_COUNT=20
       - LEAD_STORAGE_PATH=/data/lead
+      - LOG_DIR=/var/log/app
+      - CONTAINER_NAME=lead_node2
     volumes:
       - lead_node2_data:/data/lead
+      - app-logs:/var/log/app
     ports:
       - "2002:2002"
     healthcheck:
@@ -74,15 +71,6 @@ services:
         condition: service_healthy
     networks:
       - default
-    logging:
-      driver: fluentd
-      options:
-        fluentd-address: localhost:24224
-        fluentd-async: "true"
-        fluentd-buffer-limit: "1048576"
-        fluentd-retry-wait: "1s"
-        fluentd-max-retries: "10"
-        tag: lead.node2
 
   lead-node3:
     build: ../lead
@@ -95,8 +83,11 @@ services:
       - JOIN_URI=http://lead-node1:50051
       - VIRTUAL_NODE_COUNT=20
       - LEAD_STORAGE_PATH=/data/lead
+      - LOG_DIR=/var/log/app
+      - CONTAINER_NAME=lead_node3
     volumes:
       - lead_node3_data:/data/lead
+      - app-logs:/var/log/app
     ports:
       - "2003:2003"
     healthcheck:
@@ -118,20 +109,14 @@ services:
         condition: service_healthy
     networks:
       - default
-    logging:
-      driver: fluentd
-      options:
-        fluentd-address: localhost:24224
-        fluentd-async: "true"
-        fluentd-buffer-limit: "1048576"
-        fluentd-retry-wait: "1s"
-        fluentd-max-retries: "10"
-        tag: lead.node3
 
 volumes:
   lead_node1_data:
   lead_node2_data:
   lead_node3_data:
+  app-logs:
+    external: true
+    name: app-logs
 
 networks:
   default:

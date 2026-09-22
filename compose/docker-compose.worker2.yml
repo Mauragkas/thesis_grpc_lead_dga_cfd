@@ -4,6 +4,7 @@ services:
     environment:
       - WORKER_ID=${WORKER_ID:-worker2}
       - LOG_LEVEL=${LOG_LEVEL:-DEBUG}
+      - LOG_DIR=/var/log/app
       - V_MIN_FUSE_MM3=20000.0
       - OMP_NUM_THREADS=1
       - OPENBLAS_NUM_THREADS=1
@@ -11,6 +12,8 @@ services:
       - NUMEXPR_NUM_THREADS=1
       - VECLIB_MAXIMUM_THREADS=1
       - LEAD_ENDPOINT=http://lead-node1:50051   # register with the DHT
+    volumes:
+      - app-logs:/var/log/app
     healthcheck:
       test: ["CMD", "/usr/local/bin/grpc_health_probe", "-addr=:50051"]
       interval: 3s
@@ -27,15 +30,6 @@ services:
           memory: 512M
     networks:
       - default
-    logging:
-      driver: fluentd
-      options:
-        fluentd-address: localhost:24224
-        fluentd-async: "true"
-        fluentd-buffer-limit: "1048576"
-        fluentd-retry-wait: "1s"
-        fluentd-max-retries: "10"
-        tag: worker2.main
 
   load-balancer2:
     image: envoyproxy/envoy:v1.28-latest
@@ -67,6 +61,8 @@ services:
     environment:
       - RUST_LOG=info
       - RUST_LOG_STYLE=always
+      - LOG_DIR=/var/log/app
+      - CONTAINER_NAME=orchestrator2
       - EVAL_ENDPOINT=load-balancer2:50051   # local envoy (same project)
       - LEAD_ENDPOINT=http://lead-node1:50051   # same DHT bootstrap
       - N_WORKERS=${N_WORKERS:-1}
@@ -78,6 +74,8 @@ services:
       # Migration config
       - MIGRATION_INTERVAL=5
       - MIGRATION_COUNT=3
+    volumes:
+      - app-logs:/var/log/app
     deploy:
       resources:
         limits:
@@ -92,15 +90,11 @@ services:
     restart: "no"
     networks:
       - default
-    logging:
-      driver: fluentd
-      options:
-        fluentd-address: localhost:24224
-        fluentd-async: "true"
-        fluentd-buffer-limit: "1048576"
-        fluentd-retry-wait: "1s"
-        fluentd-max-retries: "10"
-        tag: orchestrator2.main
+
+volumes:
+  app-logs:
+    external: true
+    name: app-logs
 
 networks:
   default:
