@@ -4,6 +4,7 @@ import asyncio
 import json
 import logging
 import os
+import sys
 from datetime import datetime, timezone
 
 import grpc
@@ -48,12 +49,34 @@ def _configure_logging() -> logging.Logger:
     level_name = os.getenv("LOG_LEVEL", "INFO").upper()
     level = getattr(logging, level_name, logging.INFO)
 
-    handler = logging.StreamHandler()
-    handler.setFormatter(JsonFormatter())
     root = logging.getLogger()
     root.handlers.clear()
-    root.addHandler(handler)
     root.setLevel(level)
+
+    # 1. Stdout handler: human-readable plain text for `docker logs`
+    stdout_handler = logging.StreamHandler()
+    stdout_formatter = logging.Formatter(
+        "%(asctime)s [%(levelname)s] [%(name)s] %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
+    stdout_handler.setFormatter(stdout_formatter)
+    root.addHandler(stdout_handler)
+
+    # 2. Optional JSON file handler: for Fluent-Bit
+    log_file_path = os.getenv("LOG_FILE_PATH")
+    if not log_file_path and os.getenv("LOG_DIR"):
+        worker_id = os.getenv("WORKER_ID", "worker")
+        hostname = os.getenv("HOSTNAME", "unknown")
+        log_file_path = os.path.join(os.getenv("LOG_DIR"), f"{worker_id}_{hostname}.log")
+
+    if log_file_path:
+        try:
+            os.makedirs(os.path.dirname(log_file_path), exist_ok=True)
+            file_handler = logging.FileHandler(log_file_path)
+            file_handler.setFormatter(JsonFormatter())
+            root.addHandler(file_handler)
+        except Exception as e:
+            sys.stderr.write(f"Failed to open log file '{log_file_path}': {e}\n")
 
     # grpc/aio internals are noisy at DEBUG
     logging.getLogger("grpc").setLevel(logging.WARNING)

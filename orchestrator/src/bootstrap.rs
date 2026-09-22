@@ -4,8 +4,7 @@
 //! surrogate node, migration, multi-tier evaluator) and executes the distributed GA run.
 
 use crate::config::{
-    config_from_env, GaConfig, LeadConfig, RingConfig, SurrogateClientConfig,
-    TransportConfig,
+    config_from_env, GaConfig, LeadConfig, RingConfig, SurrogateClientConfig, TransportConfig,
 };
 use crate::evaluator::{GrpcEvaluator, MultiTierEvaluator};
 use crate::ga::algorithm::GaRunner;
@@ -24,20 +23,58 @@ use crate::surrogate_client::{GrpcSurrogateClient, SurrogateClient};
 use crate::transport::channel::{build_endpoint, wait_for_channel};
 use rand::rngs::StdRng;
 use rand::SeedableRng;
-use std::sync::Arc;
+use std::fs::OpenOptions;
+use std::path::Path;
+use std::sync::{Arc, Mutex};
 use tonic::transport::Server;
 use tonic::Status;
 use tracing::{error, info, warn};
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::EnvFilter;
 
-/// Initializes tracing subscriber with JSON output format.
+/// Initializes tracing subscriber with dual logging:
+/// - Stdout: Human-readable plain text for `docker logs`.
+/// - File (if configured): Structured JSON format for Fluent-Bit.
 pub fn init_logging() {
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
-        )
-        .json()
-        .with_target(true)
+    let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
+
+    // 1. Stdout layer: human-readable, plain text for `docker logs`
+    let stdout_layer = tracing_subscriber::fmt::layer().with_target(true);
+
+    // 2. Optional JSON file layer: for Fluent-Bit log forwarder
+    let log_file_path = std::env::var("LOG_FILE_PATH").ok().or_else(|| {
+        std::env::var("LOG_DIR").ok().map(|dir| {
+            let name = std::env::var("CONTAINER_NAME")
+                .or_else(|_| std::env::var("HOSTNAME"))
+                .unwrap_or_else(|_| "orchestrator".into());
+            format!("{dir}/{name}.log")
+        })
+    });
+
+    if let Some(path_str) = log_file_path {
+        let path = Path::new(&path_str);
+        if let Some(parent) = path.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        if let Ok(file) = OpenOptions::new().create(true).append(true).open(path) {
+            let file_layer = tracing_subscriber::fmt::layer()
+                .json()
+                .with_target(true)
+                .with_writer(Mutex::new(file));
+
+            tracing_subscriber::registry()
+                .with(env_filter)
+                .with(stdout_layer)
+                .with(file_layer)
+                .init();
+            return;
+        }
+    }
+
+    tracing_subscriber::registry()
+        .with(env_filter)
+        .with(stdout_layer)
         .init();
 }
 
@@ -52,17 +89,16 @@ pub async fn setup_ring(
     let ring_state = Arc::new(RingState::new(self_node.clone()));
     let member = Arc::new(LocalRingMember::new(ring_state.clone()));
 
-    let ring_server = RingServer::new(
-        LocalRingMember::new(ring_state.clone()),
-        migrant_buffer,
-    );
+    let ring_server = RingServer::new(LocalRingMember::new(ring_state.clone()), migrant_buffer);
 
     let tonic_ring_server = crate::proto::ring::ring_server::RingServer::new(ring_server);
 
     let ring_bind = ring_cfg.bind_address.clone();
-    let ring_addr: std::net::SocketAddr = ring_bind
-        .parse()
-        .map_err(|e| Box::new(Status::invalid_argument(format!("bad RING_BIND '{ring_bind}': {e}"))))?;
+    let ring_addr: std::net::SocketAddr = ring_bind.parse().map_err(|e| {
+        Box::new(Status::invalid_argument(format!(
+            "bad RING_BIND '{ring_bind}': {e}"
+        )))
+    })?;
     info!("Ring gRPC server binding to {ring_addr}");
     tokio::spawn(async move {
         if let Err(e) = Server::builder()
@@ -129,7 +165,11 @@ pub async fn setup_evaluator(
     info!("Evaluator channel ready");
 
     let client = crate::proto::eval::evaluator_client::EvaluatorClient::new(channel);
-    Ok(GrpcEvaluator::new(client, transport_cfg.clone(), ga_cfg.batch_size))
+    Ok(GrpcEvaluator::new(
+        client,
+        transport_cfg.clone(),
+        ga_cfg.batch_size,
+    ))
 }
 
 /// Connects to the surrogate node microservice if configured.
@@ -153,7 +193,8 @@ pub async fn setup_surrogate_client(
                 Box::new(e)
             })?;
         info!("Surrogate node ready at {ep}");
-        let client = crate::proto::surrogate::surrogate_service_client::SurrogateServiceClient::new(channel);
+        let client =
+            crate::proto::surrogate::surrogate_service_client::SurrogateServiceClient::new(channel);
         let grpc_client = GrpcSurrogateClient::new(client, transport_cfg.clone());
         Ok(Some(Arc::new(grpc_client)))
     } else {
@@ -198,8 +239,16 @@ pub async fn setup_neighbor_store(
 pub async fn run() -> Result<(), Box<Status>> {
     init_logging();
 
-    let (ga_cfg, transport_cfg, store_cfg, lead_cfg, surrogate_cfg, tier_cfg, ring_cfg, migration_cfg) =
-        config_from_env();
+    let (
+        ga_cfg,
+        transport_cfg,
+        store_cfg,
+        lead_cfg,
+        surrogate_cfg,
+        tier_cfg,
+        ring_cfg,
+        migration_cfg,
+    ) = config_from_env();
 
     info!(
         "GA config: pop_size={}, genes_len={}, max_generations={}, min_generations={}, stagnation_patience={}, min_improvement={}, mut_sigma={}, elite_frac={}, batch_size={}, seed={}",
@@ -244,7 +293,9 @@ pub async fn run() -> Result<(), Box<Status>> {
     let multi_tier_evaluator = MultiTierEvaluator::new(
         raw_simulator.clone(),
         store.clone(),
-        neighbor_store.clone().map(|ns| ns as Arc<dyn NeighborStore>),
+        neighbor_store
+            .clone()
+            .map(|ns| ns as Arc<dyn NeighborStore>),
         surrogate_client,
         tier_cfg,
     );
@@ -262,16 +313,18 @@ pub async fn run() -> Result<(), Box<Status>> {
         cfg: &ga_cfg,
         evaluator: &multi_tier_evaluator,
         store: store.as_ref(),
-        neighbor_store: neighbor_store.as_ref().map(|s| s.as_ref() as &dyn NeighborStore),
+        neighbor_store: neighbor_store.as_deref().map(|s| s as &dyn NeighborStore),
         migration: Some(&migration),
     };
 
-    info!("Starting GA run with seed {}", ga_cfg.seed);
     match runner.run(&mut rng).await {
-        Ok(result) => {
+        Ok(res) => {
             info!(
+                best_fitness = res.best_fitness,
+                best_genome = ?res.best_genome,
                 "GA run completed. Best fitness: {:.4}; best genome: {:?}",
-                result.best_fitness, result.best_genome
+                res.best_fitness,
+                res.best_genome
             );
             Ok(())
         }

@@ -1,6 +1,8 @@
 use std::env;
+use std::fs::OpenOptions;
 use std::net::SocketAddr;
 use std::path::Path;
+use std::sync::Mutex;
 use std::time::Instant;
 use surrogate_node::proto::surrogate::surrogate_service_server::SurrogateServiceServer;
 use surrogate_node::{
@@ -9,15 +11,49 @@ use surrogate_node::{
 };
 use tonic::transport::Server;
 use tracing::{error, info};
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::EnvFilter;
 
 fn init_logging() {
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
-        )
-        .json()
-        .with_target(true)
+    let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
+
+    // 1. Stdout layer: human-readable, plain text for `docker logs`
+    let stdout_layer = tracing_subscriber::fmt::layer().with_target(true);
+
+    // 2. Optional JSON file layer: for Fluent-Bit
+    let log_file_path = std::env::var("LOG_FILE_PATH").ok().or_else(|| {
+        std::env::var("LOG_DIR").ok().map(|dir| {
+            let name = std::env::var("CONTAINER_NAME")
+                .or_else(|_| std::env::var("HOSTNAME"))
+                .unwrap_or_else(|_| "surrogate_node".into());
+            format!("{dir}/{name}.log")
+        })
+    });
+
+    if let Some(path_str) = log_file_path {
+        let path = Path::new(&path_str);
+        if let Some(parent) = path.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        if let Ok(file) = OpenOptions::new().create(true).append(true).open(path) {
+            let file_layer = tracing_subscriber::fmt::layer()
+                .json()
+                .with_target(true)
+                .with_writer(Mutex::new(file));
+
+            tracing_subscriber::registry()
+                .with(env_filter)
+                .with(stdout_layer)
+                .with(file_layer)
+                .init();
+            return;
+        }
+    }
+
+    tracing_subscriber::registry()
+        .with(env_filter)
+        .with(stdout_layer)
         .init();
 }
 

@@ -1,6 +1,6 @@
+pub use crate::migration::config::{MigrationConfig, RingConfig};
 use std::time::Duration;
 use tracing::{info, warn};
-pub use crate::migration::config::{MigrationConfig, RingConfig};
 
 #[derive(Debug, Clone, Default)]
 pub struct LeadConfig {
@@ -92,7 +92,7 @@ pub struct GeneStoreConfig {
 impl Default for GaConfig {
     fn default() -> Self {
         Self {
-            pop_size: 60,
+            pop_size: 60 * 2,
             genes_len: 10,
             max_generations: 100,
             min_generations: 10,

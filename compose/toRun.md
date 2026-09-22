@@ -1,8 +1,9 @@
 How to run
 
 ```bash
-# 1. Shared network (once)
+# 1. Shared network & log volume (once)
 docker network create simulated-lan
+docker volume create app-logs
 
 # 2. Infra first (until Kafka is healthy)
 docker compose -f compose/docker-compose.infra.yml up -d --build

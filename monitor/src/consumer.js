@@ -90,9 +90,12 @@ function normalizeLog(raw, meta = {}) {
   if (meta.partition !== undefined) log.partition = meta.partition;
   if (meta.offset !== undefined) log.offset = meta.offset;
 
-  // 1. Container identity (e.g. "/compose-orchestrator-1" -> "compose-orchestrator-1")
+  // 1. Container identity (e.g. "/compose-orchestrator-1" -> "compose-orchestrator-1", or from file_path)
   if (log.container_name && typeof log.container_name === 'string') {
     log.source_tag = log.container_name.replace(/^\//, '');
+  } else if (log.file_path && typeof log.file_path === 'string') {
+    const match = log.file_path.match(/([^/]+)\.log$/);
+    if (match) log.source_tag = match[1];
   }
 
   // 2. Unpack Docker "log" field if it contains a serialized JSON record

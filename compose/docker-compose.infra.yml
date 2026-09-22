@@ -1,4 +1,11 @@
 services:
+  init-logs:
+    image: busybox:latest
+    container_name: init-logs
+    command: ["chmod", "-R", "777", "/var/log/app"]
+    volumes:
+      - app-logs:/var/log/app
+
   kafka:
     image: apache/kafka:3.9.0
     container_name: kafka
@@ -43,6 +50,7 @@ services:
       - "2020:2020"
     volumes:
       - ../fluent-bit.conf:/fluent-bit/etc/fluent-bit.conf:ro
+      - app-logs:/var/log/app:ro
     healthcheck:
       test: ["CMD", "curl", "-f", "http://127.0.0.1:2020/api/v1/health"]
       interval: 3s
@@ -68,7 +76,7 @@ services:
     container_name: monitor
     environment:
       - KAFKA_BROKERS=kafka:9092
-      - KAFKA_TOPICS=logs.lead,logs.orchestrator,logs.worker
+      - KAFKA_TOPICS=logs.lead,logs.orchestrator,logs.worker,logs.surrogate
       - KAFKA_GROUP_ID=monitor-group
       - PORT=3000
       - BUFFER_CAP=10000
@@ -88,6 +96,11 @@ services:
     restart: unless-stopped
     networks:
       - default
+
+volumes:
+  app-logs:
+    external: true
+    name: app-logs
 
 networks:
   default:
