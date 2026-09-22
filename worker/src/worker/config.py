@@ -27,6 +27,19 @@ class WorkerConfig:
     areal_density_fuse: float = 1.20
     areal_density_wing: float = 1.00
     semaphore_size: int = 1
+    # Powertrain & dynamic mission configuration
+    enable_mission_sim: bool = True
+    battery_cells: int = 3
+    battery_capacity_ah: float = 2.2
+    motor_kv: float = 1000.0
+    motor_resistance_ohms: float = 0.06
+    motor_max_current_a: float = 40.0
+    prop_diameter_m: float = 0.254
+    prop_pitch_m: float = 0.1524
+    max_takeoff_distance_m: float = 30.0
+    target_flight_time_s: float = 30.0
+    w_takeoff_penalty: float = 5.0
+    w_energy_penalty: float = 0.5
 
 
 BASELINE: dict[str, float] = {
@@ -73,4 +86,7 @@ def load_config() -> WorkerConfig:
         worker_id=os.getenv("WORKER_ID") or os.getenv("HOSTNAME", "unknown"),
         v_min_fuse_mm3=float(os.getenv("V_MIN_FUSE_MM3", "20000.0")),
         semaphore_size=int(os.getenv("WORKER_CONCURRENCY", "1")),
+        enable_mission_sim=os.getenv("ENABLE_MISSION_SIM", "true").lower() in ("true", "1", "yes"),
+        max_takeoff_distance_m=float(os.getenv("MAX_TAKEOFF_DISTANCE_M", "30.0")),
+        target_flight_time_s=float(os.getenv("TARGET_FLIGHT_TIME_S", "30.0")),
     )

@@ -10,10 +10,12 @@ import numpy as np
 try:
     from .config import WorkerConfig
     from .geometry import calculate_total_mass_and_weight, calculate_center_of_gravity
+    from .mission.polar import AeroPolar
     from .slender_aerodynamics import get_fuselage_drag_coefficient
 except (ImportError, ValueError):
     from config import WorkerConfig
     from geometry import calculate_total_mass_and_weight, calculate_center_of_gravity
+    from mission.polar import AeroPolar
     from slender_aerodynamics import get_fuselage_drag_coefficient
 
 
@@ -23,6 +25,9 @@ class AeroResult:
     alpha_trim: float
     cm_alpha: float
     cm_trim: float = 0.0
+    polar: AeroPolar | None = None
+    mass_kg: float = 0.0
+    s_ref: float = 0.0
 
 
 class AeroEvaluator(Protocol):
@@ -36,6 +41,9 @@ def solve_trim(
     cl_list: list[float],
     cd_list: list[float],
     cm_list: list[float],
+    polar: AeroPolar | None = None,
+    mass_kg: float = 0.0,
+    s_ref: float = 0.0,
 ) -> AeroResult | None:
     """Interpolate trim condition from an alpha sweep; None when untrimmable."""
     if cl_req < min(cl_list) or cl_req > max(cl_list):
@@ -46,7 +54,15 @@ def solve_trim(
     mid_idx = len(alpha_sweep) // 2
     cm_alpha = float(np.gradient(cm_list, np.radians(alpha_sweep))[mid_idx])
     ld = cl_req / max(cd_trim, 1e-4)
-    return AeroResult(ld=ld, alpha_trim=alpha_trim, cm_alpha=cm_alpha, cm_trim=cm_trim)
+    return AeroResult(
+        ld=ld,
+        alpha_trim=alpha_trim,
+        cm_alpha=cm_alpha,
+        cm_trim=cm_trim,
+        polar=polar,
+        mass_kg=mass_kg,
+        s_ref=s_ref,
+    )
 
 
 class AerosandboxAeroEvaluator:
@@ -133,7 +149,23 @@ class AerosandboxAeroEvaluator:
             )
             return None
 
-        result = solve_trim(cl_req, alpha_sweep, cl_list, cd_list, cm_list)
+        polar = AeroPolar(
+            alpha_deg=alpha_sweep,
+            cl=np.array(cl_list),
+            cd=np.array(cd_list),
+            cm=np.array(cm_list),
+        )
+
+        result = solve_trim(
+            cl_req,
+            alpha_sweep,
+            cl_list,
+            cd_list,
+            cm_list,
+            polar=polar,
+            mass_kg=mass_kg,
+            s_ref=s_ref,
+        )
         if result is not None:
             log.debug(
                 "trim alpha=%.3f cd=%.4f ld=%.3f cm_alpha=%.4f cm_trim=%.4f",
