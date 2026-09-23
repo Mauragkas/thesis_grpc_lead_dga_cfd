@@ -3,6 +3,9 @@ services:
     build: ../worker
     environment:
       - WORKER_ID=${WORKER_ID:-worker2}
+      - ISLAND_ID=${ISLAND_ID:-island-2}
+      - ROLE=worker
+      - WORKER_POOL=pool-2
       - LOG_LEVEL=${LOG_LEVEL:-DEBUG}
       - LOG_DIR=/var/log/app
       - V_MIN_FUSE_MM3=20000.0
@@ -63,6 +66,8 @@ services:
       - RUST_LOG_STYLE=always
       - LOG_DIR=/var/log/app
       - CONTAINER_NAME=orchestrator2
+      - ISLAND_ID=${ISLAND_ID:-island-2}
+      - ROLE=orchestrator
       - EVAL_ENDPOINT=load-balancer2:50051   # local envoy (same project)
       - LEAD_ENDPOINT=http://lead-node1:50051   # same DHT bootstrap
       - N_WORKERS=${N_WORKERS:-1}

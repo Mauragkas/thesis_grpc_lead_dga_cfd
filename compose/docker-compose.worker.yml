@@ -3,6 +3,9 @@ services:
     build: ../worker
     environment:
       - WORKER_ID=${WORKER_ID:-worker}
+      - ISLAND_ID=${ISLAND_ID:-island-1}
+      - ROLE=worker
+      - WORKER_POOL=pool-1
       - LOG_LEVEL=${LOG_LEVEL:-DEBUG}
       - LOG_DIR=/var/log/app
       - V_MIN_FUSE_MM3=20000.0
@@ -57,6 +60,8 @@ services:
       - RUST_LOG=info
       - LOG_DIR=/var/log/app
       - CONTAINER_NAME=surrogate_node
+      - ISLAND_ID=${ISLAND_ID:-island-1}
+      - ROLE=surrogate
       - GRPC_BIND=0.0.0.0:50054
       - WINDOW_SIZE=1000
       - RETRAIN_INTERVAL=20
@@ -95,6 +100,8 @@ services:
       - RUST_LOG_STYLE=always
       - LOG_DIR=/var/log/app
       - CONTAINER_NAME=orchestrator
+      - ISLAND_ID=${ISLAND_ID:-island-1}
+      - ROLE=orchestrator
       - EVAL_ENDPOINT=load-balancer:50051
       - LEAD_ENDPOINT=http://lead-node1:50051
       - SURROGATE_ENDPOINT=http://surrogate-node:50054

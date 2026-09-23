@@ -42,6 +42,17 @@ class JsonFormatter(logging.Formatter):
             val = getattr(record, key, None)
             if val is not None:
                 payload[key] = val
+
+        island_id = getattr(record, "island_id", os.getenv("ISLAND_ID"))
+        if island_id:
+            payload["island_id"] = island_id
+        role = getattr(record, "role", os.getenv("ROLE", "worker"))
+        if role:
+            payload["role"] = role
+        worker_pool = getattr(record, "worker_pool", os.getenv("WORKER_POOL"))
+        if worker_pool:
+            payload["worker_pool"] = worker_pool
+
         return json.dumps(payload, default=str)
 
 

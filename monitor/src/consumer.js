@@ -74,6 +74,8 @@ async function startConsumer({ brokers, topics, groupId, onLog }) {
  * {
  *   source: string,
  *   source_tag?: string,
+ *   island: string,
+ *   role: string,
  *   level: 'INFO' | 'WARN' | 'ERROR' | 'DEBUG',
  *   message: string,
  *   target: string,
@@ -114,6 +116,11 @@ function normalizeLog(raw, meta = {}) {
           if (!log.timestamp && parsed.timestamp) log.timestamp = parsed.timestamp;
           if (!log.ts && parsed.ts) log.ts = parsed.ts;
           if (parsed.best_genome && !log.best_genome) log.best_genome = parsed.best_genome;
+          if (parsed.island_id && !log.island_id) log.island_id = parsed.island_id;
+          if (parsed.island && !log.island) log.island = parsed.island;
+          if (parsed.role && !log.role) log.role = parsed.role;
+          if (parsed.worker_pool && !log.worker_pool) log.worker_pool = parsed.worker_pool;
+          if (parsed.worker_id && !log.worker_id) log.worker_id = parsed.worker_id;
         }
       } catch {}
     }
@@ -200,6 +207,34 @@ function normalizeLog(raw, meta = {}) {
     }
   }
 
+  // 6.5 Resolve Island and Role
+  let island = log.island_id || log.island || (log.fields && (log.fields.island_id || log.fields.island));
+  if (!island) {
+    const ident = (log.source_tag || log.container_name || log.target || log.file_path || '').toLowerCase();
+    const m = ident.match(/(?:orchestrator|worker|surrogate|island|pool)[-_]?(\d+)/i);
+    if (m) {
+      island = `island-${m[1]}`;
+    } else if (log.source === 'logs.lead' || ident.includes('lead')) {
+      island = 'lead';
+    } else if (ident.includes('orchestrator') || ident.includes('worker') || ident.includes('surrogate') || log.source === 'logs.orchestrator' || log.source === 'logs.worker' || log.source === 'logs.surrogate') {
+      island = 'island-1';
+    } else {
+      island = 'default';
+    }
+  }
+  log.island = island;
+
+  let role = log.role || (log.fields && log.fields.role);
+  if (!role) {
+    const ident = (log.source_tag || log.target || log.source || '').toLowerCase();
+    if (ident.includes('orchestrator')) role = 'orchestrator';
+    else if (ident.includes('worker')) role = 'worker';
+    else if (ident.includes('surrogate')) role = 'surrogate';
+    else if (ident.includes('lead')) role = 'lead';
+    else role = 'unknown';
+  }
+  log.role = role;
+
   // 7. Extract candidate genome if present
   const candidate = extractCandidate(log);
   if (candidate) {
@@ -267,6 +302,8 @@ function extractCandidate(log) {
   }
 
   return {
+    island: log.island || 'island-1',
+    source_tag: log.source_tag || 'orchestrator',
     gen: gen || 0,
     fitness: fitness !== undefined ? Number(fitness) : null,
     genome,
