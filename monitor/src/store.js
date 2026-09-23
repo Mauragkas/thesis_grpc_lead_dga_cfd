@@ -3,11 +3,15 @@
  * Keeps the last `capPerSource` logs per source so the API can serve
  * recent history without hitting Kafka.
  *
- * Additions over v1:
+ * Features:
  *   - subscribe(fn) / unsubscribe(fn)  — called on every push; used by ws.js
  *                                        to throttle-push stats over WebSocket.
  *   - queryBefore(ts, filter)          — cursor-based history paging: returns
  *                                        up to `limit` logs whose ts < `before`.
+ *   - Island & Role isolation          — partition / filter by island and role;
+ *                                        per-island candidate tracking.
+ *   - Best Candidate Tracking          — tracks both latest candidate and the
+ *                                        best candidate overall (highest fitness).
  */
 function createStore({ capPerSource = 10000 } = {}) {
   const buckets = new Map(); // source -> array of logs (newest at end)
@@ -19,11 +23,15 @@ function createStore({ capPerSource = 10000 } = {}) {
   // Subscriber set for push notifications
   const subscribers = new Set();
 
-  // Track latest best candidate across generations
+  // Track latest and best candidates across generations and islands
   let latestCandidate = null;
+  let bestCandidate = null;
+  const candidatesByIsland = new Map();     // island -> latest candidate
+  const bestCandidatesByIsland = new Map(); // island -> best candidate
   const candidateSubscribers = new Set();
+  const discoveredIslands = new Set();
 
-  // ── Helpers ──────────────────────────────────────────────────────────────
+  // ── Helpers ───────────────────────────────────────────────────────────────
 
   function bucket(source) {
     if (!buckets.has(source)) buckets.set(source, []);
@@ -33,7 +41,6 @@ function createStore({ capPerSource = 10000 } = {}) {
   function parseLevel(s) {
     if (typeof s === 'string') return s.toUpperCase();
     if (typeof s === 'number') {
-      // syslog-style: 7=DEBUG … 0=EMERG; tracing uses numbers sometimes
       const names = ['EMERG','ALERT','CRIT','ERROR','WARN','NOTICE','INFO','DEBUG'];
       return names[s] || String(s);
     }
@@ -42,6 +49,9 @@ function createStore({ capPerSource = 10000 } = {}) {
 
   function matches(log, filter) {
     if (filter.source && log.source !== filter.source) return false;
+    if (filter.island && log.island !== filter.island) return false;
+    if (filter.role && log.role !== filter.role) return false;
+    if (filter.container && log.source_tag !== filter.container) return false;
     if (filter.level) {
       const want = filter.level.toUpperCase();
       const got = parseLevel(log.level);
@@ -69,10 +79,19 @@ function createStore({ capPerSource = 10000 } = {}) {
   function push(log) {
     const arr = bucket(log.source);
     arr.push(log);
+
+    if (log.island && log.island !== 'lead' && log.island !== 'default') {
+      discoveredIslands.add(log.island);
+    }
+
+    if (log.candidate) {
+      setLatestCandidate(log.candidate);
+    }
+
     // Bulk trim: only fire when significantly over capacity
     if (arr.length > TRIGGER) {
       const remove = arr.length - KEEP;
-      arr.splice(0, remove); // one O(n) sweep instead of per-push
+      arr.splice(0, remove);
     }
     // Notify subscribers (e.g. ws.js stats broadcaster)
     for (const fn of subscribers) {
@@ -99,7 +118,6 @@ function createStore({ capPerSource = 10000 } = {}) {
     const out = [];
     for (const s of sources) {
       const arr = bucket(s);
-      // iterate newest-first
       for (let i = arr.length - 1; i >= 0; i--) {
         if (matches(arr[i], filter)) out.push(arr[i]);
         if (filter.limit && out.length >= filter.limit) return out;
@@ -110,8 +128,6 @@ function createStore({ capPerSource = 10000 } = {}) {
 
   /**
    * Cursor-based history page: returns up to `limit` logs whose ts < `before`.
-   * Results are newest-first (relative to `before`).
-   * Used by the "load older" scroll trigger and the /logs/history endpoint.
    */
   function queryBefore(before, filter = {}) {
     const limit = filter.limit || 100;
@@ -119,7 +135,6 @@ function createStore({ capPerSource = 10000 } = {}) {
     const out = [];
     for (const s of sources) {
       const arr = bucket(s);
-      // Walk backwards from newest; skip until ts < before
       for (let i = arr.length - 1; i >= 0; i--) {
         const log = arr[i];
         if (before !== undefined && log.ts !== undefined && log.ts >= before) continue;
@@ -127,7 +142,6 @@ function createStore({ capPerSource = 10000 } = {}) {
         if (out.length >= limit) break;
       }
     }
-    // Sort descending by ts so multi-source results are coherent
     out.sort((a, b) => (b.ts || 0) - (a.ts || 0));
     return out.slice(0, limit);
   }
@@ -149,22 +163,75 @@ function createStore({ capPerSource = 10000 } = {}) {
         }
       }
     }
-    return { total, bySource, byLevel, newestTs: newest, capPerSource };
+    return {
+      total,
+      bySource,
+      byLevel,
+      newestTs: newest,
+      capPerSource,
+      islands: Array.from(discoveredIslands).sort(),
+      candidates: Object.fromEntries(candidatesByIsland),
+      bestCandidates: Object.fromEntries(bestCandidatesByIsland),
+      bestOverall: bestCandidate,
+    };
   }
 
   function sources() {
     return Array.from(buckets.keys());
   }
 
+  function parseFit(cand) {
+    if (!cand) return -Infinity;
+    if (cand.fitness !== null && cand.fitness !== undefined && !Number.isNaN(Number(cand.fitness))) {
+      return Number(cand.fitness);
+    }
+    return -Infinity;
+  }
+
   function setLatestCandidate(cand) {
+    if (!cand) return;
+    const island = cand.island || 'island-1';
+    candidatesByIsland.set(island, cand);
     latestCandidate = cand;
+
+    const candFit = parseFit(cand);
+
+    // Track best per island
+    const currentBestIsland = bestCandidatesByIsland.get(island);
+    if (!currentBestIsland || candFit >= parseFit(currentBestIsland)) {
+      bestCandidatesByIsland.set(island, cand);
+    }
+
+    // Track best overall across all islands
+    if (!bestCandidate || candFit >= parseFit(bestCandidate)) {
+      bestCandidate = cand;
+    }
+
+    if (island !== 'lead' && island !== 'default') {
+      discoveredIslands.add(island);
+    }
+
     for (const fn of candidateSubscribers) {
       try { fn(cand); } catch { /* ignore subscriber errors */ }
     }
   }
 
-  function getLatestCandidate() {
+  function getLatestCandidate(island) {
+    if (island) return candidatesByIsland.get(island) || null;
     return latestCandidate;
+  }
+
+  function getBestCandidate(island) {
+    if (island) return bestCandidatesByIsland.get(island) || null;
+    return bestCandidate || latestCandidate;
+  }
+
+  function getAllCandidates() {
+    return Object.fromEntries(candidatesByIsland);
+  }
+
+  function getAllBestCandidates() {
+    return Object.fromEntries(bestCandidatesByIsland);
   }
 
   function onCandidate(fn) {
@@ -182,6 +249,9 @@ function createStore({ capPerSource = 10000 } = {}) {
     sources,
     setLatestCandidate,
     getLatestCandidate,
+    getBestCandidate,
+    getAllCandidates,
+    getAllBestCandidates,
     onCandidate,
   };
 }

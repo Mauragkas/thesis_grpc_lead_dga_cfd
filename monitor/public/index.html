@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>loadbalanceGA Monitor</title>
   <style>
-    /* ── Design tokens ───────────────────────────────────────────── */
+    /* ── Design tokens ───────────────────────────────────────── */
     :root {
       --bg:         #0f172a;
       --panel:      #1e293b;
@@ -29,12 +29,17 @@
       --src-surrogate:    #fb923c;   /* amber     */
       --src-unknown:      #94a3b8;   /* slate     */
 
+      --island-1:         #38bdf8;
+      --island-2:         #fb923c;
+      --island-3:         #34d399;
+      --island-4:         #f472b6;
+
       --tab-h: 36px;
       --hdr-h: 52px;
       --ctrl-h: 46px;
     }
 
-    /* ── Reset ───────────────────────────────────────────────────── */
+    /* ── Reset ────────────────────────────────────────────────── */
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -47,7 +52,7 @@
       overflow: hidden;
     }
 
-    /* ── Header ──────────────────────────────────────────────────── */
+    /* ── Header ──────────────────────────────────────────────── */
     header {
       height: var(--hdr-h);
       min-height: var(--hdr-h);
@@ -85,7 +90,7 @@
       font-size: 11px; color: var(--muted2);
     }
 
-    /* ── Controls ────────────────────────────────────────────────── */
+    /* ── Controls ────────────────────────────────────────────── */
     .controls {
       height: var(--ctrl-h);
       min-height: var(--ctrl-h);
@@ -113,11 +118,11 @@
     button { cursor: pointer; white-space: nowrap; }
     button:hover { border-color: var(--accent); color: var(--accent); }
     button.active { border-color: var(--accent); color: var(--accent); background: rgba(56,189,248,0.08); }
-    #search { width: 180px; }
+    #search { width: 170px; }
     .ctrl-sep { width: 1px; height: 20px; background: var(--border); flex-shrink: 0; }
     #count { color: var(--muted2); font-size: 11px; white-space: nowrap; flex-shrink: 0; margin-left: auto; }
 
-    /* ── Source tabs ─────────────────────────────────────────────── */
+    /* ── Source tabs ─────────────────────────────────────────── */
     .tabs {
       height: var(--tab-h);
       min-height: var(--tab-h);
@@ -191,8 +196,8 @@
       min-width: 280px;
     }
     #plane-panel {
-      width: 480px;
-      min-width: 360px;
+      width: 500px;
+      min-width: 380px;
       max-width: 60vw;
       height: 100%;
       background: var(--panel2);
@@ -206,15 +211,16 @@
       display: none;
     }
     .plane-panel-hdr {
-      height: 36px;
+      height: 38px;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 0 12px;
+      padding: 0 10px;
       background: var(--panel);
       border-bottom: 1px solid var(--border);
       flex-shrink: 0;
       font-size: 11px;
+      gap: 6px;
     }
     .plane-hdr-left {
       display: flex;
@@ -227,12 +233,29 @@
       color: var(--text);
       white-space: nowrap;
     }
+    .plane-island-select {
+      background: #111c30;
+      color: #facc15;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 2px 6px;
+      font-size: 11px;
+      font-weight: 700;
+      font-family: inherit;
+      cursor: pointer;
+      max-width: 175px;
+      height: 24px;
+    }
+    .plane-island-select:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
     .plane-badge {
       background: #1e3a5f;
       color: var(--accent);
       border: 1px solid var(--border);
       border-radius: 4px;
-      padding: 1px 5px;
+      padding: 2px 6px;
       font-size: 10px;
       font-weight: 700;
       white-space: nowrap;
@@ -242,13 +265,13 @@
     }
     .plane-hdr-actions {
       display: flex;
-      gap: 5px;
+      gap: 4px;
       align-items: center;
     }
     .plane-hdr-actions button {
       padding: 2px 7px;
       font-size: 10.5px;
-      height: 22px;
+      height: 24px;
     }
     #plane-canvas-wrap {
       flex: 1;
@@ -258,9 +281,9 @@
       overflow: hidden;
     }
     #plane-canvas-wrap canvas {
+      display: block;
       width: 100% !important;
       height: 100% !important;
-      display: block;
     }
     #plane-loading-overlay {
       position: absolute;
@@ -269,33 +292,42 @@
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      gap: 8px;
+      background: rgba(9, 14, 26, 0.85);
       color: var(--muted2);
-      font-size: 12px;
-      background: rgba(9, 14, 26, 0.88);
-      z-index: 5;
+      font-size: 11px;
+      gap: 8px;
+      pointer-events: none;
+      transition: opacity 0.25s ease;
+    }
+    #plane-loading-overlay.hidden {
+      opacity: 0;
+      pointer-events: none;
     }
     #plane-params-hud {
-      max-height: 155px;
-      overflow-y: auto;
-      background: var(--panel);
-      border-top: 1px solid var(--border);
-      padding: 6px 12px;
+      position: absolute;
+      bottom: 8px;
+      left: 8px;
+      background: rgba(15, 23, 42, 0.82);
+      border: 1px solid rgba(30, 58, 95, 0.8);
+      border-radius: 6px;
+      padding: 6px 10px;
+      font-size: 9.5px;
+      color: var(--muted2);
+      pointer-events: none;
+      backdrop-filter: blur(4px);
       display: grid;
       grid-template-columns: repeat(2, 1fr);
       gap: 3px 12px;
-      font-size: 11px;
-      flex-shrink: 0;
+      line-height: 1.35;
+      max-width: 95%;
     }
     .hud-row {
       display: flex;
       justify-content: space-between;
-      align-items: baseline;
-      padding: 1px 0;
-      border-bottom: 1px dashed rgba(255,255,255,0.06);
+      gap: 8px;
     }
-    .hud-label { color: var(--muted2); font-size: 10.5px; }
-    .hud-val { color: var(--accent); font-weight: 600; font-size: 11px; }
+    .hud-label { color: var(--muted); }
+    .hud-val { color: var(--accent); font-weight: 700; text-align: right; }
 
     /* sentinel for IntersectionObserver */
     .sentinel { height: 1px; width: 100%; }
@@ -326,7 +358,7 @@
     #older-banner.loading .spinner { display: block; }
     @keyframes spin { to { transform: rotate(360deg); } }
 
-    /* ── Log rows ────────────────────────────────────────────────── */
+    /* ── Log rows ────────────────────────────────────────────── */
     .log-row {
       display: flex;
       align-items: baseline;
@@ -347,10 +379,11 @@
     .log-row[data-src="logs.worker"]       { border-left-color: var(--src-worker); }
     .log-row[data-src="logs.surrogate"]    { border-left-color: var(--src-surrogate); }
 
-    .col-ts     { width: 100px; flex-shrink: 0; color: var(--muted); font-size: 11px; padding-right: 8px; }
-    .col-level  { width: 56px;  flex-shrink: 0; text-align: center; padding-right: 8px; }
-    .col-src    { width: 108px; flex-shrink: 0; font-size: 10.5px; padding-right: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .col-target { width: 180px; flex-shrink: 0; color: var(--muted2); font-size: 10.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding-right: 8px; }
+    .col-ts     { width: 95px; flex-shrink: 0; color: var(--muted); font-size: 11px; padding-right: 6px; }
+    .col-level  { width: 52px;  flex-shrink: 0; text-align: center; padding-right: 6px; }
+    .col-island { width: 62px;  flex-shrink: 0; text-align: center; padding-right: 6px; }
+    .col-src    { width: 88px; flex-shrink: 0; font-size: 10.5px; padding-right: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .col-target { width: 160px; flex-shrink: 0; color: var(--muted2); font-size: 10.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding-right: 8px; }
     .col-msg    { flex: 1; white-space: pre-wrap; word-break: break-all; min-width: 0; }
 
     .lvl {
@@ -362,6 +395,34 @@
     .lvl-WARN, .lvl-WARNING { color: var(--warn); background: rgba(251,191,36,0.1); }
     .lvl-ERROR, .lvl-CRIT, .lvl-ALERT, .lvl-EMERG { color: var(--error); background: rgba(248,113,113,0.1); }
     .lvl-DEBUG  { color: var(--debug); }
+
+    .isl-badge {
+      display: inline-block;
+      padding: 1px 4px;
+      border-radius: 3px;
+      font-size: 9.5px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.2px;
+      background: rgba(56, 189, 248, 0.15);
+      color: #38bdf8;
+      border: 1px solid rgba(56, 189, 248, 0.3);
+    }
+    .isl-badge.isl-2 {
+      background: rgba(251, 146, 60, 0.15);
+      color: #fb923c;
+      border-color: rgba(251, 146, 60, 0.3);
+    }
+    .isl-badge.isl-3 {
+      background: rgba(52, 211, 153, 0.15);
+      color: #34d399;
+      border-color: rgba(52, 211, 153, 0.3);
+    }
+    .isl-badge.isl-lead {
+      background: rgba(148, 163, 184, 0.15);
+      color: #94a3b8;
+      border-color: rgba(148, 163, 184, 0.3);
+    }
 
     .col-src-lead         { color: var(--src-lead); }
     .col-src-orchestrator { color: var(--src-orchestrator); }
@@ -404,7 +465,7 @@
 </head>
 <body>
 
-<!-- ── Header ─────────────────────────────────────────────────────────── -->
+<!-- ── Header ──────────────────────────────────────────────── -->
 <header>
   <div class="status-dot" id="dot"></div>
   <h1>loadbalanceGA Monitor</h1>
@@ -414,7 +475,7 @@
   </div>
 </header>
 
-<!-- ── Controls ───────────────────────────────────────────────────────── -->
+<!-- ── Controls ────────────────────────────────────────────── -->
 <div class="controls">
   <select id="ctl-level" title="filter by level">
     <option value="">all levels</option>
@@ -422,6 +483,16 @@
     <option value="INFO">INFO</option>
     <option value="WARN">WARN</option>
     <option value="ERROR">ERROR</option>
+  </select>
+  <select id="ctl-island" title="filter by island">
+    <option value="">all islands</option>
+  </select>
+  <select id="ctl-role" title="filter by role">
+    <option value="">all roles</option>
+    <option value="orchestrator">orchestrators</option>
+    <option value="worker">workers</option>
+    <option value="surrogate">surrogates</option>
+    <option value="lead">lead cluster</option>
   </select>
   <select id="ctl-container" title="filter by container">
     <option value="">all containers</option>
@@ -436,36 +507,36 @@
   <span id="count">0 shown</span>
 </div>
 
-<!-- ── Source tabs ─────────────────────────────────────────────────────── -->
+<!-- ── Source & Island tabs ─────────────────────────────────── -->
 <div class="tabs" id="tabs">
-  <div class="tab active" data-src="" style="--tab-color: var(--accent)">
+  <div class="tab active" data-tab-type="all" data-src="" data-island="" style="--tab-color: var(--accent)">
     <div class="tab-dot"></div>
     All
     <span class="badge" id="badge-all">0</span>
   </div>
-  <div class="tab" data-src="logs.lead" style="--tab-color: var(--src-lead)">
+  <div class="tab" data-tab-type="src" data-src="logs.lead" data-island="" style="--tab-color: var(--src-lead)">
     <div class="tab-dot"></div>
     lead
     <span class="badge" id="badge-lead">0</span>
   </div>
-  <div class="tab" data-src="logs.orchestrator" style="--tab-color: var(--src-orchestrator)">
+  <div class="tab" data-tab-type="src" data-src="logs.orchestrator" data-island="" style="--tab-color: var(--src-orchestrator)">
     <div class="tab-dot"></div>
     orchestrator
     <span class="badge" id="badge-orchestrator">0</span>
   </div>
-  <div class="tab" data-src="logs.worker" style="--tab-color: var(--src-worker)">
+  <div class="tab" data-tab-type="src" data-src="logs.worker" data-island="" style="--tab-color: var(--src-worker)">
     <div class="tab-dot"></div>
     worker
     <span class="badge" id="badge-worker">0</span>
   </div>
-  <div class="tab" data-src="logs.surrogate" style="--tab-color: var(--src-surrogate)">
+  <div class="tab" data-tab-type="src" data-src="logs.surrogate" data-island="" style="--tab-color: var(--src-surrogate)">
     <div class="tab-dot"></div>
     surrogate
     <span class="badge" id="badge-surrogate">0</span>
   </div>
 </div>
 
-<!-- ── Workspace (Logs + 3D Plane Split) ───────────────────────────────── -->
+<!-- ── Workspace (Logs + 3D Plane Split) ───────────────────────── -->
 <div id="workspace">
   <!-- Log area -->
   <div id="log-area">
@@ -490,12 +561,16 @@
     <div class="plane-panel-hdr">
       <div class="plane-hdr-left">
         <span class="plane-title">✈️ 3D Model</span>
+        <select id="plane-island-select" class="plane-island-select" title="Select Candidate View">
+          <option value="best" selected>🏆 Best Overall</option>
+          <option value="latest">⏱ Latest Received</option>
+        </select>
         <span class="plane-badge" id="plane-gen-badge">Gen: —</span>
         <span class="plane-badge fit" id="plane-fit-badge">Best: —</span>
       </div>
       <div class="plane-hdr-actions">
         <button id="btn-wireframe" title="Toggle Wireframe">Wireframe</button>
-        <button id="btn-reset-cam" title="Reset Camera View">⟲ Reset</button>
+        <button id="btn-reset-cam" title="Reset Camera View">↺ Reset</button>
         <button id="btn-download-stl" title="Download STL File">⬇ STL</button>
         <button id="btn-close-3d" title="Close 3D View">✕</button>
       </div>
@@ -512,11 +587,11 @@
   </div>
 </div>
 
-<!-- ── Script ──────────────────────────────────────────────────────────── -->
+<!-- ── Script ──────────────────────────────────────────────── -->
 <script>
 'use strict';
 
-// ── Constants & state ──────────────────────────────────────────────────────
+// ── Constants & state ─────────────────────────────────────────
 const SOURCE_COLORS = {
   'logs.lead':         'col-src-lead',
   'logs.orchestrator': 'col-src-orchestrator',
@@ -531,15 +606,15 @@ const BADGE_IDS = {
   'logs.surrogate':    'badge-surrogate',
 };
 
-// All logs in arrival order (newest at end). No browser-side cap.
+// All logs in arrival order (newest at end).
 const allLogs  = [];
-// Filtered view (indices into allLogs... actually we store refs)
 let viewLogs   = [];
 
-let activeSource = '';        // tab filter
+let activeSource = '';        // tab filter source
+let activeIsland = '';        // tab filter island
 let paused       = false;
 let relTime      = false;     // relative vs absolute timestamp display
-let filter       = {};        // {level, container, search}
+let filter       = {};        // {level, island, role, container, search}
 
 // Auto-scroll: follow bottom unless user has scrolled up
 let followBottom = true;
@@ -553,13 +628,11 @@ let noMoreOlder  = false;
 let pendingLive  = [];
 let rafId        = null;
 
-// Per-source totals (from WS stats frames)
-const sourceTotals = {};
-
-// Seen containers
+// Sets for dynamic selectors
 const seenContainers = new Set();
+const seenIslands    = new Set();
 
-// ── DOM refs ───────────────────────────────────────────────────────────────
+// ── DOM refs ─────────────────────────────────────────────────
 const dot          = document.getElementById('dot');
 const hdrStats     = document.getElementById('hdr-stats');
 const lastEventEl  = document.getElementById('last-event');
@@ -569,10 +642,13 @@ const logArea      = document.getElementById('log-area');
 const olderBanner  = document.getElementById('older-banner');
 const olderText    = document.getElementById('older-text');
 const ctlLevel     = document.getElementById('ctl-level');
+const ctlIsland    = document.getElementById('ctl-island');
+const ctlRole      = document.getElementById('ctl-role');
 const ctlContainer = document.getElementById('ctl-container');
 const searchEl     = document.getElementById('search');
+const tabsBar      = document.getElementById('tabs');
 
-// ── Helpers ────────────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────
 function escHtml(s) {
   return String(s).replace(/[&<>"']/g, c => (
     {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]
@@ -603,7 +679,6 @@ function srcClass(src) {
 }
 
 function shortSrc(src) {
-  // "logs.orchestrator" → "orch."  for narrow col
   const m = { 'logs.lead':'lead', 'logs.orchestrator':'orch.', 'logs.worker':'worker', 'logs.surrogate':'surrogate' };
   return m[src] || src || '—';
 }
@@ -618,9 +693,12 @@ function extractMsg(log) {
   return JSON.stringify(log);
 }
 
-// ── Filter logic ───────────────────────────────────────────────────────────
+// ── Filter logic ─────────────────────────────────────────────
 function passesFilter(log) {
   if (activeSource && log.source !== activeSource) return false;
+  if (activeIsland && log.island !== activeIsland) return false;
+  if (filter.island && log.island !== filter.island) return false;
+  if (filter.role && log.role !== filter.role) return false;
   if (filter.level) {
     const want = filter.level.toUpperCase();
     const got  = String(log.level || 'INFO').toUpperCase();
@@ -637,22 +715,34 @@ function passesFilter(log) {
   return true;
 }
 
-// ── Row rendering ──────────────────────────────────────────────────────────
+// ── Row rendering ─────────────────────────────────────────────
 function makeRow(log) {
   const lvl  = String(log.level || 'INFO').toUpperCase();
   const msg  = extractMsg(log);
   const tgt  = log.target || log.name || log.source_tag || '';
   const src  = log.source || '';
+  const islTag = log.island || '—';
+
+  let islClass = 'isl-1';
+  if (islTag === 'island-2') islClass = 'isl-2';
+  else if (islTag === 'island-3') islClass = 'isl-3';
+  else if (islTag === 'lead') islClass = 'isl-lead';
+  else if (islTag.startsWith('island-')) islClass = 'isl-' + islTag.replace('island-', '');
+
+  const islText = islTag === 'lead' ? 'LEAD' : (islTag.replace('island-', 'ISL-') || '—');
 
   // Build meta pills for detail panel
   const pills = [];
+  if (log.island)                pills.push(['island', log.island]);
+  if (log.role)                  pills.push(['role', log.role]);
+  if (log.worker_pool)           pills.push(['pool', log.worker_pool]);
   if (log.source_tag)            pills.push(['container', log.source_tag]);
   if (log.worker_id !== undefined) pills.push(['worker', log.worker_id]);
   if (log.generation !== undefined) pills.push(['gen', log.generation]);
   if (log.offset !== undefined)  pills.push(['offset', log.offset]);
   if (log.partition !== undefined) pills.push(['part', log.partition]);
 
-  // Build a clean detail JSON (drop noisy internal fields)
+  // Clean detail JSON
   const detail = Object.fromEntries(
     Object.entries(log).filter(([k]) => !['source','partition','offset'].includes(k))
   );
@@ -663,6 +753,7 @@ function makeRow(log) {
   row.innerHTML = `
     <span class="col-ts">${escHtml(fmtTs(log.ts))}</span>
     <span class="col-level"><span class="lvl ${levelClass(lvl)}">${escHtml(lvl || '—')}</span></span>
+    <span class="col-island"><span class="isl-badge ${islClass}">${escHtml(islText)}</span></span>
     <span class="col-src ${srcClass(src)}">${escHtml(shortSrc(src))}</span>
     <span class="col-target" title="${escHtml(tgt)}">${escHtml(tgt)}</span>
     <span class="col-msg">${escHtml(msg)}</span>
@@ -686,14 +777,13 @@ function makeRow(log) {
     row.classList.toggle('expanded', open);
   });
 
-  // Wrap row + detail into a fragment wrapper
   const wrap = document.createElement('div');
   wrap.appendChild(row);
   wrap.appendChild(detail_el);
   return wrap;
 }
 
-// ── Render helpers ─────────────────────────────────────────────────────────
+// ── Render helpers ────────────────────────────────────────────
 function rebuildView() {
   viewLogs = allLogs.filter(passesFilter);
   const frag = document.createDocumentFragment();
@@ -705,7 +795,6 @@ function rebuildView() {
 
 function prependOlderRows(logs) {
   const frag = document.createDocumentFragment();
-  // logs come newest-first from queryBefore; we need to insert oldest-first
   const ordered = [...logs].reverse();
   for (const log of ordered) frag.appendChild(makeRow(log));
   logList.prepend(frag);
@@ -729,7 +818,57 @@ function scrollToBottom() {
   logArea.scrollTop = logArea.scrollHeight;
 }
 
-// ── Batched live render ────────────────────────────────────────────────────
+// ── Dynamic Selectors ─────────────────────────────────────────
+function refreshIslandDropdown() {
+  const current = ctlIsland.value;
+  ctlIsland.innerHTML = '<option value="">all islands</option>';
+  for (const isl of [...seenIslands].sort()) {
+    const opt = document.createElement('option');
+    opt.value = isl;
+    opt.textContent = isl.replace('-', ' ').replace(/\b\w/g, c => c.toUpperCase());
+    if (isl === current) opt.selected = true;
+    ctlIsland.appendChild(opt);
+  }
+  updateIslandTabs();
+}
+
+function refreshContainerDropdown() {
+  const current = ctlContainer.value;
+  ctlContainer.innerHTML = '<option value="">all containers</option>';
+  for (const c of [...seenContainers].sort()) {
+    const opt = document.createElement('option');
+    opt.value = c;
+    opt.textContent = c;
+    if (c === current) opt.selected = true;
+    ctlContainer.appendChild(opt);
+  }
+}
+
+function updateIslandTabs() {
+  for (const isl of [...seenIslands].sort()) {
+    const tabId = `tab-${isl}`;
+    let tab = document.getElementById(tabId);
+    if (!tab) {
+      tab = document.createElement('div');
+      tab.id = tabId;
+      tab.className = 'tab';
+      tab.dataset.tabType = 'island';
+      tab.dataset.island = isl;
+      tab.dataset.src = '';
+      const color = isl === 'island-2' ? 'var(--island-2)' : isl === 'island-3' ? 'var(--island-3)' : 'var(--island-1)';
+      tab.style.setProperty('--tab-color', color);
+      const label = isl.replace('-', ' ').replace(/\b\w/g, c => c.toUpperCase());
+      tab.innerHTML = `
+        <div class="tab-dot"></div>
+        ${escHtml(label)}
+        <span class="badge" id="badge-${isl}">0</span>
+      `;
+      tabsBar.appendChild(tab);
+    }
+  }
+}
+
+// ── Batched live render ───────────────────────────────────────
 function scheduleRender() {
   if (rafId !== null) return;
   rafId = requestAnimationFrame(() => {
@@ -746,23 +885,32 @@ function scheduleRender() {
 
 function addLiveLogs(logs) {
   allLogs.push(...logs);
-  // Update oldestTs tracker
+  let islandsChanged = false;
+  let containersChanged = false;
+
   for (const l of logs) {
     if (l.ts && (oldestTs === null || l.ts < oldestTs)) oldestTs = l.ts;
-  }
-  // Update container dropdown
-  for (const l of logs) {
+
+    if (l.island && l.island !== 'lead' && l.island !== 'default' && !seenIslands.has(l.island)) {
+      seenIslands.add(l.island);
+      islandsChanged = true;
+    }
+
     if (l.source_tag && !seenContainers.has(l.source_tag)) {
       seenContainers.add(l.source_tag);
-      refreshContainerDropdown();
+      containersChanged = true;
     }
   }
+
+  if (islandsChanged) refreshIslandDropdown();
+  if (containersChanged) refreshContainerDropdown();
+
   if (paused) return;
   pendingLive.push(...logs);
   scheduleRender();
 }
 
-// ── Stats rendering ────────────────────────────────────────────────────────
+// ── Stats rendering ───────────────────────────────────────────
 function renderStats(s) {
   const parts = [];
   parts.push(`<span class="stat">total <b>${s.total ?? '—'}</b></span>`);
@@ -773,102 +921,115 @@ function renderStats(s) {
   hdrStats.innerHTML = parts.join('');
 
   // Update badges
-  const totals = s.bySource || {};
   document.getElementById('badge-all').textContent = s.total ?? 0;
   for (const [src, id] of Object.entries(BADGE_IDS)) {
     if (src === '') continue;
     const el = document.getElementById(id);
-    if (el) el.textContent = totals[src] ?? 0;
+    if (el) el.textContent = s.bySource?.[src] ?? 0;
   }
 
-  lastEventEl.textContent = s.newestTs
-    ? new Date(s.newestTs).toLocaleTimeString()
-    : '—';
-}
-
-// ── Container dropdown ─────────────────────────────────────────────────────
-function refreshContainerDropdown() {
-  const current = ctlContainer.value;
-  ctlContainer.innerHTML = '<option value="">all containers</option>';
-  for (const c of [...seenContainers].sort()) {
-    const opt = document.createElement('option');
-    opt.value = c; opt.textContent = c;
-    if (c === current) opt.selected = true;
-    ctlContainer.appendChild(opt);
+  if (Array.isArray(s.islands)) {
+    let changed = false;
+    for (const isl of s.islands) {
+      if (!seenIslands.has(isl)) {
+        seenIslands.add(isl);
+        changed = true;
+      }
+    }
+    if (changed) refreshIslandDropdown();
   }
 }
 
-// ── History (load older) ───────────────────────────────────────────────────
-function showOlderBanner(show) {
-  olderBanner.style.display = show ? 'flex' : 'none';
-}
-
+// ── Cursor-based history fetching ─────────────────────────────
 async function loadOlder() {
-  if (loadingOlder || noMoreOlder) return;
+  if (loadingOlder || noMoreOlder || oldestTs === null) return;
   loadingOlder = true;
   olderBanner.classList.add('loading');
-  olderText.textContent = 'Loading older logs…';
+  olderText.textContent = 'Loading…';
 
-  // Request history via WS so we stay on a single connection
-  const before = oldestTs ?? undefined;
-  const req = {
-    type:   'history',
-    before,
-    source: activeSource || undefined,
-    level:  filter.level  || undefined,
-    search: filter.search || undefined,
-    limit:  100,
-  };
-  ws.send(JSON.stringify(req));
-  // Response handled in ws.onmessage
+  const before = oldestTs;
+  if (ws && ws.readyState === ws.OPEN) {
+    const req = {
+      type:      'history',
+      before,
+      source:    activeSource || undefined,
+      island:    (activeIsland || filter.island) || undefined,
+      role:      filter.role   || undefined,
+      container: filter.container || undefined,
+      level:     filter.level  || undefined,
+      search:    filter.search || undefined,
+      limit:     100,
+    };
+    ws.send(JSON.stringify(req));
+  } else {
+    try {
+      const params = new URLSearchParams({
+        before: String(before),
+        limit:  '100',
+      });
+      if (activeSource)     params.set('source', activeSource);
+      if (activeIsland || filter.island) params.set('island', activeIsland || filter.island);
+      if (filter.role)      params.set('role', filter.role);
+      if (filter.level)     params.set('level', filter.level);
+      if (filter.container) params.set('container', filter.container);
+      if (filter.search)    params.set('search', filter.search);
+
+      const res = await fetch(`/logs/history?${params}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      onHistoryChunk(data);
+    } catch (err) {
+      console.warn('history fetch failed:', err);
+      loadingOlder = false;
+      olderBanner.classList.remove('loading');
+      olderText.textContent = '↑ Load older logs (failed, click to retry)';
+    }
+  }
 }
 
-function onHistoryChunk(data) {
+function onHistoryChunk({ logs, hasMore }) {
   loadingOlder = false;
   olderBanner.classList.remove('loading');
 
-  if (!data.logs || data.logs.length === 0) {
+  if (!logs || logs.length === 0) {
     noMoreOlder = true;
     olderText.textContent = '— no older logs —';
     return;
   }
 
-  // Record the pre-insert scroll position so we can restore it
-  const prevHeight = logArea.scrollHeight;
-  const prevTop    = logArea.scrollTop;
+  const scrollHBefore = logArea.scrollHeight;
+  const scrollTBefore = logArea.scrollTop;
 
-  // Integrate into allLogs (oldest-first insertion at front of array)
-  const ordered = [...data.logs].sort((a,b) => (a.ts||0) - (b.ts||0));
-  allLogs.unshift(...ordered);
+  allLogs.unshift(...[...logs].reverse());
 
-  // Update oldest cursor
-  for (const l of ordered) {
+  for (const l of logs) {
     if (l.ts && (oldestTs === null || l.ts < oldestTs)) oldestTs = l.ts;
   }
 
-  // Only prepend rows that pass current filter
-  const passing = data.logs.filter(passesFilter); // already newest-first
+  const passing = logs.filter(passesFilter);
   if (passing.length > 0) {
+    viewLogs.unshift(...[...passing].reverse());
     prependOlderRows(passing);
-    // Restore scroll so viewport doesn't jump
-    requestAnimationFrame(() => {
-      logArea.scrollTop = prevTop + (logArea.scrollHeight - prevHeight);
-    });
+    logArea.scrollTop = scrollTBefore + (logArea.scrollHeight - scrollHBefore);
   }
 
-  noMoreOlder = !data.hasMore;
+  if (!hasMore) {
+    noMoreOlder = true;
+  }
   olderText.textContent = noMoreOlder ? '— no older logs —' : '↑ Load older logs';
 }
 
-// ── Filter change handling ─────────────────────────────────────────────────
+// ── Filter change handling ────────────────────────────────────
 function applyFilter() {
   filter = {
     level:     ctlLevel.value     || undefined,
+    island:    ctlIsland.value    || undefined,
+    role:      ctlRole.value      || undefined,
     container: ctlContainer.value || undefined,
     search:    searchEl.value     || undefined,
   };
   sendWsFilter();
-  noMoreOlder = false;  // filter changed, allow re-fetching history
+  noMoreOlder = false;
   rebuildView();
 }
 
@@ -878,29 +1039,55 @@ function debounce(fn, ms) {
 const applyFilterDebounced = debounce(applyFilter, 280);
 
 ctlLevel.addEventListener('change', applyFilter);
+ctlIsland.addEventListener('change', (e) => {
+  activeIsland = e.target.value || '';
+  document.querySelectorAll('.tab').forEach(t => {
+    if (t.dataset.tabType === 'island') {
+      t.classList.toggle('active', t.dataset.island === activeIsland);
+    } else if (t.dataset.tabType === 'all') {
+      t.classList.toggle('active', !activeIsland && !activeSource);
+    }
+  });
+  applyFilter();
+});
+ctlRole.addEventListener('change', applyFilter);
 ctlContainer.addEventListener('change', applyFilter);
 searchEl.addEventListener('input', applyFilterDebounced);
 
-// ── Tabs ───────────────────────────────────────────────────────────────────
-document.getElementById('tabs').addEventListener('click', (e) => {
+// ── Tabs ──────────────────────────────────────────────────────
+tabsBar.addEventListener('click', (e) => {
   const tab = e.target.closest('.tab');
   if (!tab) return;
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   tab.classList.add('active');
-  activeSource = tab.dataset.src;
-  noMoreOlder  = false;
+
+  const tabType = tab.dataset.tabType || 'src';
+  if (tabType === 'island') {
+    activeIsland = tab.dataset.island || '';
+    activeSource = '';
+    ctlIsland.value = activeIsland;
+  } else if (tabType === 'src') {
+    activeSource = tab.dataset.src || '';
+    activeIsland = '';
+    ctlIsland.value = '';
+  } else {
+    activeSource = '';
+    activeIsland = '';
+    ctlIsland.value = '';
+  }
+
+  noMoreOlder = false;
   rebuildView();
   sendWsFilter();
 });
 
-// ── Buttons ────────────────────────────────────────────────────────────────
+// ── Buttons ───────────────────────────────────────────────────
 document.getElementById('btn-pause').addEventListener('click', (e) => {
   paused = !paused;
   e.target.textContent = paused ? 'Resume' : 'Pause';
   e.target.classList.toggle('active', paused);
   logArea.classList.toggle('paused', paused);
   if (!paused) {
-    // flush pending
     const passing = pendingLive.filter(passesFilter);
     pendingLive = [];
     if (passing.length) {
@@ -923,10 +1110,7 @@ document.getElementById('btn-clear').addEventListener('click', () => {
 document.getElementById('btn-ts-toggle').addEventListener('click', (e) => {
   relTime = !relTime;
   e.target.classList.toggle('active', relTime);
-  // Refresh all visible ts spans
   const spans = logList.querySelectorAll('.col-ts');
-  // We need the corresponding log — pair by index in viewLogs
-  // (each child of logList is a wrapper div containing one row)
   const children = Array.from(logList.children);
   children.forEach((wrap, i) => {
     const log = viewLogs[i];
@@ -936,7 +1120,6 @@ document.getElementById('btn-ts-toggle').addEventListener('click', (e) => {
   });
 });
 
-// Refresh relative timestamps every 10 s when relTime is on
 setInterval(() => {
   if (!relTime) return;
   const children = Array.from(logList.children);
@@ -959,11 +1142,13 @@ document.getElementById('btn-export').addEventListener('click', () => {
   URL.revokeObjectURL(url);
 });
 
-// ── WS filter push ─────────────────────────────────────────────────────────
+// ── WS filter push ───────────────────────────────────────────
 function sendWsFilter() {
   if (!ws || ws.readyState !== ws.OPEN) return;
   const wsFilter = {
     source:    activeSource || undefined,
+    island:    (activeIsland || filter.island) || undefined,
+    role:      filter.role      || undefined,
     level:     filter.level     || undefined,
     container: filter.container || undefined,
     search:    filter.search    || undefined,
@@ -971,42 +1156,46 @@ function sendWsFilter() {
   ws.send(JSON.stringify({ type: 'filter', filter: wsFilter }));
 }
 
-// ── IntersectionObserver (auto-follow + load-older) ────────────────────────
+// ── IntersectionObserver (auto-follow + load-older) ───────────
 const bottomObs = new IntersectionObserver((entries) => {
   followBottom = entries[0].isIntersecting;
 }, { root: logArea, threshold: 0.1 });
 bottomObs.observe(document.getElementById('sentinel-bottom'));
 
-// Show the "load older" banner when user reaches the top
 const topObs = new IntersectionObserver((entries) => {
-  if (entries[0].isIntersecting && allLogs.length > 0) {
-    showOlderBanner(true);
-  } else {
-    // Only hide if not actively loading
-    if (!loadingOlder) showOlderBanner(false);
+  const visible = entries[0].isIntersecting;
+  olderBanner.style.display = visible ? 'flex' : 'none';
+  if (visible && !loadingOlder && !noMoreOlder && oldestTs !== null) {
+    loadOlder();
   }
-}, { root: logArea, threshold: 0 });
+}, { root: logArea, threshold: 0.5 });
 topObs.observe(document.getElementById('sentinel-top'));
 
-// Clicking the banner triggers fetch
 olderBanner.addEventListener('click', () => {
   if (!loadingOlder && !noMoreOlder) loadOlder();
 });
 
-// ── WebSocket ──────────────────────────────────────────────────────────────
-let ws;
+// ── WebSocket transport ───────────────────────────────────────
+let ws = null;
+
 function connect() {
-  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-  ws = new WebSocket(`${proto}://${location.host}/stream`);
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  ws = new WebSocket(`${proto}//${location.host}/stream`);
 
   ws.onopen = () => {
     dot.classList.add('live');
     sendWsFilter();
   };
 
-  ws.onmessage = (ev) => {
+  ws.onmessage = (event) => {
     let msg;
-    try { msg = JSON.parse(ev.data); } catch { return; }
+    try {
+      msg = JSON.parse(event.data);
+    } catch {
+      return;
+    }
+
+    lastEventEl.textContent = new Date().toLocaleTimeString();
 
     if (msg.type === 'hello' || msg.type === 'ack' || msg.type === 'pong') return;
 
@@ -1020,8 +1209,15 @@ function connect() {
       return;
     }
 
+    if (msg.type === 'candidates') {
+      if (typeof window.onCandidatesInitial === 'function') {
+        window.onCandidatesInitial(msg);
+      }
+      return;
+    }
+
     if (msg.type === 'candidate') {
-      window.onCandidateUpdate?.(msg.candidate);
+      window.onCandidateUpdate?.(msg.candidate, msg.isBest, msg.bestOverall);
       return;
     }
 
@@ -1039,11 +1235,11 @@ function connect() {
   ws.onerror = () => ws.close();
 }
 
-// ── Bootstrap ──────────────────────────────────────────────────────────────
+// ── Bootstrap ─────────────────────────────────────────────────
 connect();
 </script>
 
-<!-- ── Plane Geometry & Three.js 3D Visualization ────────────────────── -->
+<!-- ── Plane Geometry & Three.js 3D Visualization ──────────────── -->
 <script src="/planeGeometry.js"></script>
 <script type="importmap">
 {
@@ -1061,6 +1257,23 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 let scene, camera, renderer, controls, planeMeshGroup;
 let isWireframe = false;
 let currentCandidate = null;
+
+// Multi-island and Best Candidate state
+let selectedPlaneMode = 'best'; // 'best' (default) | 'latest' | island ID (e.g. 'island-1')
+let bestOverallCandidate = null;
+let latestCandidateOverall = null;
+const islandLatestCandidates = {}; // island -> candidate
+const islandBestCandidates = {};   // island -> candidate
+
+const planeIslandSelect = document.getElementById('plane-island-select');
+
+function parseCandidateFit(cand) {
+  if (!cand) return -Infinity;
+  if (cand.fitness !== null && cand.fitness !== undefined && !Number.isNaN(Number(cand.fitness))) {
+    return Number(cand.fitness);
+  }
+  return -Infinity;
+}
 
 function init3DViewer() {
   const container = document.getElementById('plane-canvas-wrap');
@@ -1125,18 +1338,35 @@ function init3DViewer() {
   }
   animate();
 
-  // If a candidate arrived before 3D was initialized, render it now
-  if (window._pendingCandidate) {
-    updatePlane3D(window._pendingCandidate);
-  } else {
-    // Check if backend already has a candidate stored
-    fetch('/api/candidate/latest')
-      .then((r) => (r.ok ? r.json() : null))
-      .then((cand) => {
-        if (cand) updatePlane3D(cand);
-      })
-      .catch(() => {});
-  }
+  // Initial candidate fetch: prioritize Best Overall candidate
+  fetch('/api/candidate/best')
+    .then((r) => (r.ok ? r.json() : null))
+    .then((best) => {
+      if (best) {
+        bestOverallCandidate = best;
+        handleNewCandidate(best, true);
+      }
+    })
+    .catch(() => {});
+
+  // Fetch all per-island best candidates
+  fetch('/api/candidates/best')
+    .then((r) => (r.ok ? r.json() : {}))
+    .then((map) => {
+      if (map) {
+        Object.assign(islandBestCandidates, map);
+        refreshPlaneIslandOptions();
+        if (selectedPlaneMode === 'best' && !bestOverallCandidate) {
+          for (const cand of Object.values(islandBestCandidates)) {
+            if (!bestOverallCandidate || parseCandidateFit(cand) >= parseCandidateFit(bestOverallCandidate)) {
+              bestOverallCandidate = cand;
+            }
+          }
+          if (bestOverallCandidate) updatePlane3D(bestOverallCandidate, '🏆 Best Overall');
+        }
+      }
+    })
+    .catch(() => {});
 }
 
 function onWindowResize() {
@@ -1150,56 +1380,138 @@ function onWindowResize() {
   renderer.setSize(width, height);
 }
 
-function updatePlane3D(candidate) {
-  if (!candidate || !candidate.genome) return;
+function refreshPlaneIslandOptions() {
+  if (!planeIslandSelect) return;
+  const current = selectedPlaneMode;
+
+  let bestFitText = '';
+  if (bestOverallCandidate && bestOverallCandidate.fitness !== null && bestOverallCandidate.fitness !== undefined) {
+    const fitVal = Number(bestOverallCandidate.fitness).toFixed(1);
+    const islName = bestOverallCandidate.island || 'isl-1';
+    bestFitText = ` (${fitVal} [${islName}])`;
+  }
+
+  let html = `<option value="best">🏆 Best Overall${bestFitText}</option>`;
+  html += `<option value="latest">⏱ Latest Received</option>`;
+
+  const islands = Array.from(new Set([
+    ...Object.keys(islandBestCandidates),
+    ...Object.keys(islandLatestCandidates)
+  ])).sort();
+
+  for (const isl of islands) {
+    const cand = islandBestCandidates[isl] || islandLatestCandidates[isl];
+    const name = isl.replace('-', ' ').replace(/\b\w/g, c => c.toUpperCase());
+    const fitStr = cand && cand.fitness !== null && cand.fitness !== undefined
+      ? ` (Best: ${Number(cand.fitness).toFixed(1)})`
+      : '';
+    html += `<option value="${isl}">${name}${fitStr}</option>`;
+  }
+
+  planeIslandSelect.innerHTML = html;
+  planeIslandSelect.value = current;
+}
+
+function handleNewCandidate(candidate, isBestExplicit, bestOverallExplicit) {
+  if (!candidate) return;
+  const isl = candidate.island || 'island-1';
+  islandLatestCandidates[isl] = candidate;
+  latestCandidateOverall = candidate;
+
+  const candFit = parseCandidateFit(candidate);
+  const prevBestIsland = islandBestCandidates[isl];
+  if (!prevBestIsland || candFit >= parseCandidateFit(prevBestIsland)) {
+    islandBestCandidates[isl] = candidate;
+  }
+
+  if (bestOverallExplicit) {
+    bestOverallCandidate = bestOverallExplicit;
+  } else if (isBestExplicit || !bestOverallCandidate || candFit >= parseCandidateFit(bestOverallCandidate)) {
+    bestOverallCandidate = candidate;
+  }
+
+  refreshPlaneIslandOptions();
+
+  // Render logic based on user selected mode:
+  if (selectedPlaneMode === 'best') {
+    if (bestOverallCandidate) {
+      updatePlane3D(bestOverallCandidate, '🏆 Best Overall');
+    }
+  } else if (selectedPlaneMode === 'latest') {
+    updatePlane3D(candidate, `⏱ Latest [${isl}]`);
+  } else if (selectedPlaneMode === isl) {
+    const islBest = islandBestCandidates[isl] || candidate;
+    updatePlane3D(islBest, `Best [${isl}]`);
+  }
+}
+
+planeIslandSelect?.addEventListener('change', (e) => {
+  selectedPlaneMode = e.target.value;
+  if (selectedPlaneMode === 'best') {
+    if (bestOverallCandidate) updatePlane3D(bestOverallCandidate, '🏆 Best Overall');
+  } else if (selectedPlaneMode === 'latest') {
+    if (latestCandidateOverall) updatePlane3D(latestCandidateOverall, '⏱ Latest Received');
+  } else if (islandBestCandidates[selectedPlaneMode]) {
+    updatePlane3D(islandBestCandidates[selectedPlaneMode], `Best [${selectedPlaneMode}]`);
+  } else if (islandLatestCandidates[selectedPlaneMode]) {
+    updatePlane3D(islandLatestCandidates[selectedPlaneMode], `[${selectedPlaneMode}]`);
+  }
+});
+
+function updatePlane3D(candidate, modeLabel = '') {
+  if (!candidate) return;
   currentCandidate = candidate;
-  window._currentCandidate = candidate;
 
+  // Hide loading overlay
   const overlay = document.getElementById('plane-loading-overlay');
-  if (overlay) overlay.style.display = 'none';
+  if (overlay) overlay.classList.add('hidden');
 
+  // Update header badges
   const genBadge = document.getElementById('plane-gen-badge');
-  if (genBadge) genBadge.textContent = `Gen: ${candidate.gen ?? '—'}`;
-
   const fitBadge = document.getElementById('plane-fit-badge');
+  const islPrefix = candidate.island ? `[${candidate.island}] ` : '';
+  const labelPrefix = modeLabel ? `${modeLabel} ` : '';
+
+  if (genBadge) genBadge.textContent = `${labelPrefix}${islPrefix}Gen: ${candidate.gen ?? '—'}`;
   if (fitBadge) {
-    const fitVal =
-      candidate.fitness !== null && candidate.fitness !== undefined
-        ? candidate.fitness.toFixed(2)
-        : '—';
-    fitBadge.textContent = `Best: ${fitVal}`;
-  }
-
-  // Update parameters HUD
-  const params = candidate.decoded || window.PlaneGeometry.decodeGenes(candidate.genome);
-  renderParamsHud(params);
-
-  // Wait if Three.js not yet ready
-  if (!planeMeshGroup) {
-    window._pendingCandidate = candidate;
-    return;
-  }
-
-  // Clear previous mesh
-  while (planeMeshGroup.children.length > 0) {
-    const child = planeMeshGroup.children.pop();
-    if (child.geometry) child.geometry.dispose();
-    if (child.material) {
-      if (Array.isArray(child.material)) child.material.forEach((m) => m.dispose());
-      else child.material.dispose();
+    if (candidate.fitness !== null && candidate.fitness !== undefined) {
+      fitBadge.textContent = `Fit: ${Number(candidate.fitness).toFixed(2)}`;
+    } else {
+      fitBadge.textContent = 'Fit: —';
     }
   }
 
-  // Build new plane mesh
-  const meshData = window.PlaneGeometry.buildPlaneMesh(params);
+  // Decode parameters
+  let params;
+  if (candidate.decoded) {
+    params = candidate.decoded;
+  } else if (Array.isArray(candidate.genome)) {
+    params = window.PlaneGeometry.decodeGenes(candidate.genome);
+  } else {
+    return;
+  }
 
+  // Update HUD
+  renderParamsHud(params);
+
+  // Build mesh
+  const rawMesh = window.PlaneGeometry.buildPlaneMesh(params);
+
+  // Clear previous meshes
+  while (planeMeshGroup.children.length > 0) {
+    const obj = planeMeshGroup.children.pop();
+    if (obj.geometry) obj.geometry.dispose();
+  }
+
+  // Construct Three.js BufferGeometry
   const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute('position', new THREE.BufferAttribute(meshData.positions, 3));
-  geometry.setIndex(new THREE.BufferAttribute(meshData.indices, 1));
+  geometry.setAttribute('position', new THREE.BufferAttribute(rawMesh.positions, 3));
+  geometry.setIndex(new THREE.BufferAttribute(rawMesh.indices, 1));
   geometry.computeVertexNormals();
 
+  const islColor = candidate.island === 'island-2' ? 0xfb923c : 0xfacc15;
   const material = new THREE.MeshStandardMaterial({
-    color: 0xfacc15, // Aeronautics yellow
+    color: islColor,
     roughness: 0.32,
     metalness: 0.2,
     wireframe: isWireframe,
@@ -1231,8 +1543,32 @@ function renderParamsHud(p) {
   `;
 }
 
-// Global hook for websocket handler
-window.onCandidateUpdate = updatePlane3D;
+// Global hooks for websocket handler
+window.onCandidateUpdate = (candidate, isBest, bestOverall) => {
+  handleNewCandidate(candidate, isBest, bestOverall);
+};
+
+window.onCandidatesInitial = ({ candidates, bestCandidates, bestOverall }) => {
+  if (candidates) {
+    Object.assign(islandLatestCandidates, candidates);
+  }
+  if (bestCandidates) {
+    Object.assign(islandBestCandidates, bestCandidates);
+  }
+  if (bestOverall) {
+    bestOverallCandidate = bestOverall;
+  } else {
+    for (const cand of Object.values(islandBestCandidates)) {
+      if (!bestOverallCandidate || parseCandidateFit(cand) >= parseCandidateFit(bestOverallCandidate)) {
+        bestOverallCandidate = cand;
+      }
+    }
+  }
+  refreshPlaneIslandOptions();
+  if (selectedPlaneMode === 'best' && bestOverallCandidate) {
+    updatePlane3D(bestOverallCandidate, '🏆 Best Overall');
+  }
+};
 
 // Button handlers
 document.getElementById('btn-wireframe')?.addEventListener('click', (e) => {
@@ -1248,13 +1584,12 @@ document.getElementById('btn-reset-cam')?.addEventListener('click', () => {
   const p = currentCandidate?.decoded || window.PlaneGeometry?.BASELINE;
   const midX = p ? p.fuse_length / 2 : 130;
   controls.target.set(midX, 0, 0);
-  camera.position.set(midX + 100, 180, 250);
+  camera.position.set(midX + 100, 180, 280);
   controls.update();
 });
 
 document.getElementById('btn-download-stl')?.addEventListener('click', () => {
   if (!currentCandidate) {
-    // If no candidate received yet, export baseline
     const baselineParams = window.PlaneGeometry.BASELINE;
     const mesh = window.PlaneGeometry.buildPlaneMesh(baselineParams);
     const stlStr = window.PlaneGeometry.meshToSTL(mesh, 'aircraft_baseline');
@@ -1264,8 +1599,11 @@ document.getElementById('btn-download-stl')?.addEventListener('click', () => {
   const params = currentCandidate.decoded || window.PlaneGeometry.decodeGenes(currentCandidate.genome);
   const mesh = window.PlaneGeometry.buildPlaneMesh(params);
   const genNum = currentCandidate.gen ?? 0;
-  const stlStr = window.PlaneGeometry.meshToSTL(mesh, `aircraft_gen_${genNum}`);
-  downloadStlFile(stlStr, `best_candidate_gen_${genNum}.stl`);
+  const isl = currentCandidate.island || 'overall';
+  const isBest = currentCandidate === bestOverallCandidate;
+  const prefix = isBest ? 'best_overall_' : '';
+  const stlStr = window.PlaneGeometry.meshToSTL(mesh, `${prefix}aircraft_${isl}_gen_${genNum}`);
+  downloadStlFile(stlStr, `${prefix}candidate_${isl}_gen_${genNum}.stl`);
 });
 
 function downloadStlFile(stlStr, filename) {
@@ -1304,4 +1642,3 @@ if (document.readyState === 'loading') {
 </script>
 </body>
 </html>
-

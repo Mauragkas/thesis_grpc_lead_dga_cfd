@@ -3,20 +3,19 @@ const { WebSocketServer } = require('ws');
 /**
  * Attaches WebSocket handling to the HTTP server.
  *
- * Improvements over v1:
+ * Features:
  *   - Pushes `{ type: 'stats', … }` to ALL clients whenever new logs land
- *     (throttled: at most once per second) so the browser doesn't need HTTP polling.
- *   - Handles `{ type: 'history', before, source, limit }` from the client and
+ *     (throttled: at most once per second).
+ *   - Handles `{ type: 'history', before, source, island, role, limit }` from client and
  *     replies with `{ type: 'history_chunk', logs: […], hasMore }`.
- *   - Per-client filter is unchanged from v1.
+ *   - Per-client filter supports source, island, role, container, level, search.
+ *   - Broadcasts candidate updates tagged with island, plus overall best.
  */
 function attachWebSocket(server, store) {
   const wss = new WebSocketServer({ server, path: '/stream' });
   const clients = new Set();
 
   // ── Throttled stats broadcast ─────────────────────────────────────────────
-  // Subscribe to every push so we know when to broadcast stats.
-  // We coalesce rapid bursts: stats are pushed at most once per second.
   let statsDirty = false;
   let statsTimer = null;
 
@@ -40,6 +39,8 @@ function attachWebSocket(server, store) {
   function passesFilter(log, filter) {
     if (!filter) return true;
     if (filter.source && log.source !== filter.source) return false;
+    if (filter.island && log.island !== filter.island) return false;
+    if (filter.role && log.role !== filter.role) return false;
     if (filter.container && log.source_tag !== filter.container) return false;
     if (filter.level) {
       const want = String(filter.level).toUpperCase();
@@ -62,7 +63,14 @@ function attachWebSocket(server, store) {
   // Candidate broadcast listener
   store.onCandidate((candidate) => {
     if (clients.size === 0) return;
-    const payload = JSON.stringify({ type: 'candidate', candidate });
+    const bestOverall = store.getBestCandidate();
+    const isBest = bestOverall && (bestOverall === candidate || (bestOverall.ts === candidate.ts && bestOverall.fitness === candidate.fitness));
+    const payload = JSON.stringify({
+      type: 'candidate',
+      candidate,
+      isBest: Boolean(isBest),
+      bestOverall,
+    });
     for (const ws of clients) {
       if (ws.readyState === ws.OPEN) ws.send(payload);
     }
@@ -74,12 +82,20 @@ function attachWebSocket(server, store) {
     ws.filter = null;
     clients.add(ws);
 
-    // Send initial hello + current stats + current candidate
+    // Send initial hello + current stats + candidate maps (latest & best)
     ws.send(JSON.stringify({ type: 'hello', ts: Date.now() }));
     ws.send(JSON.stringify({ type: 'stats', ...store.stats() }));
-    const initialCandidate = store.getLatestCandidate();
-    if (initialCandidate) {
-      ws.send(JSON.stringify({ type: 'candidate', candidate: initialCandidate }));
+    ws.send(JSON.stringify({
+      type: 'candidates',
+      candidates: store.getAllCandidates(),
+      bestCandidates: store.getAllBestCandidates(),
+      bestOverall: store.getBestCandidate(),
+    }));
+
+    // Send best overall candidate by default
+    const bestInitial = store.getBestCandidate();
+    if (bestInitial) {
+      ws.send(JSON.stringify({ type: 'candidate', candidate: bestInitial, isBest: true }));
     }
 
     ws.on('message', (data) => {
@@ -99,15 +115,14 @@ function attachWebSocket(server, store) {
         ws.send(JSON.stringify({ type: 'pong', ts: Date.now() }));
 
       } else if (msg.type === 'history') {
-        // Cursor-based history fetch from the client.
-        // msg.before  — ms timestamp (exclusive upper bound, i.e. "older than this")
-        // msg.source  — optional source filter
-        // msg.limit   — max rows to return (capped at 200)
         const limit = Math.min(parseInt(msg.limit || '100', 10) || 100, 200);
         const filter = {
-          source: msg.source || undefined,
-          level:  msg.level  || undefined,
-          search: msg.search || undefined,
+          source:    msg.source    || undefined,
+          island:    msg.island    || undefined,
+          role:      msg.role      || undefined,
+          container: msg.container || undefined,
+          level:     msg.level     || undefined,
+          search:    msg.search    || undefined,
           limit,
         };
         const logs = store.queryBefore(msg.before, filter);

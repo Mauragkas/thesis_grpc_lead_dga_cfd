@@ -92,14 +92,14 @@ pub struct GeneStoreConfig {
 impl Default for GaConfig {
     fn default() -> Self {
         Self {
-            pop_size: 60 * 2,
+            pop_size: 60 * 4,
             genes_len: 10,
             max_generations: 100,
             min_generations: 10,
             stagnation_patience: 10,
             min_improvement: 0.001,
             mut_sigma: 0.08,
-            elite_frac: 0.5,
+            elite_frac: 0.25,
             batch_size: 1,
             seed: 42,
             eval_endpoint: "load-balancer:50051".to_string(),
