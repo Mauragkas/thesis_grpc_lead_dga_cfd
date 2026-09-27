@@ -14,6 +14,9 @@ services:
       - MKL_NUM_THREADS=1
       - NUMEXPR_NUM_THREADS=1
       - VECLIB_MAXIMUM_THREADS=1
+      - ENABLE_TAIL_SIZING=true
+      - TARGET_VH=0.50
+      - TARGET_VV=0.04
     volumes:
       - app-logs:/var/log/app
     healthcheck:

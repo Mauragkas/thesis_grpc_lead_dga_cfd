@@ -41,7 +41,12 @@ const BASELINE = {
   h_stab_tip: 15.0,
 };
 
-function decodeGenes(genes) {
+const DEFAULT_TAIL_TARGETS = {
+  vh: 0.50,
+  vv: 0.04,
+};
+
+function decodeGenes(genes, tailTargets = DEFAULT_TAIL_TARGETS) {
   const params = { ...BASELINE };
   if (!Array.isArray(genes)) return params;
   for (let i = 0; i < GENE_BOUNDS.length && i < genes.length; i++) {
@@ -50,8 +55,38 @@ function decodeGenes(genes) {
     params[bound.name] = bound.low + (bound.high - bound.low) * u;
   }
   // Place tail root at the end of the fuselage (-10mm margin from the trailing tip)
-  const tailChord = Math.max(params.v_stab_root || 35.0, params.h_stab_root || 28.0);
+  const tailChord = Math.max(BASELINE.v_stab_root || 35.0, BASELINE.h_stab_root || 28.0);
   params.tail_x_pos = params.fuse_length - tailChord - 10.0;
+
+  if (tailTargets && tailTargets.vh > 0 && tailTargets.vv > 0) {
+    const cr = params.wing_root_chord;
+    const ct = params.wing_tip_chord;
+    const sWing = 2.0 * params.wing_span * (cr + ct) / 2.0;
+    const bSpan = 2.0 * params.wing_span;
+    const mac = (2.0 / 3.0) * (cr + ct - (cr * ct) / Math.max(cr + ct, 1e-6));
+
+    const xWingAc = params.wing_x_pos + 0.25 * cr;
+    const armH = Math.max((params.tail_x_pos + 0.25 * (BASELINE.h_stab_root || 28.0)) - xWingAc, 1e-4);
+    const armV = Math.max((params.tail_x_pos + 0.25 * (BASELINE.v_stab_root || 35.0)) - xWingAc, 1e-4);
+
+    const sHReq = (tailTargets.vh * sWing * mac) / armH;
+    const sVReq = (tailTargets.vv * sWing * bSpan) / armV;
+
+    const sHBase = 2.0 * BASELINE.h_stab_span * (BASELINE.h_stab_root + BASELINE.h_stab_tip) / 2.0;
+    const sVBase = BASELINE.v_stab_height * (BASELINE.v_stab_root + BASELINE.v_stab_tip) / 2.0;
+
+    const scaleH = Math.sqrt(Math.max(sHReq / Math.max(sHBase, 1e-4), 0.01));
+    const scaleV = Math.sqrt(Math.max(sVReq / Math.max(sVBase, 1e-4), 0.01));
+
+    params.h_stab_span = BASELINE.h_stab_span * scaleH;
+    params.h_stab_root = BASELINE.h_stab_root * scaleH;
+    params.h_stab_tip = BASELINE.h_stab_tip * scaleH;
+
+    params.v_stab_height = BASELINE.v_stab_height * scaleV;
+    params.v_stab_root = BASELINE.v_stab_root * scaleV;
+    params.v_stab_tip = BASELINE.v_stab_tip * scaleV;
+  }
+
   return params;
 }
 
@@ -407,6 +442,7 @@ if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     GENE_BOUNDS,
     BASELINE,
+    DEFAULT_TAIL_TARGETS,
     decodeGenes,
     buildPlaneMesh,
     meshToSTL,
@@ -416,6 +452,7 @@ if (typeof window !== 'undefined') {
   window.PlaneGeometry = {
     GENE_BOUNDS,
     BASELINE,
+    DEFAULT_TAIL_TARGETS,
     decodeGenes,
     buildPlaneMesh,
     meshToSTL,

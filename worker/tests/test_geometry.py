@@ -1,9 +1,13 @@
 import numpy as np
+import pytest
 
 from config import BASELINE, GENE_BOUNDS
 from geometry import (
     Fuselage,
+    TailVolumeTargets,
+    calculate_tail_planform_areas,
     calculate_total_mass_and_weight,
+    calculate_wing_geometry,
     decode_genes,
     fuselage_volume_mm3,
     fuselage_from_params,
@@ -68,10 +72,51 @@ def test_decode_genes_clamps_out_of_range():
         assert under_params[b.name] == b.low
 
 
-def test_decode_genes_keeps_baseline_for_unlisted_genes():
+def test_tail_volume_targets_validates_positive():
+    with pytest.raises(ValueError, match="vh must be positive"):
+        TailVolumeTargets(vh=0.0, vv=0.04)
+    with pytest.raises(ValueError, match="vv must be positive"):
+        TailVolumeTargets(vh=0.5, vv=-0.01)
+
+
+def test_calculate_wing_geometry():
+    wing = calculate_wing_geometry(span=140.0, root_chord=55.0, tip_chord=25.0)
+    assert wing.planform_area == 11200.0
+    assert wing.wingspan == 280.0
+    assert round(wing.mac, 2) == 41.88
+
+
+def test_calculate_tail_planform_areas():
+    wing = calculate_wing_geometry(span=140.0, root_chord=55.0, tip_chord=25.0)
+    targets = TailVolumeTargets(vh=0.5, vv=0.04)
+    sh, sv = calculate_tail_planform_areas(wing, arm_h=120.0, arm_v=120.0, targets=targets)
+    # Sh = Vh * Sw * mac / Lh = 0.5 * 11200 * 41.88 / 120
+    assert round(sh, 1) == round(0.5 * 11200.0 * wing.mac / 120.0, 1)
+    # Sv = Vv * Sw * b / Lv = 0.04 * 11200 * 280 / 120
+    assert round(sv, 1) == round(0.04 * 11200.0 * 280.0 / 120.0, 1)
+
+
+def test_decode_genes_with_tail_volume_scaling_adjusts_tail_with_larger_wing():
+    # Baseline wing
+    small_wing_genes = [0.0] * len(GENE_BOUNDS)
+    large_wing_genes = [0.0] * len(GENE_BOUNDS)
+    # index 0 is wing_span (80 to 220)
+    large_wing_genes[0] = 1.0
+
+    targets = TailVolumeTargets(vh=0.5, vv=0.04)
+    small_params = decode_genes(small_wing_genes, BASELINE, GENE_BOUNDS, tail_targets=targets)
+    large_params = decode_genes(large_wing_genes, BASELINE, GENE_BOUNDS, tail_targets=targets)
+
+    # Tail on larger wing plane should be significantly larger to maintain tail volume
+    assert large_params["h_stab_span"] > small_params["h_stab_span"]
+    assert large_params["v_stab_height"] > small_params["v_stab_height"]
+
+
+def test_decode_genes_default_keeps_baseline_when_no_targets():
     genes = [0.5] * len(GENE_BOUNDS)
     params = decode_genes(genes, BASELINE, GENE_BOUNDS)
     assert params["h_stab_span"] == BASELINE["h_stab_span"]
+    assert params["v_stab_height"] == BASELINE["v_stab_height"]
 
 
 def test_tail_x_pos_placed_at_end_of_fuselage():

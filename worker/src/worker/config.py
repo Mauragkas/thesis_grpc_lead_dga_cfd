@@ -40,6 +40,10 @@ class WorkerConfig:
     target_flight_time_s: float = 30.0
     w_takeoff_penalty: float = 5.0
     w_energy_penalty: float = 0.5
+    # Tail sizing volume coefficient targets (Stan Hall method)
+    enable_tail_sizing: bool = False
+    target_vh: float = 0.50
+    target_vv: float = 0.04
 
 
 BASELINE: dict[str, float] = {
@@ -89,4 +93,7 @@ def load_config() -> WorkerConfig:
         enable_mission_sim=os.getenv("ENABLE_MISSION_SIM", "true").lower() in ("true", "1", "yes"),
         max_takeoff_distance_m=float(os.getenv("MAX_TAKEOFF_DISTANCE_M", "30.0")),
         target_flight_time_s=float(os.getenv("TARGET_FLIGHT_TIME_S", "30.0")),
+        enable_tail_sizing=os.getenv("ENABLE_TAIL_SIZING", "false").lower() in ("true", "1", "yes"),
+        target_vh=float(os.getenv("TARGET_VH", "0.50")),
+        target_vv=float(os.getenv("TARGET_VV", "0.04")),
     )
