@@ -22,6 +22,11 @@ where
         let mut models = vec![self.learning.current_model().await];
         self.collect_neighbor_models(&mut models).await;
 
+        info!(
+            "FRM: coordinator collected {} models (including own) for global round",
+            models.len()
+        );
+
         if models.is_empty() {
             warn!("FRM: global round aborted — no models");
             return;
@@ -50,13 +55,15 @@ where
                 Some((version, data)) if version >= active_ver => {
                     match serde_json::from_slice::<RmiModel>(&data) {
                         Ok(m) => {
-                            tracing::debug!(peer=%addr, version, n=m.n, "FRM: collected");
+                            info!(peer=%addr, version, n=m.n, "FRM: collected model from neighbor");
                             models.push(m);
                         }
                         Err(e) => warn!("FRM: bad model from {addr}: {e}"),
                     }
                 }
-                Some(_) => {} // stale version, skip
+                Some((version, _)) => {
+                    warn!("FRM: neighbor {addr} returned stale model version {version} < active {active_ver}, skipping");
+                }
                 None => warn!("FRM: request_model from {addr} failed"),
             }
         }
@@ -64,8 +71,9 @@ where
 
     /// Federate collected models into a single next-version global model.
     async fn build_global_model(&self, models: Vec<RmiModel>) -> RmiModel {
-        let max_version = models.iter().map(|m| m.version).max().unwrap_or(1);
-        let new_version = max_version + 1;
+        let active_ver = self.learning.version().await;
+        let max_version = models.iter().map(|m| m.version).max().unwrap_or(active_ver);
+        let new_version = max_version.max(active_ver) + 1;
         fed_avg(models, new_version)
     }
 

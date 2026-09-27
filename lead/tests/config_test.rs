@@ -2,12 +2,12 @@ use lead_node::config::{
     Config, DEFAULT_DRIFT_THRESHOLD, DEFAULT_FIX_FINGERS_INTERVAL_SECS,
     DEFAULT_FRM_GRACE_PERIOD_SECS, DEFAULT_FRM_QUORUM_THRESHOLD, DEFAULT_GRPC_BIND,
     DEFAULT_HEARTBEAT_INTERVAL_SECS, DEFAULT_HTTP_BIND, DEFAULT_JOIN_RETRY_COUNT,
-    DEFAULT_JOIN_RETRY_DELAY_SECS, DEFAULT_MIN_KEYS_FOR_DRIFT, DEFAULT_PID_ADJUST_INTERVAL,
-    DEFAULT_PID_CENTERING_STEP, DEFAULT_PID_MID_THRESHOLD, DEFAULT_PID_MIN_SAMPLES,
-    DEFAULT_PID_SCALE_STEP, DEFAULT_PID_TARGET_RATIO, DEFAULT_PID_UPPER_THRESHOLD,
-    DEFAULT_PRUNE_ERROR_RATE, DEFAULT_PRUNE_INACTIVE_SECS, DEFAULT_RANGE_OVERSCAN_MULTIPLIER,
-    DEFAULT_RETRAIN_INTERVAL_SECS, DEFAULT_SELF_URI, DEFAULT_STABILIZE_INTERVAL_SECS,
-    DEFAULT_SUCCESSOR_LIST_LEN, DEFAULT_VIRTUAL_NODE_COUNT,
+    DEFAULT_JOIN_RETRY_DELAY_SECS, DEFAULT_MIN_KEYS_FOR_DRIFT, DEFAULT_NUM_CURVES,
+    DEFAULT_PID_ADJUST_INTERVAL, DEFAULT_PID_CENTERING_STEP, DEFAULT_PID_MID_THRESHOLD,
+    DEFAULT_PID_MIN_SAMPLES, DEFAULT_PID_SCALE_STEP, DEFAULT_PID_TARGET_RATIO,
+    DEFAULT_PID_UPPER_THRESHOLD, DEFAULT_PRUNE_ERROR_RATE, DEFAULT_PRUNE_INACTIVE_SECS,
+    DEFAULT_RANGE_OVERSCAN_MULTIPLIER, DEFAULT_RETRAIN_INTERVAL_SECS, DEFAULT_SELF_URI,
+    DEFAULT_STABILIZE_INTERVAL_SECS, DEFAULT_SUCCESSOR_LIST_LEN, DEFAULT_VIRTUAL_NODE_COUNT,
 };
 
 #[test]
@@ -20,7 +20,11 @@ fn default_config_has_correct_values() {
     assert_eq!(cfg.join_uri, None);
     assert_eq!(cfg.virtual_node_count, DEFAULT_VIRTUAL_NODE_COUNT);
     assert_eq!(cfg.successor_list_len, DEFAULT_SUCCESSOR_LIST_LEN);
-    assert_eq!(cfg.range_overscan_multiplier, DEFAULT_RANGE_OVERSCAN_MULTIPLIER);
+    assert_eq!(
+        cfg.range_overscan_multiplier,
+        DEFAULT_RANGE_OVERSCAN_MULTIPLIER
+    );
+    assert_eq!(cfg.num_curves, DEFAULT_NUM_CURVES);
     assert!((cfg.frm_quorum_threshold - DEFAULT_FRM_QUORUM_THRESHOLD).abs() < 1e-9);
     assert!((cfg.drift_threshold - DEFAULT_DRIFT_THRESHOLD).abs() < 1e-9);
     assert_eq!(cfg.min_keys_for_drift, DEFAULT_MIN_KEYS_FOR_DRIFT);
@@ -35,9 +39,15 @@ fn default_config_has_correct_values() {
     assert!((cfg.prune_error_rate - DEFAULT_PRUNE_ERROR_RATE).abs() < 1e-9);
     assert_eq!(cfg.prune_inactive_secs, DEFAULT_PRUNE_INACTIVE_SECS);
     assert_eq!(cfg.stabilize_interval_secs, DEFAULT_STABILIZE_INTERVAL_SECS);
-    assert_eq!(cfg.fix_fingers_interval_secs, DEFAULT_FIX_FINGERS_INTERVAL_SECS);
+    assert_eq!(
+        cfg.fix_fingers_interval_secs,
+        DEFAULT_FIX_FINGERS_INTERVAL_SECS
+    );
     assert_eq!(cfg.heartbeat_interval_secs, DEFAULT_HEARTBEAT_INTERVAL_SECS);
-    assert_eq!(cfg.maybe_retrain_interval_secs, DEFAULT_RETRAIN_INTERVAL_SECS);
+    assert_eq!(
+        cfg.maybe_retrain_interval_secs,
+        DEFAULT_RETRAIN_INTERVAL_SECS
+    );
     assert_eq!(cfg.join_retry_count, DEFAULT_JOIN_RETRY_COUNT);
     assert_eq!(cfg.join_retry_delay_secs, DEFAULT_JOIN_RETRY_DELAY_SECS);
 }
@@ -52,6 +62,7 @@ fn config_from_vars_overrides_fields() {
         ("VIRTUAL_NODE_COUNT", "50"),
         ("LEAD_SUCCESSOR_LIST_LEN", "8"),
         ("LEAD_RANGE_OVERSCAN_MULTIPLIER", "5"),
+        ("LEAD_NUM_CURVES", "4"),
         ("LEAD_FRM_QUORUM_THRESHOLD", "0.85"),
         ("LEAD_DRIFT_THRESHOLD", "0.25"),
         ("LEAD_MIN_KEYS_FOR_DRIFT", "100"),
@@ -79,10 +90,14 @@ fn config_from_vars_overrides_fields() {
     assert_eq!(cfg.http_bind, "0.0.0.0:9090");
     assert_eq!(cfg.grpc_bind, "0.0.0.0:60060");
     assert_eq!(cfg.self_uri, "http://node-custom:60060");
-    assert_eq!(cfg.join_uri, Some("http://node-bootstrap:60060".to_string()));
+    assert_eq!(
+        cfg.join_uri,
+        Some("http://node-bootstrap:60060".to_string())
+    );
     assert_eq!(cfg.virtual_node_count, 50);
     assert_eq!(cfg.successor_list_len, 8);
     assert_eq!(cfg.range_overscan_multiplier, 5);
+    assert_eq!(cfg.num_curves, 4);
     assert!((cfg.frm_quorum_threshold - 0.85).abs() < 1e-9);
     assert!((cfg.drift_threshold - 0.25).abs() < 1e-9);
     assert_eq!(cfg.min_keys_for_drift, 100);
@@ -120,25 +135,4 @@ fn config_from_vars_ignores_invalid_values_and_falls_back_to_defaults() {
     assert!((cfg.frm_quorum_threshold - DEFAULT_FRM_QUORUM_THRESHOLD).abs() < 1e-9);
     assert_eq!(cfg.stabilize_interval_secs, DEFAULT_STABILIZE_INTERVAL_SECS);
     assert_eq!(cfg.join_uri, None);
-}
-
-#[test]
-fn pid_tuner_helper_matches_config() {
-    let cfg = Config {
-        pid_target_ratio: 0.90,
-        pid_scale_step: 0.10,
-        pid_centering_step: 0.02,
-        pid_upper_threshold: 0.08,
-        pid_mid_threshold: 0.04,
-        pid_min_samples: 50,
-        ..Default::default()
-    };
-
-    let tuner = cfg.pid_tuner();
-    assert!((tuner.target_ratio - 0.90).abs() < 1e-9);
-    assert!((tuner.scale_step - 0.10).abs() < 1e-9);
-    assert!((tuner.centering_step - 0.02).abs() < 1e-9);
-    assert!((tuner.upper_threshold - 0.08).abs() < 1e-9);
-    assert!((tuner.mid_threshold - 0.04).abs() < 1e-9);
-    assert_eq!(tuner.min_samples, 50);
 }

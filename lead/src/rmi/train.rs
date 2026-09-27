@@ -57,7 +57,7 @@ impl RmiModel {
         // Mountain climbing: evaluate each bin count with linear,
         // then try radix on the best bin count.
         for &bins in &bin_counts {
-            let linear = build_model_with_config(&sorted, bins, "linear");
+            let linear = build_model_with_config(&sorted, bins, "linear", version);
             let err = eval_model_error(&linear, &sketch);
             if err < best_error {
                 best_error = err;
@@ -68,7 +68,7 @@ impl RmiModel {
 
         // Try RadixSpline on the best bin count
         if best_bins >= 16 {
-            let radix = build_model_with_config(&sorted, best_bins, "radix");
+            let radix = build_model_with_config(&sorted, best_bins, "radix", version);
             let err = eval_model_error(&radix, &sketch);
             if err < best_error {
                 _ = err;
@@ -76,14 +76,14 @@ impl RmiModel {
             }
         }
 
-        build_model_with_config(&sorted, best_bins, &best_kind)
+        build_model_with_config(&sorted, best_bins, &best_kind, version)
     }
 }
 
 // ---------------------------------------------------------------------------
 // Helper: build model with given config
 // ---------------------------------------------------------------------------
-fn build_model_with_config(keys: &[String], bins: usize, kind: &str) -> RmiModel {
+fn build_model_with_config(keys: &[String], bins: usize, kind: &str, version: u64) -> RmiModel {
     let n = keys.len();
     let leaves: Vec<LeafKind> = match kind {
         "radix" => train_radix_leaves(keys, bins, n),
@@ -93,7 +93,7 @@ fn build_model_with_config(keys: &[String], bins: usize, kind: &str) -> RmiModel
         stage0_bins: bins,
         leaves,
         n,
-        version: 1,
+        version,
         pid_state: vec![PidState::default(); bins],
     }
 }
@@ -133,33 +133,33 @@ fn train_linear_leaves(keys: &[String], bins: usize, n: usize) -> Vec<LeafKind> 
 // RadixSpline leaf training
 // ---------------------------------------------------------------------------
 fn train_radix_leaves(keys: &[String], bins: usize, n: usize) -> Vec<LeafKind> {
-    let mut buckets: Vec<Vec<(f64, f64)>> = vec![Vec::new(); bins];
+    let mut buckets: Vec<Vec<(f64, usize)>> = vec![Vec::new(); bins];
     for (i, k) in keys.iter().enumerate() {
         let f = feature(k);
-        let p = i as f64 / n.max(1) as f64;
         let b = ((f * bins as f64) as usize).min(bins - 1);
-        buckets[b].push((f, p));
+        buckets[b].push((f, i));
     }
     let mut leaves = Vec::with_capacity(bins);
     for bucket in buckets.iter().take(bins) {
-        let mut table = vec![0u32; RADIX_ENTRIES];
+        let mut radix_table = vec![0u32; RADIX_ENTRIES];
         if !bucket.is_empty() {
-            // Build CDF: for each radix prefix, store the maximum rank
-            let mut prefix_max: Vec<usize> = vec![0; RADIX_ENTRIES];
-            for (f, _p) in bucket {
-                let idx = ((*f * RADIX_ENTRIES as f64) as usize).min(RADIX_ENTRIES - 1);
-                prefix_max[idx] = prefix_max[idx].max(bucket.len());
+            for (f, rank) in bucket {
+                let prefix = ((*f * (RADIX_ENTRIES as f64)) as usize).min(RADIX_ENTRIES - 1);
+                let normalized = ((*rank as f64 / n.max(1) as f64) * (u32::MAX as f64)) as u32;
+                radix_table[prefix] = normalized;
             }
-            // Fill: propagate max forward so table is monotonic
-            let mut running = 0usize;
-            for i in 0..RADIX_ENTRIES {
-                running = running.max(prefix_max[i]);
-                let cdf = running as f64 / bucket.len().max(1) as f64;
-                table[i] = (cdf * u32::MAX as f64) as u32;
+            // Fill gaps in radix table
+            let mut last = 0u32;
+            for val in &mut radix_table {
+                if *val == 0 {
+                    *val = last;
+                } else {
+                    last = *val;
+                }
             }
         }
         leaves.push(LeafKind::RadixSpline(RadixSplineLeaf {
-            radix_table: table,
+            radix_table,
             rp: RP,
             anchor: Anchor::default(),
         }));
@@ -168,38 +168,35 @@ fn train_radix_leaves(keys: &[String], bins: usize, n: usize) -> Vec<LeafKind> {
 }
 
 // ---------------------------------------------------------------------------
-// Model error evaluation (mean absolute error in rank prediction)
+// Math helpers
 // ---------------------------------------------------------------------------
-fn eval_model_error(model: &RmiModel, sketch: &[&String]) -> f64 {
-    let n = sketch.len().max(1) as f64;
-    let mut total_err = 0.0;
-    for (i, k) in sketch.iter().enumerate() {
-        let predicted_hash = model.predict(k) as f64;
-        let predicted_rank = predicted_hash / HASH_SPACE * n;
-        let actual_rank = i as f64;
-        total_err += (predicted_rank - actual_rank).abs();
+fn linreg(points: &[(f64, f64)]) -> (f64, f64) {
+    let m = points.len() as f64;
+    let sum_x: f64 = points.iter().map(|(x, _)| x).sum();
+    let sum_y: f64 = points.iter().map(|(_, y)| y).sum();
+    let sum_xy: f64 = points.iter().map(|(x, y)| x * y).sum();
+    let sum_xx: f64 = points.iter().map(|(x, _)| x * x).sum();
+
+    let denom = m * sum_xx - sum_x * sum_x;
+    if denom.abs() < 1e-12 {
+        return (1.0, 0.0);
     }
-    total_err / n
+    let slope = (m * sum_xy - sum_x * sum_y) / denom;
+    let intercept = (sum_y - slope * sum_x) / m;
+    (slope, intercept)
 }
 
-// ---------------------------------------------------------------------------
-// Linear regression
-// ---------------------------------------------------------------------------
-fn linreg(samples: &[(f64, f64)]) -> (f64, f64) {
-    let n = samples.len() as f64;
-    let mx: f64 = samples.iter().map(|(x, _)| *x).sum::<f64>() / n;
-    let my: f64 = samples.iter().map(|(_, y)| *y).sum::<f64>() / n;
-    let mut num = 0.0;
-    let mut den = 0.0;
-    for (x, y) in samples {
-        let dx = x - mx;
-        let dy = y - my;
-        num += dx * dy;
-        den += dx * dx;
+fn eval_model_error(model: &RmiModel, sketch: &[&String]) -> f64 {
+    if sketch.is_empty() {
+        return 0.0;
     }
-    if den.abs() < 1e-30 {
-        return (0.0, my);
-    }
-    let w = num / den;
-    (w, my - w * mx)
+    let total_err: f64 = sketch
+        .iter()
+        .map(|k| {
+            let pred = model.predict(k);
+            let actual = (feature(k) * HASH_SPACE) as u64;
+            (pred as f64 - actual as f64).abs()
+        })
+        .sum();
+    total_err / sketch.len() as f64
 }

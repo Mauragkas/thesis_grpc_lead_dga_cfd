@@ -1,12 +1,9 @@
-use axum::{
-    extract::{Path, State},
-    http::StatusCode,
-};
+use axum::extract::{Path, State};
+use axum::http::StatusCode;
 
+use crate::api::AppState;
 use crate::storage::KeyStore;
 use crate::transport::RemoteNode;
-
-use super::AppState;
 
 pub async fn get_local_kv<S, R>(
     State(node): State<AppState<S, R>>,
@@ -45,6 +42,7 @@ where
     R: RemoteNode,
 {
     if node.storage().remove(&key).await.is_some() {
+        node.learning.set_keys_total(node.storage().len().await);
         StatusCode::OK
     } else {
         StatusCode::NOT_FOUND
@@ -102,6 +100,7 @@ where
     let target = node.lookup_target(&key).await;
     if target.address == node.self_uri {
         if node.storage().remove(&key).await.is_some() {
+            node.learning.set_keys_total(node.storage().len().await);
             StatusCode::OK
         } else {
             StatusCode::NOT_FOUND
@@ -109,6 +108,6 @@ where
     } else if node.remote().delete_local(&target.address, &key).await {
         StatusCode::OK
     } else {
-        StatusCode::INTERNAL_SERVER_ERROR
+        StatusCode::NOT_FOUND
     }
 }

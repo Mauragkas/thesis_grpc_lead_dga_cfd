@@ -12,3 +12,4 @@ AGENTS.md
 *eval_pb2*.py
 node_modules/
 *.zip
+.agent
