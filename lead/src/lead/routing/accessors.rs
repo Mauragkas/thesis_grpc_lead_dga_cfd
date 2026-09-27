@@ -68,11 +68,22 @@ where
         *pred = Some(other.clone());
         drop(pred);
 
-        let old_id = old.as_ref().map(|o| o.id).unwrap_or(vnode.vid);
+        // If old was None, we didn't split an existing interval we were previously holding.
+        let old = match old {
+            Some(o) => o,
+            None => return,
+        };
+
+        // Don't migrate keys to ourselves
+        if other.address == self.self_uri {
+            return;
+        }
+
         let snap = self.storage.snapshot().await;
         let mut to_move: Vec<(String, String)> = Vec::new();
         for (k, v) in snap {
-            if in_range(self.learning.predict(&k).await, old_id, other.id, true) {
+            let h = self.learning.predict(&k).await;
+            if in_range(h, old.id, other.id, true) && !self.owns_key(&k).await {
                 to_move.push((k, v));
             }
         }

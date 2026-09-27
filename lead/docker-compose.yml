@@ -7,7 +7,7 @@ services:
       - HTTP_BIND=0.0.0.0:2001
       - GRPC_BIND=0.0.0.0:50051
       - SELF_URI=http://node1:50051
-      - VIRTUAL_NODE_COUNT=20
+      - VIRTUAL_NODE_COUNT=100
       - LEAD_STORAGE_PATH=/data/lead
     volumes:
       - lead_node1_data:/data/lead
@@ -40,7 +40,7 @@ services:
       - GRPC_BIND=0.0.0.0:50052
       - SELF_URI=http://node2:50052
       - JOIN_URI=http://node1:50051
-      - VIRTUAL_NODE_COUNT=20
+      - VIRTUAL_NODE_COUNT=100
       - LEAD_STORAGE_PATH=/data/lead
     volumes:
       - lead_node2_data:/data/lead
@@ -75,7 +75,7 @@ services:
       - GRPC_BIND=0.0.0.0:50053
       - SELF_URI=http://node3:50053
       - JOIN_URI=http://node1:50051
-      - VIRTUAL_NODE_COUNT=20
+      - VIRTUAL_NODE_COUNT=100
       - LEAD_STORAGE_PATH=/data/lead
     volumes:
       - lead_node3_data:/data/lead

@@ -10,6 +10,7 @@ pub const DEFAULT_SELF_URI: &str = "http://127.0.0.1:50051";
 pub const DEFAULT_VIRTUAL_NODE_COUNT: usize = 10;
 pub const DEFAULT_SUCCESSOR_LIST_LEN: usize = 4; // R
 pub const DEFAULT_RANGE_OVERSCAN_MULTIPLIER: usize = 3;
+pub const DEFAULT_NUM_CURVES: usize = crate::rmi::DEFAULT_NUM_CURVES;
 pub const DEFAULT_FRM_QUORUM_THRESHOLD: f64 = 0.90;
 pub const DEFAULT_DRIFT_THRESHOLD: f64 = 0.40;
 pub const DEFAULT_MIN_KEYS_FOR_DRIFT: usize = 50;
@@ -57,8 +58,9 @@ pub struct Config {
     pub virtual_node_count: usize,
     pub successor_list_len: usize,
 
-    // Range queries
+    // Range queries & Multi-Probe
     pub range_overscan_multiplier: usize,
+    pub num_curves: usize,
 
     // Federated Learning (FRM)
     pub frm_quorum_threshold: f64,
@@ -101,6 +103,7 @@ impl Default for Config {
             virtual_node_count: DEFAULT_VIRTUAL_NODE_COUNT,
             successor_list_len: DEFAULT_SUCCESSOR_LIST_LEN,
             range_overscan_multiplier: DEFAULT_RANGE_OVERSCAN_MULTIPLIER,
+            num_curves: DEFAULT_NUM_CURVES,
             frm_quorum_threshold: DEFAULT_FRM_QUORUM_THRESHOLD,
             drift_threshold: DEFAULT_DRIFT_THRESHOLD,
             min_keys_for_drift: DEFAULT_MIN_KEYS_FOR_DRIFT,
@@ -184,7 +187,10 @@ impl Config {
             }
         }
 
-        if let Some(v) = map.get("LEAD_STORAGE_BACKEND").or_else(|| map.get("STORAGE_BACKEND")) {
+        if let Some(v) = map
+            .get("LEAD_STORAGE_BACKEND")
+            .or_else(|| map.get("STORAGE_BACKEND"))
+        {
             match v.trim().to_lowercase().as_str() {
                 "sled" => {
                     cfg.storage_backend = StorageBackend::Sled;
@@ -192,36 +198,154 @@ impl Config {
                         cfg.storage_path = Some("./data/lead".to_string());
                     }
                 }
-                "memory" | "inmemory" | "in-memory" => {
+                "memory" | "inmemory" | "in-memory" | "mem" => {
                     cfg.storage_backend = StorageBackend::Memory;
                 }
-                other => warn!("Unknown STORAGE_BACKEND={other:?}; keeping {:?}", cfg.storage_backend),
+                other => {
+                    warn!(
+                        "Unknown STORAGE_BACKEND={other:?}; keeping {:?}",
+                        cfg.storage_backend
+                    );
+                }
             }
         }
 
-        parse_usize(&map, &["VIRTUAL_NODE_COUNT", "LEAD_VIRTUAL_NODE_COUNT"], &mut cfg.virtual_node_count);
-        parse_usize(&map, &["LEAD_SUCCESSOR_LIST_LEN", "SUCCESSOR_LIST_LEN"], &mut cfg.successor_list_len);
-        parse_usize(&map, &["LEAD_RANGE_OVERSCAN_MULTIPLIER", "RANGE_OVERSCAN_MULTIPLIER"], &mut cfg.range_overscan_multiplier);
-        parse_f64(&map, &["LEAD_FRM_QUORUM_THRESHOLD", "FRM_QUORUM_THRESHOLD"], &mut cfg.frm_quorum_threshold);
-        parse_f64(&map, &["LEAD_DRIFT_THRESHOLD", "DRIFT_THRESHOLD"], &mut cfg.drift_threshold);
-        parse_usize(&map, &["LEAD_MIN_KEYS_FOR_DRIFT", "MIN_KEYS_FOR_DRIFT"], &mut cfg.min_keys_for_drift);
-        parse_u64(&map, &["LEAD_FRM_GRACE_PERIOD_SECS", "FRM_GRACE_PERIOD_SECS"], &mut cfg.frm_grace_period_secs);
-        parse_usize(&map, &["LEAD_PID_ADJUST_INTERVAL", "PID_ADJUST_INTERVAL"], &mut cfg.pid_adjust_interval);
-        parse_f64(&map, &["LEAD_PID_TARGET_RATIO", "PID_TARGET_RATIO"], &mut cfg.pid_target_ratio);
-        parse_f64(&map, &["LEAD_PID_SCALE_STEP", "PID_SCALE_STEP"], &mut cfg.pid_scale_step);
-        parse_f64(&map, &["LEAD_PID_CENTERING_STEP", "PID_CENTERING_STEP"], &mut cfg.pid_centering_step);
-        parse_f64(&map, &["LEAD_PID_UPPER_THRESHOLD", "PID_UPPER_THRESHOLD"], &mut cfg.pid_upper_threshold);
-        parse_f64(&map, &["LEAD_PID_MID_THRESHOLD", "PID_MID_THRESHOLD"], &mut cfg.pid_mid_threshold);
-        parse_usize(&map, &["LEAD_PID_MIN_SAMPLES", "PID_MIN_SAMPLES"], &mut cfg.pid_min_samples);
-        parse_f64(&map, &["LEAD_PRUNE_ERROR_RATE", "PRUNE_ERROR_RATE"], &mut cfg.prune_error_rate);
-        parse_u64(&map, &["LEAD_PRUNE_INACTIVE_SECS", "PRUNE_INACTIVE_SECS"], &mut cfg.prune_inactive_secs);
-        parse_u64(&map, &["LEAD_STABILIZE_INTERVAL_SECS", "STABILIZE_INTERVAL_SECS"], &mut cfg.stabilize_interval_secs);
-        parse_u64(&map, &["LEAD_FIX_FINGERS_INTERVAL_SECS", "FIX_FINGERS_INTERVAL_SECS"], &mut cfg.fix_fingers_interval_secs);
-        parse_u64(&map, &["LEAD_CHECK_PREDECESSOR_INTERVAL_SECS", "CHECK_PREDECESSOR_INTERVAL_SECS"], &mut cfg.check_predecessor_interval_secs);
-        parse_u64(&map, &["LEAD_HEARTBEAT_INTERVAL_SECS", "HEARTBEAT_INTERVAL_SECS"], &mut cfg.heartbeat_interval_secs);
-        parse_u64(&map, &["LEAD_RETRAIN_INTERVAL_SECS", "RETRAIN_INTERVAL_SECS"], &mut cfg.maybe_retrain_interval_secs);
-        parse_usize(&map, &["LEAD_JOIN_RETRY_COUNT", "JOIN_RETRY_COUNT"], &mut cfg.join_retry_count);
-        parse_u64(&map, &["LEAD_JOIN_RETRY_DELAY_SECS", "JOIN_RETRY_DELAY_SECS"], &mut cfg.join_retry_delay_secs);
+        parse_usize(
+            &map,
+            &["VIRTUAL_NODE_COUNT", "LEAD_VIRTUAL_NODE_COUNT"],
+            &mut cfg.virtual_node_count,
+        );
+        parse_usize(
+            &map,
+            &["LEAD_SUCCESSOR_LIST_LEN", "SUCCESSOR_LIST_LEN"],
+            &mut cfg.successor_list_len,
+        );
+        parse_usize(
+            &map,
+            &[
+                "LEAD_RANGE_OVERSCAN_MULTIPLIER",
+                "RANGE_OVERSCAN_MULTIPLIER",
+            ],
+            &mut cfg.range_overscan_multiplier,
+        );
+        parse_usize(
+            &map,
+            &["LEAD_NUM_CURVES", "NUM_CURVES"],
+            &mut cfg.num_curves,
+        );
+        if cfg.num_curves > 0 {
+            crate::rmi::set_num_curves(cfg.num_curves);
+        }
+
+        parse_f64(
+            &map,
+            &["LEAD_FRM_QUORUM_THRESHOLD", "FRM_QUORUM_THRESHOLD"],
+            &mut cfg.frm_quorum_threshold,
+        );
+        parse_f64(
+            &map,
+            &["LEAD_DRIFT_THRESHOLD", "DRIFT_THRESHOLD"],
+            &mut cfg.drift_threshold,
+        );
+        parse_usize(
+            &map,
+            &["LEAD_MIN_KEYS_FOR_DRIFT", "MIN_KEYS_FOR_DRIFT"],
+            &mut cfg.min_keys_for_drift,
+        );
+        parse_u64(
+            &map,
+            &["LEAD_FRM_GRACE_PERIOD_SECS", "FRM_GRACE_PERIOD_SECS"],
+            &mut cfg.frm_grace_period_secs,
+        );
+
+        parse_usize(
+            &map,
+            &["LEAD_PID_ADJUST_INTERVAL", "PID_ADJUST_INTERVAL"],
+            &mut cfg.pid_adjust_interval,
+        );
+        parse_f64(
+            &map,
+            &["LEAD_PID_TARGET_RATIO", "PID_TARGET_RATIO"],
+            &mut cfg.pid_target_ratio,
+        );
+        parse_f64(
+            &map,
+            &["LEAD_PID_SCALE_STEP", "PID_SCALE_STEP"],
+            &mut cfg.pid_scale_step,
+        );
+        parse_f64(
+            &map,
+            &["LEAD_PID_CENTERING_STEP", "PID_CENTERING_STEP"],
+            &mut cfg.pid_centering_step,
+        );
+        parse_f64(
+            &map,
+            &["LEAD_PID_UPPER_THRESHOLD", "PID_UPPER_THRESHOLD"],
+            &mut cfg.pid_upper_threshold,
+        );
+        parse_f64(
+            &map,
+            &["LEAD_PID_MID_THRESHOLD", "PID_MID_THRESHOLD"],
+            &mut cfg.pid_mid_threshold,
+        );
+        parse_usize(
+            &map,
+            &["LEAD_PID_MIN_SAMPLES", "PID_MIN_SAMPLES"],
+            &mut cfg.pid_min_samples,
+        );
+
+        parse_f64(
+            &map,
+            &["LEAD_PRUNE_ERROR_RATE", "PRUNE_ERROR_RATE"],
+            &mut cfg.prune_error_rate,
+        );
+        parse_u64(
+            &map,
+            &["LEAD_PRUNE_INACTIVE_SECS", "PRUNE_INACTIVE_SECS"],
+            &mut cfg.prune_inactive_secs,
+        );
+
+        parse_u64(
+            &map,
+            &["LEAD_STABILIZE_INTERVAL_SECS", "STABILIZE_INTERVAL_SECS"],
+            &mut cfg.stabilize_interval_secs,
+        );
+        parse_u64(
+            &map,
+            &[
+                "LEAD_FIX_FINGERS_INTERVAL_SECS",
+                "FIX_FINGERS_INTERVAL_SECS",
+            ],
+            &mut cfg.fix_fingers_interval_secs,
+        );
+        parse_u64(
+            &map,
+            &[
+                "LEAD_CHECK_PREDECESSOR_INTERVAL_SECS",
+                "CHECK_PREDECESSOR_INTERVAL_SECS",
+            ],
+            &mut cfg.check_predecessor_interval_secs,
+        );
+        parse_u64(
+            &map,
+            &["LEAD_HEARTBEAT_INTERVAL_SECS", "HEARTBEAT_INTERVAL_SECS"],
+            &mut cfg.heartbeat_interval_secs,
+        );
+        parse_u64(
+            &map,
+            &["LEAD_RETRAIN_INTERVAL_SECS", "RETRAIN_INTERVAL_SECS"],
+            &mut cfg.maybe_retrain_interval_secs,
+        );
+        parse_usize(
+            &map,
+            &["LEAD_JOIN_RETRY_COUNT", "JOIN_RETRY_COUNT"],
+            &mut cfg.join_retry_count,
+        );
+        parse_u64(
+            &map,
+            &["LEAD_JOIN_RETRY_DELAY_SECS", "JOIN_RETRY_DELAY_SECS"],
+            &mut cfg.join_retry_delay_secs,
+        );
 
         cfg
     }

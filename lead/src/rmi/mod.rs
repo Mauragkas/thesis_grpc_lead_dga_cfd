@@ -5,7 +5,7 @@ pub mod model;
 pub mod train;
 
 pub use diff::LeafDiff;
-pub use feature::feature;
+pub use feature::{feature, get_num_curves, set_num_curves, DEFAULT_NUM_CURVES};
 pub use leaf::{Anchor, LeafKind, LinearLeaf, RadixSplineLeaf, RADIX_ENTRIES, RP};
 pub use model::{empty_pid_vec, PidState, RmiModel};
 

@@ -1,17 +1,20 @@
 use std::collections::HashSet;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::time::Instant;
-
 use tokio::sync::RwLock;
 use tracing::{info, warn};
 
-use crate::lead::vnode::RmiState;
 use crate::ring::NodeId;
 use crate::rmi::{feature, PidState, RmiModel};
 
-/// Owns all online-learning state for a physical node: the learned model
-/// (active + pending), the drift/version counters, and the drift bookkeeping.
-///
+pub(crate) struct RmiState {
+    pub(crate) active: RmiModel,
+    pub(crate) update: Option<RmiModel>,
+    pub(crate) drift_new: usize,
+    pub(crate) update_ready: bool,
+    pub(crate) dirty_leaves: HashSet<usize>,
+}
+
 /// Capsule for the LEARNING concern of [`LeadNode`](crate::lead::LeadNode).
 /// All mutation of the model state flows through here so the drift/version/
 /// dirty-leaf invariants are enforced in one place. Network I/O, storage
@@ -36,7 +39,7 @@ impl LearnedIndex {
                 dirty_leaves: HashSet::new(),
             }),
             keys_total: AtomicUsize::new(0),
-            model_version_counter: AtomicU64::new(1),
+            model_version_counter: AtomicU64::new(2),
             insert_since_pid: AtomicUsize::new(0),
             start_time: Instant::now(),
         }
@@ -56,20 +59,14 @@ impl LearnedIndex {
         self.rmi.read().await.active.clone()
     }
 
-    /// The model to use as "current": a pending update if present, else active.
-    pub async fn current_model(&self) -> RmiModel {
-        let rmi = self.rmi.read().await;
-        rmi.update.clone().unwrap_or_else(|| rmi.active.clone())
-    }
-
-    /// Resolve the model for a specific version, falling back to active.
+    /// Read the model for an explicit version, falling back to active model.
     pub async fn model_for_version(&self, version: u64) -> RmiModel {
         let rmi = self.rmi.read().await;
         if rmi.active.version == version {
             rmi.active.clone()
-        } else if let Some(ref update) = rmi.update {
-            if update.version == version {
-                update.clone()
+        } else if let Some(ref upd) = rmi.update {
+            if upd.version == version {
+                upd.clone()
             } else {
                 rmi.active.clone()
             }
@@ -78,25 +75,39 @@ impl LearnedIndex {
         }
     }
 
+    /// The model to use as "current": a pending update if present, else active.
+    pub async fn current_model(&self) -> RmiModel {
+        let rmi = self.rmi.read().await;
+        rmi.update.clone().unwrap_or_else(|| rmi.active.clone())
+    }
+
+    /// Read the active model's version.
     pub async fn version(&self) -> u64 {
         self.rmi.read().await.active.version
+    }
+
+    /// `(update_ready, has_pending_update)`
+    pub async fn status(&self) -> (bool, bool) {
+        let rmi = self.rmi.read().await;
+        (rmi.update_ready, rmi.update.is_some())
     }
 
     pub async fn is_update_ready(&self) -> bool {
         self.rmi.read().await.update_ready
     }
 
-    /// `(update_ready, has_pending_update)` snapshot.
-    pub async fn status(&self) -> (bool, bool) {
-        let rmi = self.rmi.read().await;
-        (rmi.update_ready, rmi.update.is_some())
-    }
-
     pub async fn dirty_leaf_indices(&self) -> Vec<usize> {
-        self.rmi.read().await.dirty_leaves.iter().copied().collect()
+        let mut v: Vec<usize> = self.rmi.read().await.dirty_leaves.iter().copied().collect();
+        v.sort_unstable();
+        v
     }
 
-    /// True while the startup grace period (before drift detection starts) is
+    /// Returns `true` while the node is within the bootstrap grace window.
+    ///
+    /// `elapsed().as_secs() < grace_secs` is strictly `<` so that a node
+    /// started with `grace_secs = 0` is immediately eligible for drift
+    /// tracking on its very first insert (used in fast tests). In production
+    /// with `grace_secs = 10`, it evaluates to `true` while the timer is
     /// still elapsing.
     pub fn in_grace(&self, grace_secs: u64) -> bool {
         self.start_time.elapsed().as_secs() < grace_secs
@@ -113,15 +124,14 @@ impl Default for LearnedIndex {
     }
 }
 
+// ----------------------------------------------------------------------
+// State mutation
+// ----------------------------------------------------------------------
 impl LearnedIndex {
-    // ------------------------------------------------------------------
-    // Mutations
-    // ------------------------------------------------------------------
-
-    /// Account for one inserted key: bump counters, mark the affected leaf
-    /// dirty, and raise `update_ready` when the drift threshold is crossed.
+    /// Record a key insertion.
     ///
-    /// Returns `true` when a PID adjustment is due (interval reached).
+    /// Updates drift counters and marks the affected leaf dirty.
+    /// Returns `true` if a PID anchor adjustment is due.
     pub async fn record_insert(
         &self,
         key: &str,
@@ -168,12 +178,14 @@ impl LearnedIndex {
 
     /// Promote `model` to active, clearing all pending/drift state.
     pub async fn activate(&self, model: RmiModel) {
+        let next_ver = model.version + 1;
         let mut rmi = self.rmi.write().await;
         rmi.active = model;
         rmi.update = None;
         rmi.drift_new = 0;
         rmi.update_ready = false;
         rmi.dirty_leaves.clear();
+        self.model_version_counter.store(next_ver, Ordering::SeqCst);
     }
 
     /// Accept an incoming pushed model after a version + payload check.
@@ -189,11 +201,13 @@ impl LearnedIndex {
         }
         match serde_json::from_slice::<RmiModel>(data) {
             Ok(m) => {
+                let next_ver = m.version + 1;
                 rmi.active = m;
                 rmi.update = None;
                 rmi.drift_new = 0;
                 rmi.update_ready = false;
                 rmi.dirty_leaves.clear();
+                self.model_version_counter.store(next_ver, Ordering::SeqCst);
                 true
             }
             Err(e) => {
@@ -240,4 +254,3 @@ impl LearnedIndex {
         tracing::debug!("PID adjustment complete across {} bins", model.stage0_bins);
     }
 }
-
