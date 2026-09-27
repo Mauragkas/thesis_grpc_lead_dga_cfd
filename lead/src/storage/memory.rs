@@ -9,12 +9,14 @@ use super::KeyStore;
 /// In-memory BTreeMap-backed storage engine.
 pub struct InMemoryStore {
     data: RwLock<BTreeMap<String, String>>,
+    meta: RwLock<BTreeMap<String, String>>,
 }
 
 impl InMemoryStore {
     pub fn new() -> Self {
         Self {
             data: RwLock::new(BTreeMap::new()),
+            meta: RwLock::new(BTreeMap::new()),
         }
     }
 }
@@ -74,5 +76,13 @@ impl KeyStore for InMemoryStore {
 
     async fn is_empty(&self) -> bool {
         self.data.read().await.is_empty()
+    }
+
+    async fn get_meta(&self, key: &str) -> Option<String> {
+        self.meta.read().await.get(key).cloned()
+    }
+
+    async fn put_meta(&self, key: String, val: String) {
+        self.meta.write().await.insert(key, val);
     }
 }

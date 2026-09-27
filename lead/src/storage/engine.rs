@@ -89,4 +89,18 @@ impl KeyStore for StorageEngine {
             Self::Sled(s) => s.flush().await,
         }
     }
+
+    async fn get_meta(&self, key: &str) -> Option<String> {
+        match self {
+            Self::Memory(s) => s.get_meta(key).await,
+            Self::Sled(s) => s.get_meta(key).await,
+        }
+    }
+
+    async fn put_meta(&self, key: String, val: String) {
+        match self {
+            Self::Memory(s) => s.put_meta(key, val).await,
+            Self::Sled(s) => s.put_meta(key, val).await,
+        }
+    }
 }

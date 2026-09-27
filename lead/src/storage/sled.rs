@@ -8,6 +8,7 @@ use super::KeyStore;
 /// Durable, disk-backed key-value store powered by sled.
 pub struct SledStore {
     db: sled::Db,
+    meta_tree: sled::Tree,
 }
 
 impl SledStore {
@@ -20,14 +21,16 @@ impl SledStore {
             }
         }
         let db = sled::open(p)?;
-        Ok(Self { db })
+        let meta_tree = db.open_tree(b"lead_meta")?;
+        Ok(Self { db, meta_tree })
     }
 
     /// Creates a temporary sled database (useful for testing or ephemeral runs).
     pub fn open_temporary() -> Result<Self, sled::Error> {
         let config = sled::Config::new().temporary(true);
         let db = config.open()?;
-        Ok(Self { db })
+        let meta_tree = db.open_tree(b"lead_meta")?;
+        Ok(Self { db, meta_tree })
     }
 }
 
@@ -58,10 +61,11 @@ impl KeyStore for SledStore {
             .range(start_key.as_bytes()..)
             .take(count)
             .filter_map(|res| {
-                let (k, v) = res.ok()?;
-                let key = String::from_utf8(k.to_vec()).ok()?;
-                let val = String::from_utf8(v.to_vec()).ok()?;
-                Some((key, val))
+                res.ok().and_then(|(k, v)| {
+                    let ks = String::from_utf8(k.to_vec()).ok()?;
+                    let vs = String::from_utf8(v.to_vec()).ok()?;
+                    Some((ks, vs))
+                })
             })
             .collect()
     }
@@ -71,10 +75,11 @@ impl KeyStore for SledStore {
             .range::<&[u8], _>((Bound::Excluded(after_key.as_bytes()), Bound::Unbounded))
             .take(count)
             .filter_map(|res| {
-                let (k, v) = res.ok()?;
-                let key = String::from_utf8(k.to_vec()).ok()?;
-                let val = String::from_utf8(v.to_vec()).ok()?;
-                Some((key, val))
+                res.ok().and_then(|(k, v)| {
+                    let ks = String::from_utf8(k.to_vec()).ok()?;
+                    let vs = String::from_utf8(v.to_vec()).ok()?;
+                    Some((ks, vs))
+                })
             })
             .collect()
     }
@@ -83,10 +88,11 @@ impl KeyStore for SledStore {
         self.db
             .iter()
             .filter_map(|res| {
-                let (k, v) = res.ok()?;
-                let key = String::from_utf8(k.to_vec()).ok()?;
-                let val = String::from_utf8(v.to_vec()).ok()?;
-                Some((key, val))
+                res.ok().and_then(|(k, v)| {
+                    let ks = String::from_utf8(k.to_vec()).ok()?;
+                    let vs = String::from_utf8(v.to_vec()).ok()?;
+                    Some((ks, vs))
+                })
             })
             .collect()
     }
@@ -100,8 +106,21 @@ impl KeyStore for SledStore {
     }
 
     async fn flush(&self) {
-        if let Err(e) = self.db.flush() {
+        if let Err(e) = self.db.flush_async().await {
             tracing::error!("sled flush error: {e}");
+        }
+    }
+
+    async fn get_meta(&self, key: &str) -> Option<String> {
+        match self.meta_tree.get(key.as_bytes()) {
+            Ok(Some(val)) => String::from_utf8(val.to_vec()).ok(),
+            _ => None,
+        }
+    }
+
+    async fn put_meta(&self, key: String, val: String) {
+        if let Err(e) = self.meta_tree.insert(key.as_bytes(), val.as_bytes()) {
+            tracing::error!("sled put_meta error for key {key}: {e}");
         }
     }
 }

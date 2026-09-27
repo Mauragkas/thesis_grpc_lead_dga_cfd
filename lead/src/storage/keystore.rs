@@ -13,4 +13,12 @@ pub trait KeyStore: Send + Sync {
     async fn len(&self) -> usize;
     async fn is_empty(&self) -> bool;
     async fn flush(&self) {}
+
+    /// Read internal node metadata (isolated from user keyspace).
+    async fn get_meta(&self, _key: &str) -> Option<String> {
+        None
+    }
+
+    /// Persist internal node metadata (isolated from user keyspace).
+    async fn put_meta(&self, _key: String, _val: String) {}
 }
