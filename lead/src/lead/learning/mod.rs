@@ -131,6 +131,11 @@ where
     pub async fn push_model(&self, version: u64, data: &[u8]) -> bool {
         let accepted = self.learning.accept_pushed_model(version, data).await;
         if accepted {
+            if let Ok(s) = std::str::from_utf8(data) {
+                self.storage
+                    .put_meta("active_model".to_string(), s.to_string())
+                    .await;
+            }
             info!("FRM: accepted model version {}", version);
             self.migrate_keys_for_new_model().await;
         }

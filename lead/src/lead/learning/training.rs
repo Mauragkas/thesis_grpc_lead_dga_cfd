@@ -1,10 +1,10 @@
 use tracing::{info, warn};
 
+use crate::lead::LeadNode;
 use crate::rmi::RmiModel;
 use crate::storage::KeyStore;
 use crate::transport::RemoteNode;
 
-use super::super::LeadNode;
 use super::fed_avg::fed_avg;
 
 impl<S, R> LeadNode<S, R>
@@ -36,6 +36,11 @@ where
         self.broadcast_global_model(&global).await;
 
         let version = global.version;
+        if let Ok(json_str) = serde_json::to_string(&global) {
+            self.storage
+                .put_meta("active_model".to_string(), json_str)
+                .await;
+        }
         self.learning.activate(global).await;
 
         info!("FRM: global model v{} activated, migrating keys", version);
@@ -52,17 +57,27 @@ where
                 continue;
             }
             match self.remote.request_model(addr, &self.self_uri).await {
-                Some((version, data)) if version >= active_ver => {
+                Some((version, data)) => {
                     match serde_json::from_slice::<RmiModel>(&data) {
                         Ok(m) => {
-                            info!(peer=%addr, version, n=m.n, "FRM: collected model from neighbor");
-                            models.push(m);
+                            // Accept if version >= active_ver OR if the peer holds keys (n > 0),
+                            // ensuring rebooted nodes with keys are included in federated training.
+                            if version >= active_ver || m.n > 0 {
+                                info!(
+                                    peer = %addr,
+                                    version,
+                                    n = m.n,
+                                    "FRM: collected model from neighbor"
+                                );
+                                models.push(m);
+                            } else {
+                                warn!(
+                                    "FRM: neighbor {addr} returned un-trained stale model version {version} < active {active_ver}, skipping"
+                                );
+                            }
                         }
                         Err(e) => warn!("FRM: bad model from {addr}: {e}"),
                     }
-                }
-                Some((version, _)) => {
-                    warn!("FRM: neighbor {addr} returned stale model version {version} < active {active_ver}, skipping");
                 }
                 None => warn!("FRM: request_model from {addr} failed"),
             }
@@ -80,7 +95,7 @@ where
     /// Serialize and push the global model to all known peers.
     async fn broadcast_global_model(&self, global: &RmiModel) {
         let data = serde_json::to_vec(global).unwrap_or_default();
-        let peers = self.all_peers().await;
+        let peers = self.neighbor_set().await;
         for addr in &peers {
             if *addr == self.self_uri {
                 continue;
@@ -91,9 +106,8 @@ where
         }
     }
 
-    // ------------------------------------------------------------------
-    // Key migration after model update
-    // ------------------------------------------------------------------
+    /// When a new model is activated, keys whose predicted owner is no
+    /// longer us are migrated to their new home via /kv/local/:key.
     pub(super) async fn migrate_keys_for_new_model(&self) {
         let snap = self.storage.snapshot().await;
         let mut migrated = 0usize;
@@ -123,7 +137,7 @@ where
     }
 
     pub(super) async fn reset_drift_state(&self) {
-        let n = self.storage.len().await;
-        self.learning.reset_drift(n).await;
+        let len = self.storage.len().await;
+        self.learning.reset_drift(len).await;
     }
 }

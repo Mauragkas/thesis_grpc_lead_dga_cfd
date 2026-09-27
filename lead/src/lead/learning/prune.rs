@@ -22,7 +22,8 @@ where
             }
             let err_rate = v.error_rate();
             let inactive = v.last_active.read().await.elapsed().as_secs();
-            if err_rate > self.config.prune_error_rate || inactive > self.config.prune_inactive_secs {
+            if err_rate > self.config.prune_error_rate || inactive > self.config.prune_inactive_secs
+            {
                 to_prune.push(v.vid);
             }
         }
@@ -46,6 +47,7 @@ where
     // ------------------------------------------------------------------
     // all_peers (unchanged from original but with pruning check)
     // ------------------------------------------------------------------
+    #[allow(dead_code)]
     pub(super) async fn all_peers(&self) -> Vec<String> {
         let mut peers = std::collections::HashSet::new();
         peers.insert(self.self_uri.clone());

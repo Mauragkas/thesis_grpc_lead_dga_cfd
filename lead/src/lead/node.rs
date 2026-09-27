@@ -99,12 +99,28 @@ where
         true
     }
 
-    /// Initializes learning state with pre-existing keys from persistent storage.
+    /// Initializes learning state and active RMI model with pre-existing data from persistent storage.
     pub async fn init_from_storage(&self) {
         let n = self.storage.len().await;
         if n > 0 {
             tracing::info!(initial_keys = n, "restored existing keys from storage");
             self.learning.set_keys_total(n);
+        }
+        if let Some(json_str) = self.storage.get_meta("active_model").await {
+            match serde_json::from_str::<crate::rmi::RmiModel>(&json_str) {
+                Ok(model) => {
+                    tracing::info!(
+                        version = model.version,
+                        n = model.n,
+                        bins = model.stage0_bins,
+                        "restored active RMI model from storage"
+                    );
+                    self.learning.activate(model).await;
+                }
+                Err(e) => {
+                    tracing::warn!("failed to deserialize active RMI model from storage: {e}");
+                }
+            }
         }
     }
 }
