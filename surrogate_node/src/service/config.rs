@@ -23,7 +23,7 @@ impl Default for SurrogateConfig {
             grpc_bind: "0.0.0.0:50054".to_string(),
             window_size: 1000,
             retrain_interval: 20,
-            min_train_samples: 30,
+            min_train_samples: 100,
             mlp_epochs: 250,
             mlp_lr: 1e-3,
             mlp_batch_size: 32,
@@ -45,12 +45,16 @@ impl SurrogateConfig {
                 cfg.window_size = n;
             }
         }
-        if let Ok(val) = env::var("RETRAIN_INTERVAL").or_else(|_| env::var("SURROGATE_RETRAIN_INTERVAL")) {
+        if let Ok(val) =
+            env::var("RETRAIN_INTERVAL").or_else(|_| env::var("SURROGATE_RETRAIN_INTERVAL"))
+        {
             if let Ok(n) = val.parse::<usize>() {
                 cfg.retrain_interval = n;
             }
         }
-        if let Ok(val) = env::var("MIN_TRAIN_SAMPLES").or_else(|_| env::var("SURROGATE_MIN_TRAIN_SAMPLES")) {
+        if let Ok(val) =
+            env::var("MIN_TRAIN_SAMPLES").or_else(|_| env::var("SURROGATE_MIN_TRAIN_SAMPLES"))
+        {
             if let Ok(n) = val.parse::<usize>() {
                 cfg.min_train_samples = n;
             }
@@ -65,7 +69,9 @@ impl SurrogateConfig {
                 cfg.mlp_lr = lr;
             }
         }
-        if let Ok(val) = env::var("MLP_BATCH_SIZE").or_else(|_| env::var("SURROGATE_MLP_BATCH_SIZE")) {
+        if let Ok(val) =
+            env::var("MLP_BATCH_SIZE").or_else(|_| env::var("SURROGATE_MLP_BATCH_SIZE"))
+        {
             if let Ok(bs) = val.parse::<usize>() {
                 cfg.mlp_batch_size = bs;
             }

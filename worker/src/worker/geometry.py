@@ -52,6 +52,66 @@ class Fuselage:
         return float(v_nose + v_mid + v_tail)
 
 
+@dataclass(frozen=True)
+class WingGeometry:
+    """Planform geometry of the main wing."""
+
+    span: float
+    root_chord: float
+    tip_chord: float
+
+    @property
+    def wingspan(self) -> float:
+        return 2.0 * self.span
+
+    @property
+    def planform_area(self) -> float:
+        return 2.0 * self.span * (self.root_chord + self.tip_chord) / 2.0
+
+    @property
+    def mac(self) -> float:
+        """Mean Aerodynamic Chord for a trapezoidal wing."""
+        cr = self.root_chord
+        ct = self.tip_chord
+        return (2.0 / 3.0) * (cr + ct - (cr * ct) / max(cr + ct, 1e-6))
+
+
+@dataclass(frozen=True)
+class TailVolumeTargets:
+    """Target horizontal and vertical tail volume coefficients (Stan Hall / Pazmany method)."""
+
+    vh: float
+    vv: float
+
+    def __post_init__(self) -> None:
+        if self.vh <= 0:
+            raise ValueError("vh must be positive")
+        if self.vv <= 0:
+            raise ValueError("vv must be positive")
+
+
+def calculate_wing_geometry(span: float, root_chord: float, tip_chord: float) -> WingGeometry:
+    return WingGeometry(span=span, root_chord=root_chord, tip_chord=tip_chord)
+
+
+def calculate_tail_planform_areas(
+    wing: WingGeometry,
+    arm_h: float,
+    arm_v: float,
+    targets: TailVolumeTargets,
+) -> tuple[float, float]:
+    """Calculate required horizontal and vertical tail planform areas using volume coefficients.
+
+    VH = SH * LH / (SW * mac)  =>  SH = VH * SW * mac / LH
+    VV = SV * LV / (SW * b)    =>  SV = VV * SW * b / LV
+    """
+    lh = max(arm_h, 1e-4)
+    lv = max(arm_v, 1e-4)
+    s_h = targets.vh * wing.planform_area * wing.mac / lh
+    s_v = targets.vv * wing.planform_area * wing.wingspan / lv
+    return s_h, s_v
+
+
 def fuselage_from_params(params: dict[str, float]) -> Fuselage:
     return Fuselage(
         length=params["fuse_length"],
@@ -178,10 +238,44 @@ def calculate_center_of_gravity(
     return float(x_cg), 0.0, 0.0
 
 
+def _apply_tail_volume_scaling(
+    params: dict[str, float],
+    baseline: dict[str, float],
+    targets: TailVolumeTargets,
+) -> None:
+    """Scale tail dimensions proportionally to maintain target tail volume coefficients."""
+    wing = calculate_wing_geometry(
+        span=params["wing_span"],
+        root_chord=params["wing_root_chord"],
+        tip_chord=params["wing_tip_chord"],
+    )
+    x_wing_ac = params["wing_x_pos"] + 0.25 * params["wing_root_chord"]
+    arm_h = (params["tail_x_pos"] + 0.25 * baseline.get("h_stab_root", 28.0)) - x_wing_ac
+    arm_v = (params["tail_x_pos"] + 0.25 * baseline.get("v_stab_root", 35.0)) - x_wing_ac
+
+    s_h_req, s_v_req = calculate_tail_planform_areas(wing, arm_h, arm_v, targets)
+
+    # Baseline tail planform areas
+    s_h_base = 2.0 * baseline["h_stab_span"] * (baseline["h_stab_root"] + baseline["h_stab_tip"]) / 2.0
+    s_v_base = baseline["v_stab_height"] * (baseline["v_stab_root"] + baseline["v_stab_tip"]) / 2.0
+
+    scale_h = float(np.sqrt(max(s_h_req / max(s_h_base, 1e-4), 0.01)))
+    scale_v = float(np.sqrt(max(s_v_req / max(s_v_base, 1e-4), 0.01)))
+
+    params["h_stab_span"] = baseline["h_stab_span"] * scale_h
+    params["h_stab_root"] = baseline["h_stab_root"] * scale_h
+    params["h_stab_tip"] = baseline["h_stab_tip"] * scale_h
+
+    params["v_stab_height"] = baseline["v_stab_height"] * scale_v
+    params["v_stab_root"] = baseline["v_stab_root"] * scale_v
+    params["v_stab_tip"] = baseline["v_stab_tip"] * scale_v
+
+
 def decode_genes(
     genes: Sequence[float],
     baseline: dict[str, float] = BASELINE,
     bounds: Sequence[GeneBound] = (),
+    tail_targets: TailVolumeTargets | None = None,
 ) -> dict[str, float]:
     params = baseline.copy()
     for i, bound in enumerate(bounds):
@@ -189,6 +283,10 @@ def decode_genes(
         params[bound.name] = bound.low + (bound.high - bound.low) * u
 
     # Place tail root at the end of the fuselage (-10mm margin from the trailing tip)
-    tail_chord = max(params.get("v_stab_root", 35.0), params.get("h_stab_root", 28.0))
+    tail_chord = max(baseline.get("v_stab_root", 35.0), baseline.get("h_stab_root", 28.0))
     params["tail_x_pos"] = params["fuse_length"] - tail_chord - 10.0
+
+    if tail_targets is not None:
+        _apply_tail_volume_scaling(params, baseline, tail_targets)
+
     return params

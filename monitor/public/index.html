@@ -1540,6 +1540,8 @@ function renderParamsHud(p) {
     <div class="hud-row"><span class="hud-label">Airfoil</span><span class="hud-val">NACA ${Math.round(p.naca_m)}${Math.round(p.naca_p)}${Math.round(p.naca_t)}</span></div>
     <div class="hud-row"><span class="hud-label">Fuselage Length</span><span class="hud-val">${p.fuse_length.toFixed(1)} mm</span></div>
     <div class="hud-row"><span class="hud-label">Fuselage Diam.</span><span class="hud-val">${p.fuse_max_diam.toFixed(1)} mm</span></div>
+    ${p.h_stab_span ? `<div class="hud-row"><span class="hud-label">H-Tail Span</span><span class="hud-val">${(p.h_stab_span * 2).toFixed(1)} mm</span></div>` : ""}
+    ${p.v_stab_height ? `<div class="hud-row"><span class="hud-label">V-Tail Height</span><span class="hud-val">${p.v_stab_height.toFixed(1)} mm</span></div>` : ""}
   `;
 }
 

@@ -7,7 +7,7 @@ from typing import Sequence
 try:
     from .aero import AeroEvaluator, AeroResult
     from .config import BASELINE, GENE_BOUNDS, GeneBound, WorkerConfig
-    from .geometry import fuselage_volume_mm3, decode_genes
+    from .geometry import fuselage_volume_mm3, decode_genes, TailVolumeTargets
     from .mission.trajectory import MissionConfig, MissionOutcome, MissionSimulator
     from .powertrain.battery import Battery, Capacity
     from .powertrain.motor import Motor, MotorKV, MotorResistance
@@ -16,7 +16,7 @@ try:
 except (ImportError, ValueError):
     from aero import AeroEvaluator, AeroResult
     from config import BASELINE, GENE_BOUNDS, GeneBound, WorkerConfig
-    from geometry import fuselage_volume_mm3, decode_genes
+    from geometry import fuselage_volume_mm3, decode_genes, TailVolumeTargets
     from mission.trajectory import MissionConfig, MissionOutcome, MissionSimulator
     from powertrain.battery import Battery, Capacity
     from powertrain.motor import Motor, MotorKV, MotorResistance
@@ -51,6 +51,11 @@ class FitnessEvaluator:
         self._bounds = bounds
         self._logger = logger or logging.getLogger("worker.fitness")
         self._mission_simulator = mission_simulator or self._create_default_simulator(config)
+        self._tail_targets = (
+            TailVolumeTargets(vh=config.target_vh, vv=config.target_vv)
+            if getattr(config, "enable_tail_sizing", False)
+            else None
+        )
 
     @staticmethod
     def _create_default_simulator(config: WorkerConfig) -> MissionSimulator:
@@ -84,7 +89,7 @@ class FitnessEvaluator:
         return MissionSimulator(powertrain=powertrain, config=mission_cfg)
 
     def evaluate_genes(self, genes: Sequence[float]) -> EvaluationOutcome:
-        params = decode_genes(genes, self._baseline, self._bounds)
+        params = decode_genes(genes, self._baseline, self._bounds, tail_targets=self._tail_targets)
         self._logger.debug("decoded genes=%s -> params=%s", list(genes), params)
         return self.evaluate_params(params)
 
