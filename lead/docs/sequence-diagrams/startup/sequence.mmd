@@ -24,6 +24,16 @@ sequenceDiagram
     Main->>Lead: LeadNode::new(cfg, storage, remote)
     Lead-->>Main: Arc<LeadNode>
     Main->>Lead: init_from_storage().await
+    Lead->>Storage: len().await
+    Storage-->>Lead: n_keys
+    opt n_keys > 0
+        Lead->>Lead: learning.set_keys_total(n_keys)
+    end
+    Lead->>Storage: get_meta("active_model").await
+    Storage-->>Lead: Option<json_str>
+    opt active_model metadata present
+        Lead->>Lead: deserialize RmiModel & learning.activate(model)
+    end
 
     opt cfg.join_uri is Some(join_uri)
         Main->>Join: spawn join loop

@@ -31,12 +31,12 @@ Coordinates distributed model retraining and synchronization across the LEAD clu
 
 ## Main steps: Federated Averaging and Broadcast
 
-1. The coordinator pulls models from all neighbors via `request_model()`.
+1. The coordinator pulls models from all neighbors via `request_model()` (accepting neighbor models if `version >= active_version` or if the peer holds keys with $n > 0$, ensuring rebooted nodes with stored keys are included in federated aggregation).
 2. `fed_avg(models, new_version)` combines the collected models:
    - Weights leaf parameters by sample size: $w_i = n_i / \sum n$.
    - Computes weighted linear weights, biases, and anchor offsets across all bins.
 3. The coordinator broadcasts the new model to all known cluster peers via `push_model(version, payload)`.
-4. The coordinator activates the model locally.
+4. The coordinator persists the active model to storage metadata via `storage.put_meta("active_model", json)` and activates the model locally via `learning.activate(global)`.
 
 ## Main steps: Key Re-Migration
 

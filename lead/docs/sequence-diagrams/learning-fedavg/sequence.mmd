@@ -3,6 +3,7 @@ sequenceDiagram
     participant Neighbors as Neighbor Nodes
     participant FedAvg as FederatedAveraging::fed_avg
     participant Peers as All Cluster Peers
+    participant Storage as KeyStore (StorageEngine)
 
     Note over Coord,Neighbors: 1. Heartbeat Quorum Consensus
     Coord->>Neighbors: /lead.Lead/Heartbeat(ready, version)
@@ -12,6 +13,7 @@ sequenceDiagram
     Note over Coord,Neighbors: 2. Model Gathering
     Coord->>Neighbors: /lead.Lead/RequestModel(coordinator)
     Neighbors-->>Coord: ModelParams { version, model_data }
+    Coord->>Coord: Accept if version >= active or peer has keys (n > 0)
 
     Note over Coord,FedAvg: 3. Federated Model Averaging
     Coord->>FedAvg: fed_avg(collected_models, next_version)
@@ -20,6 +22,7 @@ sequenceDiagram
     Note over Coord,Peers: 4. Global Broadcast & Activation
     Coord->>Peers: /lead.Lead/PushModel(global_model)
     Peers-->>Coord: BoolMsg { ok: true }
+    Coord->>Storage: put_meta("active_model", json)
     Coord->>Coord: activate(global_model)
     Coord->>Coord: migrate_keys_for_new_model()
     Coord->>Coord: reset_drift_state()

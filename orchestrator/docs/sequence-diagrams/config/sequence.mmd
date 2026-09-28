@@ -31,6 +31,30 @@ sequenceDiagram
         ConfigFn->>GaCfg: ga.seed = parsed_seed
     end
 
+    opt MAX_GENERATIONS / GA_GENERATIONS is set and parses as usize
+        ConfigFn->>Env: var("MAX_GENERATIONS")
+        Env-->>ConfigFn: gen string
+        ConfigFn->>GaCfg: ga.max_generations = parsed_gen
+    end
+
+    opt MIN_GENERATIONS / GA_MIN_GENERATIONS is set and parses as usize
+        ConfigFn->>Env: var("MIN_GENERATIONS")
+        Env-->>ConfigFn: min_gen string
+        ConfigFn->>GaCfg: ga.min_generations = parsed_min_gen
+    end
+
+    opt STAGNATION_PATIENCE / GA_STAGNATION_PATIENCE is set and parses as usize
+        ConfigFn->>Env: var("STAGNATION_PATIENCE")
+        Env-->>ConfigFn: patience string
+        ConfigFn->>GaCfg: ga.stagnation_patience = parsed_patience
+    end
+
+    opt MIN_IMPROVEMENT / GA_MIN_IMPROVEMENT is set and parses as f64
+        ConfigFn->>Env: var("MIN_IMPROVEMENT")
+        Env-->>ConfigFn: imp string
+        ConfigFn->>GaCfg: ga.min_improvement = parsed_imp
+    end
+
     opt Transport Resilience Overrides
         ConfigFn->>Env: var("CIRCUIT_BREAKER_FAILURE_THRESHOLD")
         Env-->>ConfigFn: threshold string

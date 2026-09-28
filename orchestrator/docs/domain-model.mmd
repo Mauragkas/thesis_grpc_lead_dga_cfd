@@ -5,12 +5,33 @@ direction TB
 class GaConfig {
   +pop_size: usize
   +genes_len: usize
-  +generations: usize
+  +max_generations: usize
+  +min_generations: usize
+  +stagnation_patience: usize
+  +min_improvement: f64
   +mut_sigma: f64
   +elite_frac: f64
   +batch_size: usize
   +seed: u64
   +eval_endpoint: String
+  +generations() usize
+}
+
+class GaResult {
+  +best_fitness: f64
+  +best_genome: Vec~f64~
+}
+
+class ProgressTracker {
+  +patience: usize
+  +min_improvement: f64
+  +min_generations: usize
+  +last_improvement_fitness: f64
+  +stagnant_generations: usize
+  +new(patience, min_improvement, min_generations)$ ProgressTracker
+  +update(current_best, current_gen) bool
+  +stagnant_generations() usize
+  +is_stagnant(current_gen) bool
 }
 
 class TransportConfig {
@@ -71,7 +92,7 @@ class GaRunner {
   +store: &dyn GeneStore
   +neighbor_store: Option<&dyn NeighborStore>
   +migration: Option<&dyn MigrationHook>
-  +run(rng) Result~f64~
+  +run(rng) Result~GaResult~
 }
 
 class GAOperators {
@@ -400,6 +421,8 @@ GaRunner --> NeighborStore : optional KNN store
 GaRunner --> MigrationHook : optional island migration
 GaRunner --> NormalDistribution : mutation sampling
 GaRunner --> GAOperators : generational operators
+GaRunner *-- ProgressTracker : tracks convergence
+GaRunner ..> GaResult : returns best candidate
 
 GrpcEvaluator ..|> Evaluator
 GrpcEvaluator --> TransportConfig

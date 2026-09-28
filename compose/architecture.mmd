@@ -2,9 +2,9 @@ flowchart TB
     subgraph LAN["External Docker Network: simulated-lan"]
 
         subgraph INFRA["1. Observability & Event Streaming (docker-compose.infra.yml)"]
-            Kafka["Kafka Broker (KRaft)\napache/kafka:3.9.0\nPort: 9092\nTopics: logs.lead, logs.orchestrator, logs.worker"]
-            FluentBit["Fluent-Bit Log Forwarder\nfluent/fluent-bit:3.0\nPort: 24224 (fluentd input)\nRoutes by tag to Kafka topics"]
-            Monitor["Monitor Web Dashboard\nNode.js / Express / WebSockets\nPort: 3000 (UI)\nConsumes Kafka logs"]
+            Kafka["Kafka Broker (KRaft)\napache/kafka:3.9.0\nPort: 9092\nTopics: logs.lead, logs.orchestrator,\nlogs.worker, logs.surrogate"]
+            FluentBit["Fluent-Bit Log Forwarder\nfluent/fluent-bit:3.0\nTails: /var/log/app/*.log (shared volume)\nFallback Port: 24224\nRoutes to Kafka topics"]
+            Monitor["Monitor Web Dashboard\nNode.js / Express / WebSockets\nPort: 3000 (UI)\nConsumes Kafka logs & 3D Viewer"]
 
             FluentBit -->|Structured JSON logs| Kafka
             Kafka -->|Stream log events| Monitor
@@ -12,9 +12,9 @@ flowchart TB
 
         subgraph LEAD_CLUSTER["2. LEAD Distributed DHT Ring (docker-compose.lead.yml)"]
             direction LR
-            Lead1["lead-node1 (Seed)\nHTTP: 2001 | gRPC: 50051\n20 vnodes (VIDs 0..19)"]
-            Lead2["lead-node2\nHTTP: 2002 | gRPC: 50052\n20 vnodes (VIDs 20..39)\nJoins lead-node1"]
-            Lead3["lead-node3\nHTTP: 2003 | gRPC: 50053\n20 vnodes (VIDs 40..59)\nJoins lead-node1"]
+            Lead1["lead-node1 (Seed)\nHTTP: 2001 | gRPC: 50051\n100 vnodes | Sled Storage"]
+            Lead2["lead-node2\nHTTP: 2002 | gRPC: 50052\n100 vnodes | Sled Storage\nJoins lead-node1"]
+            Lead3["lead-node3\nHTTP: 2003 | gRPC: 50053\n100 vnodes | Sled Storage\nJoins lead-node1"]
 
             Lead1 <==>|Chord Ring &\nFedAvg Sync| Lead2
             Lead2 <==>|Chord Ring &\nFedAvg Sync| Lead3
@@ -23,14 +23,16 @@ flowchart TB
 
         subgraph ISLAND1["3. GA Island 1 (docker-compose.worker.yml)"]
             Orch1["Orchestrator 1 (Rust)\nGA Seed: 42 | Ring: 50060\nIsland Model GA Driver"]
+            Surr1["surrogate-node (Rust/C++)\nPort: 50054 | MLP Surrogate\nSliding Window & Online Retrain"]
             Envoy1["Envoy Load Balancer 1\nROUND_ROBIN gRPC\nPort: 50051"]
             subgraph WORKER_POOL1["Worker Pool 1 (--scale worker=N)"]
-                W1_1["worker (replica 1)\nPython + AeroSandbox"]
-                W1_2["worker (replica 2)\nPython + AeroSandbox"]
-                W1_N["worker (replica N)\nPython + AeroSandbox"]
+                W1_1["worker (replica 1)\nPython + AeroSandbox + Mission"]
+                W1_2["worker (replica 2)\nPython + AeroSandbox + Mission"]
+                W1_N["worker (replica N)\nPython + AeroSandbox + Mission"]
             end
 
-            Orch1 -->|EvaluateBatch| Envoy1
+            Orch1 -->|Tier 2 Predict / Ingest| Surr1
+            Orch1 -->|Tier 3 EvaluateBatch| Envoy1
             Envoy1 -->|gRPC Round-Robin| W1_1
             Envoy1 -->|gRPC Round-Robin| W1_2
             Envoy1 -->|gRPC Round-Robin| W1_N
@@ -40,9 +42,9 @@ flowchart TB
             Orch2["Orchestrator 2 (Rust)\nGA Seed: 43 | Ring: 50060\nJoins Orch 1 Ring"]
             Envoy2["Envoy Load Balancer 2\nROUND_ROBIN gRPC\nPort: 50051 (Host: 50052)"]
             subgraph WORKER_POOL2["Worker Pool 2 (--scale worker2=N)"]
-                W2_1["worker2 (replica 1)\nPython + AeroSandbox"]
-                W2_2["worker2 (replica 2)\nPython + AeroSandbox"]
-                W2_N["worker2 (replica N)\nPython + AeroSandbox"]
+                W2_1["worker2 (replica 1)\nPython + AeroSandbox + Mission"]
+                W2_2["worker2 (replica 2)\nPython + AeroSandbox + Mission"]
+                W2_N["worker2 (replica N)\nPython + AeroSandbox + Mission"]
             end
 
             Orch2 -->|EvaluateBatch| Envoy2
@@ -57,12 +59,13 @@ flowchart TB
         Orch1 -.->|PutRouted / RangeQuery| Lead1
         Orch2 -.->|PutRouted / RangeQuery| Lead1
 
-        %% Logging streams
-        Lead1 -.->|tag: lead.node1| FluentBit
-        Lead2 -.->|tag: lead.node2| FluentBit
-        Lead3 -.->|tag: lead.node3| FluentBit
-        Orch1 -.->|tag: orchestrator.main| FluentBit
-        Orch2 -.->|tag: orchestrator2.main| FluentBit
-        W1_1 -.->|tag: worker.main| FluentBit
-        W2_1 -.->|tag: worker2.main| FluentBit
+        %% Logging streams (file tailing into shared volume)
+        Lead1 -.->|lead.file| FluentBit
+        Lead2 -.->|lead.file| FluentBit
+        Lead3 -.->|lead.file| FluentBit
+        Orch1 -.->|orchestrator.file| FluentBit
+        Orch2 -.->|orchestrator.file| FluentBit
+        Surr1 -.->|surrogate.file| FluentBit
+        W1_1 -.->|worker.file| FluentBit
+        W2_1 -.->|worker.file| FluentBit
     end

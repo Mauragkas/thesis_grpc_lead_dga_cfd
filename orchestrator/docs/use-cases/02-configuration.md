@@ -13,6 +13,14 @@ Reads runtime overrides from environment variables and combines them with defaul
 ### Genetic Algorithm & Evaluator
 - `EVAL_ENDPOINT`: gRPC address of the evaluator load balancer (default: `"load-balancer:50051"`).
 - `GA_SEED`: RNG seed for reproducible genetic algorithm runs (default: `42`).
+- `MAX_GENERATIONS` / `GA_GENERATIONS`: Maximum generations to run (safety upper bound, default: `100`).
+- `MIN_GENERATIONS` / `GA_MIN_GENERATIONS`: Minimum generations before early stopping is allowed (default: `10`).
+- `STAGNATION_PATIENCE` / `GA_STAGNATION_PATIENCE`: Consecutive generations without significant fitness improvement before stopping early; set to `0` to disable (default: `10`).
+- `MIN_IMPROVEMENT` / `GA_MIN_IMPROVEMENT`: Minimum absolute fitness improvement required to reset the stagnation counter (default: `0.001`).
+
+### Logging & Observability
+- `LOG_FILE_PATH`: Explicit file path where structured JSON logs will be written for Fluent-Bit (optional).
+- `LOG_DIR`: Directory where `$CONTAINER_NAME.log` or `$HOSTNAME.log` will be created if `LOG_FILE_PATH` is not set (optional).
 
 ### In-Memory Cache
 - `GENE_STORE_MAX_AGE`: Maximum generation TTL for cached gene records before eviction (default: `5`).

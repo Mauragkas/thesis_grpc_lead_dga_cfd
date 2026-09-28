@@ -35,11 +35,13 @@ The `surrogate_node` operates in two primary modes:
 | `GRPC_BIND` / `SURROGATE_GRPC_BIND` | `0.0.0.0:50054` | Socket address for the gRPC server |
 | `WINDOW_SIZE` / `SURROGATE_WINDOW_SIZE` | `1000` | Maximum capacity of the sliding window buffer |
 | `RETRAIN_INTERVAL` / `SURROGATE_RETRAIN_INTERVAL` | `20` | Number of ingested samples between background retraining cycles |
-| `MIN_TRAIN_SAMPLES` / `SURROGATE_MIN_TRAIN_SAMPLES` | `30` | Minimum samples required before marking the model ready |
+| `MIN_TRAIN_SAMPLES` / `SURROGATE_MIN_TRAIN_SAMPLES` | `100` | Minimum samples required before marking the model ready |
 | `MLP_EPOCHS` / `SURROGATE_MLP_EPOCHS` | `250` | Training epochs per online retraining cycle |
 | `MLP_LR` / `SURROGATE_MLP_LR` | `0.001` | Learning rate for the MLP optimizer |
 | `MLP_BATCH_SIZE` / `SURROGATE_MLP_BATCH_SIZE` | `32` | Mini-batch size during training |
 | `MLP_HIDDEN` / `SURROGATE_MLP_HIDDEN` | `64,32` | Comma-separated hidden layer dimensions |
+| `MLP_ACTIVATION` / `SURROGATE_MLP_ACTIVATION` | `silu` | Hidden activation function (`silu`, `relu`, `gelu`, `tanh`) |
+| `LOG_FILE_PATH` / `LOG_DIR` | `None` | Path / directory for structured JSON file logging |
 
 ## Build & Test
 
