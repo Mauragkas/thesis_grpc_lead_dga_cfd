@@ -25,7 +25,7 @@ Starts the orchestrator binary, initializes structured JSON logging via `tracing
 ## Main steps
 
 1. The process starts in `main` and delegates to `orchestrator::bootstrap::run()`.
-2. Structured JSON logging is initialized via `tracing_subscriber` with target filtering.
+2. Dual logging is initialized via `tracing_subscriber`: human-readable plain text on stdout for `docker logs`, and an optional structured JSON file layer for Fluent-Bit log forwarding when `LOG_FILE_PATH` or `LOG_DIR` is configured.
 3. Configuration is loaded with `config_from_env()`, returning `(GaConfig, TransportConfig, GeneStoreConfig, LeadConfig, SurrogateClientConfig, TierConfig, RingConfig, MigrationConfig)`.
 4. The node's address is hashed with `Sha256Hasher` to produce a `NodeInfo` ID; `RingState` and `LocalRingMember` are created.
 5. A `MigrantBuffer` and `RingServer` (implementing the tonic `Ring` gRPC service) are created, bound to `ring_cfg.bind_address`, and spawned in a background task.
@@ -46,14 +46,14 @@ Starts the orchestrator binary, initializes structured JSON logging via `tracing
 13. `MultiTierEvaluator` is constructed, composing the raw simulator, local gene store, optional LEAD neighbor store, optional surrogate client, and `TierConfig`.
 14. `LeadMigration` is instantiated with `TopKSelector`, the local ring member, the ring client, and the migrant buffer.
 15. A seeded `StdRng` is initialized from `ga_cfg.seed`.
-16. `GaRunner::run()` is executed with `evaluator: &multi_tier_evaluator`.
+16. `GaRunner::run()` is executed with `evaluator: &multi_tier_evaluator`, evaluating generations until completion or early stopping on stagnation convergence.
 
 ## Postconditions
 
-- The GA run completes across the configured number of generations.
+- The GA run completes (either reaching `max_generations` or terminating early upon detecting stagnation convergence).
 - Ring membership and periodic stabilization continue running in the background.
 - Island migrations are exchanged periodically with ring neighbors.
-- The best-ever fitness value is logged and returned.
+- The `GaResult` containing all-time `best_fitness` and `best_genome` is logged and returned.
 
 ## Failure cases
 

@@ -23,7 +23,7 @@ Starts the `lead-node` binary, loads runtime configuration from environment vari
 
 ## Main steps
 
-1. The process initializes structured JSON logging via `tracing_subscriber`.
+1. The process initializes dual logging via `tracing_subscriber`: human-readable plain text on stdout for `docker logs`, and an optional structured JSON file layer for Fluent-Bit log forwarding when `LOG_FILE_PATH` or `LOG_DIR` is configured.
 2. Runtime configuration is loaded with `Config::from_env()`.
 3. The storage engine is instantiated based on `cfg.storage_backend`:
    - If `StorageBackend::Sled`: opens persistent database via `StorageEngine::sled(path)` (default path `"./data/lead"`).
@@ -34,7 +34,9 @@ Starts the `lead-node` binary, loads runtime configuration from environment vari
    - Initializes $k$ `VirtualNode` instances with base-10 finger tables.
    - Links initial successors locally in a circular ring.
    - Instantiates the initial `LearnedIndex` with default `RmiModel`.
-6. `lead.init_from_storage().await;` is called to inspect existing keys in storage and initialize `LearnedIndex::keys_total`.
+6. `lead.init_from_storage().await;` is called to:
+   - Inspect existing keys in storage and initialize `LearnedIndex::keys_total`.
+   - Query `storage.get_meta("active_model")` to recover and activate any previously persisted `RmiModel` (preserving model version and parameters across node restarts).
 7. If `join_uri` is configured:
    - An asynchronous join loop contacts the bootstrap node to discover successors for each local vnode.
    - Retries up to `join_retry_count` times (default 300) with `join_retry_delay_secs` sleeps (default 1s) until all vnodes discover remote successors.

@@ -17,6 +17,7 @@ class Config {
   +virtual_node_count: usize
   +successor_list_len: usize
   +range_overscan_multiplier: usize
+  +num_curves: usize
   +join_retry_count: usize
   +join_retry_delay_secs: u64
   +from_env()$ Config
@@ -84,6 +85,8 @@ class KeyStore <<interface>> {
   +len() usize
   +is_empty() bool
   +flush()
+  +get_meta(key) Option~String~
+  +put_meta(key, val)
 }
 
 class StorageEngine {
@@ -99,10 +102,13 @@ class StorageEngine {
   +len() usize
   +is_empty() bool
   +flush()
+  +get_meta(key) Option~String~
+  +put_meta(key, val)
 }
 
 class InMemoryStore {
   -data: RwLock~BTreeMap~String_String~~
+  -metadata: RwLock~HashMap~String_String~~
   +new()
   +get(key) Option~String~
   +put(key, val)
@@ -113,6 +119,8 @@ class InMemoryStore {
   +len() usize
   +is_empty() bool
   +flush()
+  +get_meta(key) Option~String~
+  +put_meta(key, val)
 }
 
 class SledStore {
@@ -128,6 +136,8 @@ class SledStore {
   +len() usize
   +is_empty() bool
   +flush()
+  +get_meta(key) Option~String~
+  +put_meta(key, val)
 }
 
 %% Transport & Remote Communication
@@ -177,6 +187,7 @@ class LearnedIndex {
   -pending: RwLock~Option~RmiModel~~
   -drift_new: AtomicUsize
   -keys_total: AtomicUsize
+  -model_version_counter: AtomicU64
   +new()
   +predict(key) u64
   +record_insert(key, grace_secs, min_keys, threshold) bool
@@ -186,6 +197,8 @@ class LearnedIndex {
   +is_update_ready() bool
   +accept_pushed_model(version, data) bool
   +reset_drift(n)
+  +next_version() u64
+  +in_grace(grace_secs) bool
 }
 
 class RmiModel {

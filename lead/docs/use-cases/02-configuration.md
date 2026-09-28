@@ -24,8 +24,13 @@ Reads environment variables to configure network interfaces, cluster bootstrap e
 - `LEAD_JOIN_RETRY_COUNT` / `JOIN_RETRY_COUNT`: Maximum bootstrap join attempts before timeout (default: `300`).
 - `LEAD_JOIN_RETRY_DELAY_SECS` / `JOIN_RETRY_DELAY_SECS`: Delay between bootstrap join attempts in seconds (default: `1`).
 
-### Range Queries
+### Range Queries & Multi-Probe
 - `LEAD_RANGE_OVERSCAN_MULTIPLIER` / `RANGE_OVERSCAN_MULTIPLIER`: Local range scan overscan multiplier (default: `3`).
+- `LEAD_NUM_CURVES` / `NUM_CURVES`: Multi-probe Hilbert curves count used in feature normalization (default: `16`).
+
+### Logging & Observability
+- `LOG_FILE_PATH`: Explicit file path where structured JSON logs will be written for Fluent-Bit (optional).
+- `LOG_DIR`: Directory where `$CONTAINER_NAME.log` or `$HOSTNAME.log` will be created if `LOG_FILE_PATH` is not set (optional).
 
 ### Federated Learning (FRM)
 - `LEAD_FRM_QUORUM_THRESHOLD` / `FRM_QUORUM_THRESHOLD`: Neighbor quorum ratio needed to trigger transient coordinator round (default: `0.90`).

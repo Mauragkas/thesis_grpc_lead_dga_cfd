@@ -1,6 +1,7 @@
 sequenceDiagram
     participant Main as main()
     participant Runner as GaRunner::run()
+    participant Tracker as ProgressTracker
     participant Mig as MigrationHook
     participant Ops as ga::operators
     participant Store as GeneStore
@@ -13,8 +14,9 @@ sequenceDiagram
     Ops-->>Runner: population
 
     Runner->>Normal: Normal::new(0.0, cfg.mut_sigma)
+    Runner->>Tracker: ProgressTracker::new(patience, min_improvement, min_generations)
 
-    loop for gen in 1..=cfg.generations
+    loop for gen in 1..=cfg.max_generations
         opt migration is Some(...)
             Runner->>Mig: drain_immigrants()
             Mig-->>Runner: immigrants
@@ -46,9 +48,15 @@ sequenceDiagram
         end
 
         Runner->>Store: evict_expired(gen)
+        Runner->>Runner: record_generation_stats(gen, best_ever, best_genome)
 
         opt migration is Some(...)
             Runner->>Mig: maybe_emigrate(gen, &population, &fitnesses)
+        end
+
+        Runner->>Tracker: update(best_ever, gen)
+        opt tracker converged (stagnated >= patience and gen >= min_generations)
+            Runner->>Runner: log convergence & break early
         end
 
         Runner->>Ops: select_survivors(&population, &fitnesses, cfg)
@@ -57,5 +65,5 @@ sequenceDiagram
         Ops-->>Runner: next population
     end
 
-    Runner-->>Main: Ok(best_ever)
+    Runner-->>Main: Ok(GaResult { best_fitness, best_genome })
 

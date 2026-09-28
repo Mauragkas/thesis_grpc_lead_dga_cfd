@@ -27,7 +27,8 @@ Coordinates the full GA generational lifecycle: initial population generation, i
  
 1. Generate the initial random population within normalized `[0, 1]` bounds.
 2. Initialize `Normal` distribution for mutations.
-3. For each generation `gen` from `1` to `generations`:
+3. Initialize `ProgressTracker::new(stagnation_patience, min_improvement, min_generations)`.
+4. For each generation `gen` from `1` to `max_generations`:
    1. **Immigration**: If `MigrationHook` is configured, drain immigrants from the buffer and integrate them into the population.
    2. **Cache check**: Query `store.lookup_exact(genes, gen)` for each individual.
    3. **Filter uncached**: Collect all cache misses that require remote evaluation.
@@ -35,16 +36,17 @@ Coordinates the full GA generational lifecycle: initial population generation, i
    5. **Store locally**: Insert newly evaluated individuals and their fitness into the local `GeneStore`.
    6. **Store in LEAD DHT**: If `NeighborStore` is configured, persist each newly evaluated individual under multi-probe Hilbert keys.
    7. **Eviction**: Call `store.evict_expired(gen)` to drop records exceeding the TTL window.
-   8. **Statistics**: Compute generation best and average fitness, update `best_ever`, and log metrics.
+   8. **Statistics**: Compute generation best and average fitness, update all-time `best_ever` and `best_genome`, and log metrics.
    9. **Emigration**: If `MigrationHook` is configured and `gen` matches the migration interval, select top individuals and send them to the ring successor.
-   10. **Selection**: Call `select_survivors()` to keep the top `elite_frac` portion.
-   11. **Breeding**: Call `next_generation()` to mutate survivors into a full new population.
-4. Return the `best_ever` fitness achieved across all generations.
+   10. **Convergence Check**: Update `tracker.update(best_ever, gen)`. If progress has stagnated ($< \text{min\_improvement}$) for $\ge \text{stagnation\_patience}$ consecutive generations and $\text{gen} \ge \text{min\_generations}$, log early convergence and break out of the generational loop.
+   11. **Selection**: Call `select_survivors()` to keep the top `elite_frac` portion.
+   12. **Breeding**: Call `next_generation()` to mutate survivors into a full new population.
+5. Return the `GaResult` containing `best_fitness` and `best_genome` achieved across the run.
  
 ## Postconditions
  
-- The GA run completes.
-- The best fitness value is returned to `main`.
+- The GA run completes (either reaching `max_generations` or terminating early upon stagnation convergence).
+- The `GaResult` with the best fitness score and genome parameter vector is returned to `main`.
  
 ## Failure cases
  
