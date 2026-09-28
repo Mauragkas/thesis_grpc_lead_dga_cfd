@@ -9,7 +9,6 @@ Demonstrates that ring migration preserves search space diversity, preventing
 early catastrophic stagnation.
 
 Generates:
-  - figures/fig1_population_diversity.pdf
   - figures/fig1_population_diversity.png
 """
 
@@ -99,15 +98,15 @@ def plot_diversity(
 
 def main():
     parser = argparse.ArgumentParser(description="Plot GA Population Diversity")
-    parser.add_argument("--single-pattern", type=str, default="data/single_island_*.jsonl")
-    parser.add_argument("--multi-pattern", type=str, default="data/multi_island_node*.jsonl")
-    parser.add_argument("--out-dir", type=str, default="figures")
+    parser.add_argument("--single-pattern", type=str, default="evaluation/data/single_island_*.jsonl")
+    parser.add_argument("--multi-pattern", type=str, default="evaluation/data/multi_island_node*.jsonl")
+    parser.add_argument("--out-dir", type=str, default="evaluation/figures")
     args = parser.parse_args()
 
     s_files = sorted([Path(p) for p in glob.glob(args.single_pattern)])
     m_files = sorted([Path(p) for p in glob.glob(args.multi_pattern)])
     if not m_files:
-        m_files = sorted([Path(p) for p in glob.glob("data/multi_island_*.jsonl")])
+        m_files = sorted([Path(p) for p in glob.glob("evaluation/data/multi_island_*.jsonl")])
 
     plot_diversity(s_files, m_files, Path(args.out_dir))
 

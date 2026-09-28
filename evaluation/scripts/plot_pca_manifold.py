@@ -181,12 +181,12 @@ def plot_pca_manifold(jsonl_path: Path, out_dir: Path):
 def main():
     parser = argparse.ArgumentParser(description="Plot PCA Evolution Manifold")
     parser.add_argument("--jsonl", type=str, default="", help="Path to JSONL run file")
-    parser.add_argument("--out-dir", type=str, default="figures")
+    parser.add_argument("--out-dir", type=str, default="evaluation/figures")
     args = parser.parse_args()
 
     jsonl_path = Path(args.jsonl) if args.jsonl else None
     if not jsonl_path or not jsonl_path.exists():
-        found = sorted(glob.glob("data/*_island_*.jsonl"))
+        found = sorted(glob.glob("evaluation/data/*_island_*.jsonl"))
         if found:
             jsonl_path = Path(found[0])
 
