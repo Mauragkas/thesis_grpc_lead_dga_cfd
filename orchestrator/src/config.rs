@@ -52,7 +52,12 @@ pub struct GaConfig {
     pub batch_size: usize,
     pub seed: u64,
     pub eval_endpoint: String,
+    /// Optional path to export JSON Lines generational telemetry for benchmarks.
+    pub export_path: Option<String>,
+    /// Whether to log full population genomes into each generation record.
+    pub record_population: bool,
 }
+
 
 impl GaConfig {
     /// Convenience alias for `max_generations` for backward compatibility.
@@ -103,8 +108,11 @@ impl Default for GaConfig {
             batch_size: 1,
             seed: 42,
             eval_endpoint: "load-balancer:50051".to_string(),
+            export_path: None,
+            record_population: false,
         }
     }
+
 }
 
 impl Default for TransportConfig {
@@ -176,6 +184,17 @@ where
             ga.eval_endpoint
         );
     }
+
+    if let Some(raw) = env_map.get("POP_SIZE").or_else(|| env_map.get("GA_POP_SIZE")) {
+        match raw.parse::<usize>() {
+            Ok(pop) => {
+                info!("POP_SIZE override: {pop}");
+                ga.pop_size = pop;
+            }
+            Err(_) => warn!("Ignoring invalid POP_SIZE '{raw}': not a valid usize"),
+        }
+    }
+
 
     if let Some(raw) = env_map.get("GA_SEED") {
         match raw.parse::<u64>() {
@@ -263,7 +282,27 @@ where
         );
     }
 
+    if let Some(path) = env_map
+        .get("GA_EXPORT_PATH")
+        .or_else(|| env_map.get("EXPORT_PATH"))
+    {
+        if !path.trim().is_empty() {
+            info!("GA_EXPORT_PATH set: {path}");
+            ga.export_path = Some(path.trim().to_string());
+        }
+    }
+
+    if let Some(raw) = env_map
+        .get("GA_RECORD_POPULATION")
+        .or_else(|| env_map.get("RECORD_POPULATION"))
+    {
+        let lower = raw.trim().to_lowercase();
+        ga.record_population = lower == "true" || lower == "1" || lower == "yes";
+        info!("GA_RECORD_POPULATION set: {}", ga.record_population);
+    }
+
     let mut store = GeneStoreConfig::default();
+
     if let Some(raw) = env_map.get("GENE_STORE_MAX_AGE") {
         match raw.parse::<usize>() {
             Ok(max_age) => {

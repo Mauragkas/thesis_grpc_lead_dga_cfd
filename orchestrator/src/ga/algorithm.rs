@@ -1,6 +1,10 @@
 use crate::config::GaConfig;
 use crate::evaluator::Evaluator;
 use crate::ga::operators::{next_generation, random_population, select_survivors};
+use crate::ga::telemetry::{
+    compute_fitness_stats, compute_gene_variance, compute_population_entropy, GenerationRecord,
+    TelemetrySink,
+};
 use crate::gene_store::GeneStore;
 use crate::migration::MigrationHook;
 use crate::neighbor_store::NeighborStore;
@@ -9,6 +13,7 @@ use rand_distr::Normal;
 use std::time::Instant;
 use tonic::Status;
 use tracing::{error, info, warn};
+
 
 /// Result of a completed GA run containing the best candidate found.
 #[derive(Debug, Clone, PartialEq)]
@@ -106,10 +111,42 @@ pub struct GaRunner<'a> {
     pub store: &'a dyn GeneStore,
     pub neighbor_store: Option<&'a dyn NeighborStore>,
     pub migration: Option<&'a dyn MigrationHook>,
+    pub telemetry: Option<&'a dyn TelemetrySink>,
 }
 
 impl<'a> GaRunner<'a> {
+    pub fn new(
+        cfg: &'a GaConfig,
+        evaluator: &'a dyn Evaluator,
+        store: &'a dyn GeneStore,
+    ) -> Self {
+        Self {
+            cfg,
+            evaluator,
+            store,
+            neighbor_store: None,
+            migration: None,
+            telemetry: None,
+        }
+    }
+
+    pub fn with_neighbor_store(mut self, ns: Option<&'a dyn NeighborStore>) -> Self {
+        self.neighbor_store = ns;
+        self
+    }
+
+    pub fn with_migration(mut self, mig: Option<&'a dyn MigrationHook>) -> Self {
+        self.migration = mig;
+        self
+    }
+
+    pub fn with_telemetry(mut self, telem: Option<&'a dyn TelemetrySink>) -> Self {
+        self.telemetry = telem;
+        self
+    }
+
     pub async fn run(&self, rng: &mut StdRng) -> Result<GaResult, Status> {
+
         let start = Instant::now();
         info!(
             "GA run starting: pop_size={}, genes_len={}, max_generations={}, min_generations={}, stagnation_patience={}, min_improvement={}, mut_sigma={}, elite_frac={}, batch_size={}",
@@ -144,11 +181,14 @@ impl<'a> GaRunner<'a> {
 
             self.record_generation_stats(
                 gen,
+                start.elapsed().as_secs_f64(),
                 &population,
                 &fitnesses,
                 &mut best_ever,
                 &mut best_genome,
-            );
+            )
+            .await;
+
 
             self.handle_emigration(gen, &population, &fitnesses).await;
 
@@ -213,23 +253,19 @@ impl<'a> GaRunner<'a> {
             })
     }
 
-    /// Records generation fitness metrics to stdout and logs, updating best candidate if improved.
-    fn record_generation_stats(
+    /// Records generation fitness metrics to stdout and logs, updating best candidate if improved,
+    /// and dispatches structured telemetry to the sink if configured.
+    async fn record_generation_stats(
         &self,
         gen: usize,
+        elapsed_sec: f64,
         population: &[Vec<f64>],
         fitnesses: &[f64],
         best_ever: &mut f64,
         best_genome: &mut Vec<f64>,
     ) {
         let candidate = find_best_candidate(population, fitnesses);
-        let gen_best_fitness = candidate.map(|(_, f)| f).unwrap_or(f64::NEG_INFINITY);
-
-        let avg = if fitnesses.is_empty() {
-            0.0
-        } else {
-            fitnesses.iter().sum::<f64>() / fitnesses.len() as f64
-        };
+        let (gen_best, avg, worst, std_dev) = compute_fitness_stats(fitnesses);
 
         if let Some((genes, fitness)) = candidate {
             if fitness > *best_ever || best_genome.is_empty() {
@@ -240,13 +276,38 @@ impl<'a> GaRunner<'a> {
 
         info!(
             gen = gen,
-            best = gen_best_fitness,
+            best = gen_best,
             avg = avg,
             best_ever = *best_ever,
             best_genome = ?best_genome,
-            "Gen {gen}: best={gen_best_fitness:.4}, avg={avg:.4}, best_ever={best_ever:.4}, best_genome={best_genome:?}"
+            "Gen {gen}: best={gen_best:.4}, avg={avg:.4}, best_ever={best_ever:.4}, best_genome={best_genome:?}"
         );
+
+        if let Some(sink) = self.telemetry {
+            let gene_variance = compute_gene_variance(population, self.cfg.genes_len);
+            let entropy = compute_population_entropy(population, self.cfg.genes_len, 10);
+            let pop_snapshot = if self.cfg.record_population {
+                Some(population.to_vec())
+            } else {
+                None
+            };
+
+            let record = GenerationRecord {
+                generation: gen,
+                elapsed_sec,
+                best_fitness: gen_best,
+                avg_fitness: avg,
+                worst_fitness: worst,
+                std_fitness: std_dev,
+                best_genome: best_genome.clone(),
+                gene_variance,
+                entropy,
+                population: pop_snapshot,
+            };
+            sink.record(record).await;
+        }
     }
+
 
     /// Emigrates individuals to ring successor if due.
     async fn handle_emigration(

@@ -27,13 +27,7 @@ async fn runner_returns_best_fitness_on_happy_path() {
     let store = MockGeneStore::empty();
 
     let mut rng = seeded_rng(&cfg);
-    let runner = GaRunner {
-        cfg: &cfg,
-        evaluator: &evaluator,
-        store: &store,
-        neighbor_store: None,
-        migration: None,
-    };
+    let runner = GaRunner::new(&cfg, &evaluator, &store);
     let best = runner.run(&mut rng).await.unwrap();
     // best ever should be the max of the supplied fitnesses
     assert!((best.best_fitness - (pop as f64)).abs() < 1e-9);
@@ -48,14 +42,9 @@ async fn runner_propagates_evaluator_errors() {
     let store = MockGeneStore::empty();
 
     let mut rng = seeded_rng(&cfg);
-    let runner = GaRunner {
-        cfg: &cfg,
-        evaluator: &evaluator,
-        store: &store,
-        neighbor_store: None,
-        migration: None,
-    };
+    let runner = GaRunner::new(&cfg, &evaluator, &store);
     let err = runner.run(&mut rng).await.unwrap_err();
+
     assert_eq!(err.code(), Status::internal("x").code());
     assert!(err.message().contains("mock evaluator failure"));
 }
@@ -84,14 +73,8 @@ async fn runner_with_multi_tier_evaluator_exact_cache_hits() {
         tier_cfg,
     );
 
-    let mut rng = StdRng::seed_from_u64(cfg.seed);
-    let runner = GaRunner {
-        cfg: &cfg,
-        evaluator: &multi_tier,
-        store: store.as_ref(),
-        neighbor_store: None,
-        migration: None,
-    };
+    let mut rng = seeded_rng(&cfg);
+    let runner = GaRunner::new(&cfg, &multi_tier, store.as_ref());
     let best = runner.run(&mut rng).await.unwrap();
     assert!(best.best_fitness >= 100.0);
     assert_eq!(best.best_genome.len(), cfg.genes_len);
@@ -106,13 +89,7 @@ async fn runner_invokes_eviction_each_generation() {
     let store = MockGeneStore::empty();
 
     let mut rng = seeded_rng(&cfg);
-    let runner = GaRunner {
-        cfg: &cfg,
-        evaluator: &evaluator,
-        store: &store,
-        neighbor_store: None,
-        migration: None,
-    };
+    let runner = GaRunner::new(&cfg, &evaluator, &store);
     runner.run(&mut rng).await.unwrap();
     assert_eq!(
         store.evict_calls.load(std::sync::atomic::Ordering::SeqCst),
@@ -134,14 +111,9 @@ async fn runner_stops_early_when_stagnated() {
     let store = MockGeneStore::empty();
 
     let mut rng = seeded_rng(&cfg);
-    let runner = GaRunner {
-        cfg: &cfg,
-        evaluator: &evaluator,
-        store: &store,
-        neighbor_store: None,
-        migration: None,
-    };
+    let runner = GaRunner::new(&cfg, &evaluator, &store);
     let res = runner.run(&mut rng).await.unwrap();
+
     assert_eq!(res.best_fitness, 5.0);
     let evictions = store.evict_calls.load(std::sync::atomic::Ordering::SeqCst);
     // Gen 1: baseline (stagnant = 0)
@@ -178,13 +150,7 @@ async fn runner_continues_while_making_progress() {
     let store = MockGeneStore::empty();
 
     let mut rng = seeded_rng(&cfg);
-    let runner = GaRunner {
-        cfg: &cfg,
-        evaluator: &evaluator,
-        store: &store,
-        neighbor_store: None,
-        migration: None,
-    };
+    let runner = GaRunner::new(&cfg, &evaluator, &store);
     let res = runner.run(&mut rng).await.unwrap();
     assert_eq!(
         store.evict_calls.load(std::sync::atomic::Ordering::SeqCst),
@@ -260,13 +226,7 @@ async fn runner_with_multi_tier_stores_newly_evaluated_individuals() {
     );
 
     let mut rng = seeded_rng(&cfg);
-    let runner = GaRunner {
-        cfg: &cfg,
-        evaluator: &multi_tier,
-        store: store.as_ref(),
-        neighbor_store: None,
-        migration: None,
-    };
+    let runner = GaRunner::new(&cfg, &multi_tier, store.as_ref());
     runner.run(&mut rng).await.unwrap();
     // At minimum, generation 1 evaluates initial population uncached and stores them.
     assert!(store.store_calls.load(std::sync::atomic::Ordering::SeqCst) >= cfg.pop_size);
@@ -286,14 +246,9 @@ async fn runner_tracks_and_returns_best_candidate_genome() {
     let store = MockGeneStore::empty();
 
     let mut runner_rng = seeded_rng(&cfg);
-    let runner = GaRunner {
-        cfg: &cfg,
-        evaluator: &evaluator,
-        store: &store,
-        neighbor_store: None,
-        migration: None,
-    };
+    let runner = GaRunner::new(&cfg, &evaluator, &store);
     let result = runner.run(&mut runner_rng).await.unwrap();
     assert!((result.best_fitness - 999.0).abs() < 1e-9);
     assert_eq!(result.best_genome, expected_best_genome);
 }
+
