@@ -6,7 +6,6 @@ Compares:
   2. Multi-Island Distributed GA with Ring Migration (Preserves diversity, reaches higher optima)
 
 Generates:
-  - figures/fig1_single_vs_multi_island.pdf
   - figures/fig1_single_vs_multi_island.png
 """
 
@@ -96,15 +95,15 @@ def plot_comparison(
 
 def main():
     parser = argparse.ArgumentParser(description="Plot Single vs Multi Island Convergence")
-    parser.add_argument("--single-pattern", type=str, default="data/single_island_*.jsonl")
-    parser.add_argument("--multi-pattern", type=str, default="data/multi_island_node*.jsonl")
-    parser.add_argument("--out-dir", type=str, default="figures")
+    parser.add_argument("--single-pattern", type=str, default="evaluation/data/single_island_*.jsonl")
+    parser.add_argument("--multi-pattern", type=str, default="evaluation/data/multi_island_node*.jsonl")
+    parser.add_argument("--out-dir", type=str, default="evaluation/figures")
     args = parser.parse_args()
 
     s_files = sorted([Path(p) for p in glob.glob(args.single_pattern)])
     m_files = sorted([Path(p) for p in glob.glob(args.multi_pattern)])
     if not m_files:
-        m_files = sorted([Path(p) for p in glob.glob("data/multi_island_*.jsonl")])
+        m_files = sorted([Path(p) for p in glob.glob("evaluation/data/multi_island_*.jsonl")])
 
 
     if not s_files or not m_files:

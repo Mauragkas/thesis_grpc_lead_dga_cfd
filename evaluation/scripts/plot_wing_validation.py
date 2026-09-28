@@ -6,7 +6,6 @@ worker CFD physics model (semi-span, true 3D NACA 4-digit airfoil lofting,
 dynamic Stan Hall tail volume sizing, and proper aspect-ratio rendering).
 
 Generates:
-  - figures/fig1_wing_geometry_3d.pdf
   - figures/fig1_wing_geometry_3d.png
   - figures/table1_geometric_aero_specs.tex
 """
@@ -402,12 +401,9 @@ def render_wings_3d(baseline_params: Dict[str, float], optimal_params: Dict[str,
 
     out_dir.mkdir(parents=True, exist_ok=True)
     png_path = out_dir / "fig1_wing_geometry_3d.png"
-    pdf_path = out_dir / "fig1_wing_geometry_3d.pdf"
     fig.savefig(png_path, format="png", bbox_inches="tight")
-    fig.savefig(pdf_path, format="pdf", bbox_inches="tight")
     plt.close(fig)
     print(f"Generated: {png_path}")
-    print(f"Generated: {pdf_path}")
 
 
 # Locate and import real worker evaluation module
@@ -506,7 +502,7 @@ Mission Energy Consumed (Wh) & {base_energy:.2f} & {opt_energy:.2f} & {((opt_ene
 def find_best_genome_from_runs() -> Tuple[List[float], Optional[str], Optional[int], float]:
     """Finds the overall highest-fitness genome across available benchmark data files."""
     candidate_patterns = [
-        "orchestrator/data/*.jsonl",
+        "evaluation/data/*.jsonl",
         "data/*.jsonl",
     ]
     files = []
@@ -545,7 +541,7 @@ def find_best_genome_from_runs() -> Tuple[List[float], Optional[str], Optional[i
 def main():
     parser = argparse.ArgumentParser(description="Render 3D Wing Geometry & Generate LaTeX Specs Table")
     parser.add_argument("--jsonl", type=str, default="", help="Optional run JSONL file to extract best_genome")
-    default_out = "orchestrator/figures" if Path("orchestrator/figures").exists() else "figures"
+    default_out = "evaluation/figures" if Path("evaluation/figures").exists() else "figures"
     parser.add_argument("--out-dir", type=str, default=default_out)
     args = parser.parse_args()
 

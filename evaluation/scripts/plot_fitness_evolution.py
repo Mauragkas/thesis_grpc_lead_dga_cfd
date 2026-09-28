@@ -5,7 +5,6 @@ Plots Best, Mean, and Worst fitness across generations with optional confidence
 intervals (+/- 1 sigma) across multiple random seed runs.
 
 Generates:
-  - figures/fig1_fitness_evolution.pdf
   - figures/fig1_fitness_evolution.png
 """
 
@@ -114,8 +113,8 @@ def plot_evolution(gens: np.ndarray, stats: Dict[str, Tuple[np.ndarray, np.ndarr
 
 def main():
     parser = argparse.ArgumentParser(description="Plot GA Fitness Evolution")
-    parser.add_argument("--data-pattern", type=str, default="data/*_island_*.jsonl", help="Glob pattern for run JSONL files")
-    parser.add_argument("--out-dir", type=str, default="figures", help="Output directory for figures")
+    parser.add_argument("--data-pattern", type=str, default="evaluation/data/*_island_*.jsonl", help="Glob pattern for run JSONL files")
+    parser.add_argument("--out-dir", type=str, default="evaluation/figures", help="Output directory for figures")
     args = parser.parse_args()
 
     files = [Path(p) for p in glob.glob(args.data_pattern)]
