@@ -8,6 +8,8 @@ use crate::config::{
 };
 use crate::evaluator::{GrpcEvaluator, MultiTierEvaluator};
 use crate::ga::algorithm::GaRunner;
+use crate::ga::telemetry::{JsonLinesFileSink, TelemetrySink};
+
 use crate::gene_store::{EuclideanDistance, GenerationEvictor, InMemoryGeneStore};
 use crate::hilbert::HilbertKeyGenerator;
 use crate::lead_store::GrpcLeadStore;
@@ -308,6 +310,17 @@ pub async fn run() -> Result<(), Box<Status>> {
         migrant_buffer.clone(),
     );
 
+    let telemetry_sink: Option<Box<dyn TelemetrySink>> = match &ga_cfg.export_path {
+        Some(path) => match JsonLinesFileSink::try_new(path) {
+            Ok(sink) => Some(Box::new(sink)),
+            Err(e) => {
+                warn!("Failed to initialize GA telemetry export file at {path}: {e}");
+                None
+            }
+        },
+        None => None,
+    };
+
     let mut rng = StdRng::seed_from_u64(ga_cfg.seed);
     let runner = GaRunner {
         cfg: &ga_cfg,
@@ -315,7 +328,9 @@ pub async fn run() -> Result<(), Box<Status>> {
         store: store.as_ref(),
         neighbor_store: neighbor_store.as_deref().map(|s| s as &dyn NeighborStore),
         migration: Some(&migration),
+        telemetry: telemetry_sink.as_deref(),
     };
+
 
     match runner.run(&mut rng).await {
         Ok(res) => {

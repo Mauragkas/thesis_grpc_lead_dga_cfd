@@ -151,3 +151,15 @@ fn config_from_vars_ignores_invalid_numerical_values() {
     assert_eq!(migration.interval_generations, 5);
     assert_eq!(migration.migrant_count, 3);
 }
+
+#[test]
+fn config_from_vars_parses_telemetry_options() {
+    let vars = [
+        ("GA_EXPORT_PATH", "/tmp/ga_results.jsonl"),
+        ("GA_RECORD_POPULATION", "true"),
+    ];
+    let (ga, _, _, _, _, _, _, _) = config_from_vars(vars);
+    assert_eq!(ga.export_path, Some("/tmp/ga_results.jsonl".to_string()));
+    assert!(ga.record_population);
+}
+

@@ -164,5 +164,8 @@ pub fn small_config() -> orchestrator::config::GaConfig {
         batch_size: 2,
         seed: 7,
         eval_endpoint: "127.0.0.1:0".to_string(),
+        export_path: None,
+        record_population: false,
     }
 }
+
