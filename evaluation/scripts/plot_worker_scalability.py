@@ -10,6 +10,7 @@ Evaluates:
 
 Generates:
   - evaluation/figures/fig4_worker_scalability.png
+  - evaluation/figures/table_fig4_worker_scalability.tex
 """
 
 import argparse
@@ -77,9 +78,9 @@ def plot_worker_scalability(worker_bench_path: Path, out_dir: Path):
 
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(13.5, 4.8), dpi=300)
 
-    # ─────────────────────────────────────────────────────────────────
+    # ─────────────────────────────────────────────────────────────
     # Panel 1: Speedup vs. Scaling Laws
-    # ─────────────────────────────────────────────────────────────────
+    # ─────────────────────────────────────────────────────────────
     ideal_speedup = workers
 
     # Amdahl's Law: S(W) = 1 / ((1 - p) + p / W)
@@ -111,7 +112,7 @@ def plot_worker_scalability(worker_bench_path: Path, out_dir: Path):
     ax1.text(
         workers[-1],
         speedup_vals[-1] * 0.75,
-        f"{speedup_vals[-1]:.1f}$\\times$ at $W=32$\n(Eff: {efficiency_vals[-1]:.1f}%)",
+        f"{speedup_vals[-1]:.1f}\\times at $W=32$\n(Eff: {efficiency_vals[-1]:.1f}%)",
         ha="right",
         va="top",
         fontsize=9,
@@ -120,9 +121,9 @@ def plot_worker_scalability(worker_bench_path: Path, out_dir: Path):
         bbox=dict(boxstyle="round,pad=0.25", facecolor="#eff6ff", edgecolor="#93c5fd"),
     )
 
-    # ─────────────────────────────────────────────────────────────────
+    # ─────────────────────────────────────────────────────────────
     # Panel 2: Evaluator Throughput (indiv/sec)
-    # ─────────────────────────────────────────────────────────────────
+    # ─────────────────────────────────────────────────────────────
     ax2.bar(
         [str(w) for w in workers],
         throughput_vals,
@@ -149,9 +150,33 @@ def plot_worker_scalability(worker_bench_path: Path, out_dir: Path):
     plt.close(fig)
     print(f"Generated: {out_path}")
 
+    # Export LaTeX table for worker scalability
+    tex_path = out_dir / "table_fig4_worker_scalability.tex"
+    with open(tex_path, "w", encoding="utf-8") as f_tex:
+        f_tex.write(r"""\begin{table}[t]
+\centering
+\caption{Distributed CFD Worker Scalability and Generational Throughput Scaling}
+\label{tab:worker_scalability}
+\begin{tabular}{ccccc}
+\hline
+\textbf{Workers ($W$)} & \textbf{Wall Time ($T_W$, s)} & \textbf{Measured Speedup} & \textbf{Parallel Efficiency ($\eta$)} & \textbf{Throughput (indiv/s)} \\
+\hline
+""")
+        for idx, w in enumerate(workers):
+            t_w = wall_clock_sec[idx]
+            s_w = speedup_vals[idx]
+            eff = efficiency_vals[idx]
+            tp = throughput_vals[idx]
+            f_tex.write(f"$W = {w}$ & {t_w:.2f}~s & {s_w:.2f}$\\times$ & {eff:.1f}\\% & {tp:.1f} \\\\\n")
+        f_tex.write(r"""\hline
+\end{tabular}
+\end{table}
+""")
+    print(f"Generated: {tex_path}")
+
 
 def main():
-    parser = argparse.ArgumentParser(description="Plot Worker Scalability & Scaling Laws")
+    parser = argparse.ArgumentParser(description="Plot Worker Speedup & Scalability")
     parser.add_argument(
         "--data",
         type=str,

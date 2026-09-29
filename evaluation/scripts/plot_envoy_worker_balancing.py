@@ -8,6 +8,7 @@ Plots real empirical AeroSandbox CFD worker latency distributions:
 
 Generates:
   - evaluation/figures/fig3_envoy_load_balancing.png
+  - evaluation/figures/table_fig3_envoy_load_balancing.tex
 """
 
 import argparse
@@ -47,9 +48,9 @@ def plot_real_load_balancing(data_path: Path, out_dir: Path):
 
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(13.5, 4.8), dpi=300)
 
-    # ─────────────────────────────────────────────────────────────────
+    # ─────────────────────────────────────────────────────────────
     # Panel 1: Empirical CFD Worker Latency CDF & Tail Straggler Reduction
-    # ─────────────────────────────────────────────────────────────────
+    # ─────────────────────────────────────────────────────────────
     sorted_rr = np.sort(rr_lat)
     sorted_lr = np.sort(lr_lat)
     cdf_rr = np.arange(1, len(sorted_rr) + 1) / len(sorted_rr)
@@ -80,9 +81,9 @@ def plot_real_load_balancing(data_path: Path, out_dir: Path):
     ax1.grid(True, linestyle="--", alpha=0.35)
     ax1.legend(loc="lower right", frameon=True, framealpha=0.92, fontsize=9.5)
 
-    # ─────────────────────────────────────────────────────────────────
+    # ─────────────────────────────────────────────────────────────
     # Panel 2: Per-Worker Evaluation Counts & Load Fairness
-    # ─────────────────────────────────────────────────────────────────
+    # ─────────────────────────────────────────────────────────────
     workers = ["Worker 1\n(:50051)", "Worker 2\n(:50052)", "Worker 3\n(:50053)", "Worker 4\n(:50054)"]
     x = np.arange(len(workers))
     width = 0.35
@@ -110,6 +111,29 @@ def plot_real_load_balancing(data_path: Path, out_dir: Path):
     fig.savefig(out_path, format="png", bbox_inches="tight")
     plt.close(fig)
     print(f"Generated: {out_path}")
+
+    # Export LaTeX table for Envoy load balancing comparison
+    tex_path = out_dir / "table_fig3_envoy_load_balancing.tex"
+    with open(tex_path, "w", encoding="utf-8") as f_tex:
+        f_tex.write(r"""\begin{table}[t]
+\centering
+\caption{Envoy gRPC Least-Request vs. Static Round-Robin Load Balancing Performance}
+\label{tab:envoy_balancing_eval}
+\begin{tabular}{lcc}
+\hline
+\textbf{Performance Metric} & \textbf{Static Round-Robin} & \textbf{Envoy Least-Request (P2C)} \\
+\hline
+Median Latency ($P_{50}$) & """ + f"{p50_rr:.1f}" + r"""~ms & """ + f"{p50_lr:.1f}" + r"""~ms \\
+90th Percentile Latency ($P_{90}$) & """ + f"{p90_rr:.1f}" + r"""~ms & """ + f"{p90_lr:.1f}" + r"""~ms \\
+Tail Latency ($P_{99}$) & """ + f"{p99_rr:.1f}" + r"""~ms & """ + f"{p99_lr:.1f}" + r"""~ms \\
+Tail Reduction ($\Delta P_{99}$) & --- & """ + f"-{tail_cut:.1f}" + r"""~ms \\
+Jain's Fairness Index ($J$) & """ + f"{jain_rr:.4f}" + r""" & """ + f"{jain_lr:.4f}" + r""" \\
+Worker Assigned Range (Min / Max) & """ + f"{int(np.min(rr_counts))} / {int(np.max(rr_counts))}" + r""" & """ + f"{int(np.min(lr_counts))} / {int(np.max(lr_counts))}" + r""" \\
+\hline
+\end{tabular}
+\end{table}
+""")
+    print(f"Generated: {tex_path}")
 
 
 def main():

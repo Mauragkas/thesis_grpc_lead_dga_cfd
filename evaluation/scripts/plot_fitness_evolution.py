@@ -6,6 +6,7 @@ intervals (+/- 1 sigma) across multiple random seed runs.
 
 Generates:
   - figures/fig1_fitness_evolution.png
+  - figures/table_fig1_fitness_evolution.tex
 """
 
 import argparse
@@ -101,7 +102,6 @@ def plot_evolution(gens: np.ndarray, stats: Dict[str, Tuple[np.ndarray, np.ndarr
     ax.grid(True)
     ax.legend(loc="lower right", frameon=True, framealpha=0.9, edgecolor="#cccccc")
 
-
     out_dir.mkdir(parents=True, exist_ok=True)
     png_path = out_dir / "fig1_fitness_evolution.png"
 
@@ -109,6 +109,33 @@ def plot_evolution(gens: np.ndarray, stats: Dict[str, Tuple[np.ndarray, np.ndarr
     plt.close(fig)
     print(f"Generated: {png_path}")
 
+    # Export LaTeX table
+    tex_path = out_dir / "table_fig1_fitness_evolution.tex"
+    sample_gens = [g for g in [1, 5, 10, 20, 30, 45, int(gens[-1])] if g <= gens[-1]]
+    sample_gens = sorted(list(set(sample_gens)))
+    with open(tex_path, "w", encoding="utf-8") as f_tex:
+        f_tex.write(r"""\begin{table}[t]
+\centering
+\caption{Generational Fitness Evolution and Population Convergence Statistics}
+\label{tab:fitness_evolution}
+\begin{tabular}{cccc}
+\hline
+\textbf{Generation ($t$)} & \textbf{Best Fitness ($L/D$)} & \textbf{Feasible Mean Fitness} & \textbf{Worst Feasible Fitness} \\
+\hline
+""")
+        for g in sample_gens:
+            idx = g - 1
+            b_m, b_s = best_mean[idx], best_std[idx]
+            a_m, a_s = avg_mean[idx], avg_std[idx]
+            w_m, w_s = worst_mean[idx], worst_std[idx]
+            a_str = f"{a_m:.2f} $\\pm$ {a_s:.2f}" if a_m > -100 else "N/A"
+            w_str = f"{w_m:.2f} $\\pm$ {w_s:.2f}" if w_m > -100 else "N/A"
+            f_tex.write(f"$t = {g}$ & {b_m:.2f} $\\pm$ {b_s:.2f} & {a_str} & {w_str} \\\\\n")
+        f_tex.write(r"""\hline
+\end{tabular}
+\end{table}
+""")
+    print(f"Generated: {tex_path}")
 
 
 def main():

@@ -10,11 +10,13 @@ Plots:
 
 Generates:
   - evaluation/figures/fig5_fitness_multi_seed_ribbon.png
+  - evaluation/figures/table_fig5_multi_seed_ribbon.tex
 """
 
 import argparse
 import glob
 import json
+import re
 from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
@@ -149,6 +151,36 @@ def plot_multiseed_ribbon(jsonl_pattern: str, fallback_json: Path, out_dir: Path
     fig.savefig(out_path, format="png", bbox_inches="tight")
     plt.close(fig)
     print(f"Generated: {out_path} (from {len(runs)} authentic CFD runs)")
+
+    # Export LaTeX table for multi-seed statistical significance
+    tex_path = out_dir / "table_fig5_multi_seed_ribbon.tex"
+    with open(tex_path, "w", encoding="utf-8") as f_tex:
+        f_tex.write(r"""\begin{table}[t]
+\centering
+\caption{Cross-Seed Statistical Reproducibility and Aerodynamic Fitness Convergence}
+\label{tab:multi_seed_convergence}
+\begin{tabular}{ccccc}
+\hline
+\textbf{Random Seed} & \textbf{Initial Best ($t=1$)} & \textbf{Mid Best ($t=20$)} & \textbf{Final Best ($t=45$)} & \textbf{Net Gain ($\Delta L/D$)} \\
+\hline
+""")
+        mid_idx = min(19, min_len - 1)
+        final_idx = min_len - 1
+        for i, r in enumerate(runs):
+            f_name = Path(r.get("file", f"seed_{i}")).name
+            seed_match = re.search(r"seed(\d+)", f_name)
+            s_label = f"Seed {seed_match.group(1)}" if seed_match else f"Run {i+1}"
+            b0 = r["best_fitness"][0]
+            b_mid = r["best_fitness"][mid_idx]
+            b_fin = r["best_fitness"][final_idx]
+            diff = b_fin - b0
+            f_tex.write(f"{s_label} & {b0:.2f} & {b_mid:.2f} & {b_fin:.2f} & +{diff:.2f} \\\\\n")
+        f_tex.write(r"""\hline
+""" + f"\\textbf{{Mean $\\pm$ Std}} & {mean_best[0]:.2f} $\\pm$ {std_best[0]:.2f} & {mean_best[mid_idx]:.2f} $\\pm$ {std_best[mid_idx]:.2f} & {mean_best[final_idx]:.2f} $\\pm$ {std_best[final_idx]:.2f} & +{mean_best[final_idx] - mean_best[0]:.2f} \\\\\n" + r"""\hline
+\end{tabular}
+\end{table}
+""")
+    print(f"Generated: {tex_path}")
 
 
 def main():

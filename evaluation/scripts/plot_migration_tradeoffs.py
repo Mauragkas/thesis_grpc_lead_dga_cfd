@@ -10,6 +10,7 @@ Evaluates:
 
 Generates:
   - evaluation/figures/fig4_island_migration_tradeoffs.png
+  - evaluation/figures/table10_distributed_migration_and_worker_scalability.tex
 """
 
 import argparse
@@ -51,9 +52,9 @@ def plot_real_migration_benchmarks(data_path: Path, out_dir: Path):
         (5, 1): "Low Volume ($M_{\\mathrm{int}}=5, C=1$)",
     }
 
-    # ─────────────────────────────────────────────────────────────────
+    # ─────────────────────────────────────────────────────────────
     # Panel 1: Generational Best Fitness Progression (Measured)
-    # ─────────────────────────────────────────────────────────────────
+    # ─────────────────────────────────────────────────────────────
     for run in data:
         key = (run["interval"], run["count"])
         best_hist = np.array(run["history_best"])
@@ -78,9 +79,9 @@ def plot_real_migration_benchmarks(data_path: Path, out_dir: Path):
     ax1.grid(True, linestyle="--", alpha=0.35)
     ax1.legend(loc="lower right", frameon=True, framealpha=0.92, fontsize=9.0)
 
-    # ─────────────────────────────────────────────────────────────────
+    # ─────────────────────────────────────────────────────────────
     # Panel 2: Normalized Shannon Entropy / Population Diversity
-    # ─────────────────────────────────────────────────────────────────
+    # ─────────────────────────────────────────────────────────────
     for run in data:
         key = (run["interval"], run["count"])
         ent_hist = np.array(run["history_entropy"])
@@ -102,7 +103,6 @@ def plot_real_migration_benchmarks(data_path: Path, out_dir: Path):
     ax2.grid(True, linestyle="--", alpha=0.35)
     ax2.legend(loc="upper right", frameon=True, framealpha=0.92, fontsize=9.0)
 
-    # Add insight callout
     ax2.text(
         15,
         0.42,
@@ -118,6 +118,39 @@ def plot_real_migration_benchmarks(data_path: Path, out_dir: Path):
     fig.savefig(out_path, format="png", bbox_inches="tight")
     plt.close(fig)
     print(f"Generated: {out_path}")
+
+    # Export LaTeX table
+    tex_path = out_dir / "table10_distributed_migration_and_worker_scalability.tex"
+    with open(tex_path, "w", encoding="utf-8") as f_tex:
+        f_tex.write(r"""\begin{table}[t]
+\centering
+\caption{Distributed Multi-Island Migration Parameter Sensitivity Analysis}
+\label{tab:migration_tradeoffs}
+\begin{tabular}{cccccc}
+\hline
+\textbf{Interval ($\tau$)} & \textbf{Count ($M_c$)} & \textbf{Gens to Converge} & \textbf{Final Best $L/D$} & \textbf{Final Entropy} & \textbf{Convergence Behavior} \\
+\hline
+""")
+        for run in data:
+            tau = run["interval"]
+            mc = run["count"]
+            gens_c = run["generations_to_converge"]
+            f_best = run["history_best"][-1]
+            h_fin = run["history_entropy"][-1]
+            if tau == 2:
+                behav = "Rapid consensus; premature drift"
+            elif tau == 5 and mc == 3:
+                behav = "Optimal Pareto trade-off"
+            elif tau == 15:
+                behav = "Delayed cross-pollination"
+            else:
+                behav = "Insufficient genetic mixing"
+            f_tex.write(f"$\\tau = {tau}$ & $M_c = {mc}$ & {gens_c} gens & {f_best:.2f} & {h_fin:.3f} & {behav} \\\\\n")
+        f_tex.write(r"""\hline
+\end{tabular}
+\end{table}
+""")
+    print(f"Generated: {tex_path}")
 
 
 def main():

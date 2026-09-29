@@ -5,6 +5,7 @@ Trains and evaluates a Matérn 5/2 Gaussian Process surrogate directly on the
 authentic dataset of 1,200 AeroSandbox CFD evaluations (`tests/configs_and_scores.json`).
 Generates:
   - evaluation/figures/fig2_surrogate_parameter_sensitivity.png
+  - evaluation/figures/table_fig2_surrogate_parameter_sensitivity.tex
 """
 
 import argparse
@@ -161,6 +162,34 @@ def plot_sensitivity_panel(dataset_path: Path, out_dir: Path):
     plt.savefig(out_path, dpi=300, bbox_inches="tight")
     plt.close(fig)
     print(f"Generated: {out_path}")
+
+    # Export LaTeX table for surrogate parameter sensitivity ranking
+    tex_path = out_dir / "table_fig2_surrogate_parameter_sensitivity.tex"
+    # Compute relevance metric (inverse squared length scale normalized)
+    relevance = 1.0 / (ls ** 2)
+    rel_pct = (relevance / np.sum(relevance)) * 100.0
+    sorted_order = np.argsort(-rel_pct)
+
+    with open(tex_path, "w", encoding="utf-8") as f_tex:
+        f_tex.write(r"""\begin{table}[t]
+\centering
+\caption{Gaussian Process Automatic Relevance Determination (ARD) Parameter Sensitivity}
+\label{tab:gp_ard_sensitivity}
+\begin{tabular}{lccc}
+\hline
+\textbf{Rank} & \textbf{Geometric Design Parameter} & \textbf{Learned Length-Scale ($\ell_d$)} & \textbf{Relative Sensitivity (\%)} \\
+\hline
+""")
+        for rank, p_idx in enumerate(sorted_order, start=1):
+            pname = FEATURE_NAMES[p_idx].replace("_", r"\_")
+            l_val = ls[p_idx]
+            r_val = rel_pct[p_idx]
+            f_tex.write(f"{rank} & \\texttt{{{pname}}} & {l_val:.2f} & {r_val:.1f}\\% \\\\\n")
+        f_tex.write(r"""\hline
+\end{tabular}
+\end{table}
+""")
+    print(f"Generated: {tex_path}")
 
 
 def main():

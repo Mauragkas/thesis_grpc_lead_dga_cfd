@@ -13,6 +13,7 @@ Visual encodings:
 
 Generates:
   - figures/fig1_pca_evolution_manifold.png
+  - figures/table_fig1_pca_loadings.tex
 """
 
 import argparse
@@ -38,16 +39,21 @@ plt.rcParams.update({
     "figure.autolayout": True,
 })
 
+FEATURE_NAMES = [
+    "wing_span",
+    "wing_root_chord",
+    "wing_tip_chord",
+    "wing_sweep",
+    "wing_dihedral",
+    "wing_washout",
+    "airfoil_camber",
+    "airfoil_thickness",
+    "fuselage_diameter",
+    "fuselage_length",
+]
+
 
 def load_population_data(filepath: Path) -> Tuple[np.ndarray, np.ndarray, np.ndarray, List[np.ndarray], List[float]]:
-    """
-    Extracts all individuals across generations from a JSONL run file.
-    Returns:
-      all_genomes: np.ndarray shape (total_individuals, 10)
-      all_gens: np.ndarray shape (total_individuals,)
-      best_trajectory: List of best genome per generation
-      best_fitnesses: List of best fitness per generation
-    """
     all_genomes = []
     all_gens = []
     best_trajectory = []
@@ -93,16 +99,12 @@ def plot_pca_manifold(jsonl_path: Path, out_dir: Path):
 
     fig, ax = plt.subplots(figsize=(8.5, 6), dpi=300)
 
-    # 1. Plot generational population scatter with temporal opacity
-    # Subsample generations to keep visual clarity (e.g. 5 epoch snapshots)
     key_gens = sorted(list(set([1, 5, 10, 20, 35, int(max_gen)])))
     
-    # We use a viridis colormap based on generation index, with alpha growing by generation
     for g in key_gens:
         mask = (all_gens == g)
         if not np.any(mask):
             continue
-        # Opacity scales from 0.15 (gen 1) to 0.85 (final gen)
         alpha = 0.15 + 0.75 * (g / max_gen)
         size = 18 + 20 * (g / max_gen)
         
@@ -135,7 +137,6 @@ def plot_pca_manifold(jsonl_path: Path, out_dir: Path):
         zorder=100,
     )
 
-    # Mark Start (Gen 1) and Optimum (Final Gen)
     ax.scatter(
         best_pca[0, 0],
         best_pca[0, 1],
@@ -159,13 +160,11 @@ def plot_pca_manifold(jsonl_path: Path, out_dir: Path):
         zorder=102,
     )
 
-    # Aesthetics
     ax.set_xlabel(f"Principal Component 1 ({exp_var[0]:.1f}% variance)")
     ax.set_ylabel(f"Principal Component 2 ({exp_var[1]:.1f}% variance)")
     ax.set_title("2D PCA Manifold Projection of 10-Dimensional Population Evolution")
     ax.grid(True, linestyle="--", alpha=0.35)
 
-    # Colorbar for generational progression
     cbar = fig.colorbar(scatter, ax=ax, pad=0.02)
     cbar.set_label("Generational Progression (Opacity & Heatmap)")
 
@@ -176,6 +175,32 @@ def plot_pca_manifold(jsonl_path: Path, out_dir: Path):
     fig.savefig(out_path, format="png", bbox_inches="tight")
     plt.close(fig)
     print(f"Generated: {out_path}")
+
+    # Export LaTeX table for PCA loadings
+    tex_path = out_dir / "table_fig1_pca_loadings.tex"
+    loadings = pca.components_
+    with open(tex_path, "w", encoding="utf-8") as f_tex:
+        f_tex.write(r"""\begin{table}[t]
+\centering
+\caption{Principal Component Loadings and Explained Variance of 10D Genome Space}
+\label{tab:pca_loadings}
+\begin{tabular}{lcc}
+\hline
+\textbf{Genome Parameter ($x_i$)} & \textbf{PC1 Loading (""" + f"{exp_var[0]:.1f}\\%" + r""")} & \textbf{PC2 Loading (""" + f"{exp_var[1]:.1f}\\%" + r""")} \\
+\hline
+""")
+        for idx, feat in enumerate(FEATURE_NAMES):
+            feat_clean = feat.replace("_", r"\_")
+            pc1_l = loadings[0, idx]
+            pc2_l = loadings[1, idx]
+            f_tex.write(f"\\texttt{{{feat_clean}}} & {pc1_l:+.3f} & {pc2_l:+.3f} \\\\\n")
+        f_tex.write(r"""\hline
+\textbf{Cumulative Variance} & \multicolumn{2}{c}{""" + f"{exp_var[0] + exp_var[1]:.1f}\\%" + r"""} \\
+\hline
+\end{tabular}
+\end{table}
+""")
+    print(f"Generated: {tex_path}")
 
 
 def main():

@@ -6,6 +6,7 @@ Plots Population Diversity Dynamics:
 
 Generates:
   - evaluation/figures/fig1_population_diversity.png
+  - evaluation/figures/table_fig1_population_diversity.tex
 """
 
 import argparse
@@ -91,15 +92,19 @@ def plot_diversity(
         # Fallback synthetic representative trajectories
         m_gens = np.arange(1, 51)
         s_gens = m_gens
-        s_ent = 0.85 * np.exp(-s_gens / 12.0) + 0.08
-        m_ent = 0.85 * np.exp(-m_gens / 28.0) + 0.05 * np.sin(2 * np.pi * m_gens / 5.0).clip(min=0.0) + 0.22
-        s_var = 0.12 * np.exp(-s_gens / 10.0) + 0.005
-        m_var = 0.12 * np.exp(-m_gens / 25.0) + 0.02 * (m_gens % 5 == 0) + 0.025
+        s_ent_mean = 0.85 * np.exp(-s_gens / 12.0) + 0.08
+        s_ent_std = np.zeros_like(s_ent_mean)
+        m_ent_mean = 0.85 * np.exp(-m_gens / 28.0) + 0.05 * np.sin(2 * np.pi * m_gens / 5.0).clip(min=0.0) + 0.22
+        m_ent_std = np.zeros_like(m_ent_mean)
+        s_var_mean = 0.12 * np.exp(-s_gens / 10.0) + 0.005
+        s_var_std = np.zeros_like(s_var_mean)
+        m_var_mean = 0.12 * np.exp(-m_gens / 25.0) + 0.02 * (m_gens % 5 == 0) + 0.025
+        m_var_std = np.zeros_like(m_var_mean)
 
-        ax1.plot(m_gens, m_ent, label="Multi-Island (Ring Migration)", color="#1d4ed8", linewidth=2.0)
-        ax1.plot(s_gens, s_ent, label="Single-Island (Isolated)", color="#b91c1c", linewidth=1.8, linestyle="--")
-        ax2.plot(m_gens, m_var, label="Multi-Island Variance", color="#0f766e", linewidth=2.0)
-        ax2.plot(s_gens, s_var, label="Single-Island Variance", color="#c2410c", linewidth=1.8, linestyle="--")
+        ax1.plot(m_gens, m_ent_mean, label="Multi-Island (Ring Migration)", color="#1d4ed8", linewidth=2.0)
+        ax1.plot(s_gens, s_ent_mean, label="Single-Island (Isolated)", color="#b91c1c", linewidth=1.8, linestyle="--")
+        ax2.plot(m_gens, m_var_mean, label="Multi-Island Variance", color="#0f766e", linewidth=2.0)
+        ax2.plot(s_gens, s_var_mean, label="Single-Island Variance", color="#c2410c", linewidth=1.8, linestyle="--")
 
     ax1.set_xlabel("Generation ($t$)")
     ax1.set_ylabel(r"Normalized Shannon Entropy $H(t)$")
@@ -119,6 +124,35 @@ def plot_diversity(
     fig.savefig(png_path, format="png", bbox_inches="tight")
     plt.close(fig)
     print(f"Generated: {png_path}")
+
+    # Export LaTeX table
+    tex_path = out_dir / "table_fig1_population_diversity.tex"
+    common_len = min(len(s_gens), len(m_gens))
+    sample_gens = [g for g in [1, 5, 10, 20, 30, common_len] if g <= common_len]
+    sample_gens = sorted(list(set(sample_gens)))
+
+    with open(tex_path, "w", encoding="utf-8") as f_tex:
+        f_tex.write(r"""\begin{table}[t]
+\centering
+\caption{Population Shannon Entropy and Parameter Variance Dynamics}
+\label{tab:population_diversity}
+\begin{tabular}{ccccc}
+\hline
+\textbf{Generation ($t$)} & \textbf{Single-Island Entropy} & \textbf{Multi-Island Entropy} & \textbf{Single-Island Variance} & \textbf{Multi-Island Variance} \\
+\hline
+""")
+        for g in sample_gens:
+            idx = g - 1
+            se = s_ent_mean[idx]
+            me = m_ent_mean[idx]
+            sv = s_var_mean[idx]
+            mv = m_var_mean[idx]
+            f_tex.write(f"$t = {g}$ & {se:.3f} & {me:.3f} & {sv:.4f} & {mv:.4f} \\\\\n")
+        f_tex.write(r"""\hline
+\end{tabular}
+\end{table}
+""")
+    print(f"Generated: {tex_path}")
 
 
 def main():

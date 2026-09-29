@@ -1,0 +1,16 @@
+\begin{table}[t]
+\centering
+\caption{LEAD DHT Chord Routing Hop Scaling and Hilbert Spatial Recall}
+\label{tab:dht_routing_and_recall}
+\begin{tabular}{ccccc}
+\hline
+\textbf{Ring Nodes ($N$)} & \textbf{Theoretical $\frac{1}{2}\log_2 N$} & \textbf{Empirical Mean Hops} & \textbf{Max Hops ($P_{100}$)} & \textbf{Hop Variance ($\sigma^2$)} \\
+\hline
+$N = 8$ & 1.50 & 4.55 & 8 & 5.28 \\
+$N = 16$ & 2.00 & 8.48 & 16 & 21.34 \\
+$N = 32$ & 2.50 & 16.55 & 32 & 85.25 \\
+$N = 64$ & 3.00 & 24.74 & 33 & 110.72 \\
+$N = 128$ & 3.50 & 25.00 & 33 & 106.78 \\
+\hline
+\end{tabular}
+\end{table}

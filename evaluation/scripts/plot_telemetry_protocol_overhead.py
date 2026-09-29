@@ -8,6 +8,7 @@ across batch sizes (N = 10, 50, 100 individuals).
 
 Generates:
   - evaluation/figures/fig3_telemetry_protocol_overhead.png
+  - evaluation/figures/table7_telemetry_protocol_overhead.tex
 """
 
 import argparse
@@ -38,9 +39,6 @@ def plot_real_telemetry_benchmark(data_path: Path, out_dir: Path):
     proto_us = np.array(data["proto_us"])
     json_us = np.array(data["json_us"])
 
-    # Over-the-wire byte sizes based on the measured struct definition:
-    # Protobuf: 98 bytes per individual (varint tags + IEEE 754 packed double precision floats)
-    # JSON: 385 bytes per individual (stringified keys, floating point representations)
     bytes_proto_kb = (np.array(batches) * 98) / 1024.0
     bytes_json_kb = (np.array(batches) * 385) / 1024.0
 
@@ -49,9 +47,9 @@ def plot_real_telemetry_benchmark(data_path: Path, out_dir: Path):
     x = np.arange(len(batches))
     width = 0.35
 
-    # ─────────────────────────────────────────────────────────────────
+    # ─────────────────────────────────────────────────────────────
     # Panel 1: Wire Serialization Footprint (KB)
-    # ─────────────────────────────────────────────────────────────────
+    # ─────────────────────────────────────────────────────────────
     b1 = ax1.bar(x - width / 2, bytes_proto_kb, width, label="Protobuf Binary (prost / Tonic gRPC)", color="#2563eb", edgecolor="black", linewidth=0.7, alpha=0.9)
     b2 = ax1.bar(x + width / 2, bytes_json_kb, width, label="JSON Lines (serde_json)", color="#f59e0b", edgecolor="black", linewidth=0.7, alpha=0.9)
 
@@ -68,7 +66,7 @@ def plot_real_telemetry_benchmark(data_path: Path, out_dir: Path):
     ax1.text(
         x[-1] - width / 2,
         bytes_proto_kb[-1] + 1.2,
-        f"{compression_factor:.1f}$\\times$\nSmaller",
+        f"{compression_factor:.1f}\\times\nSmaller",
         ha="center",
         va="bottom",
         fontsize=9,
@@ -76,9 +74,9 @@ def plot_real_telemetry_benchmark(data_path: Path, out_dir: Path):
         color="#1e40af",
     )
 
-    # ─────────────────────────────────────────────────────────────────
+    # ─────────────────────────────────────────────────────────────
     # Panel 2: Empirical Serialization Latency from Criterion.rs (microseconds)
-    # ─────────────────────────────────────────────────────────────────
+    # ─────────────────────────────────────────────────────────────
     ax2.plot(x, json_us, "s-", color="#f59e0b", linewidth=2.0, markersize=7, label="JSON Serialization (serde_json)")
     ax2.plot(x, proto_us, "o-", color="#2563eb", linewidth=2.2, markersize=7, label="Protobuf Encoding (prost)")
 
@@ -95,7 +93,7 @@ def plot_real_telemetry_benchmark(data_path: Path, out_dir: Path):
     ax2.text(
         x[-1] - 0.25,
         proto_us[-1] + 2.0,
-        f"{speedup_at_100:.1f}$\\times$ Faster\nEncoding",
+        f"{speedup_at_100:.1f}\\times Faster\nEncoding",
         fontsize=9,
         fontweight="bold",
         color="#1e40af",
@@ -107,6 +105,31 @@ def plot_real_telemetry_benchmark(data_path: Path, out_dir: Path):
     fig.savefig(out_path, format="png", bbox_inches="tight")
     plt.close(fig)
     print(f"Generated: {out_path}")
+
+    # Export LaTeX table
+    tex_path = out_dir / "table7_telemetry_protocol_overhead.tex"
+    with open(tex_path, "w", encoding="utf-8") as f_tex:
+        f_tex.write(r"""\begin{table}[t]
+\centering
+\caption{Criterion Serialization Benchmark: Binary Protobuf vs. JSON Lines}
+\label{tab:telemetry_serialization}
+\begin{tabular}{cccccc}
+\hline
+\textbf{Batch ($N$)} & \textbf{Protobuf Latency} & \textbf{JSON Latency} & \textbf{Speedup} & \textbf{Protobuf Wire} & \textbf{JSON Wire} \\
+\hline
+""")
+        for idx, b in enumerate(batches):
+            p_u = proto_us[idx]
+            j_u = json_us[idx]
+            sp = j_u / p_u
+            p_bytes = b * 98
+            j_bytes = b * 385
+            f_tex.write(f"$N = {b}$ & {p_u:.2f}~$\\mu$s & {j_u:.2f}~$\\mu$s & {sp:.1f}$\\times$ & {p_bytes}~B & {j_bytes}~B \\\\\n")
+        f_tex.write(r"""\hline
+\end{tabular}
+\end{table}
+""")
+    print(f"Generated: {tex_path}")
 
 
 def main():
