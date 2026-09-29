@@ -11,6 +11,10 @@ path = "src/lib.rs"
 name = "lead_node"
 path = "src/main.rs"
 
+[[bin]]
+name = "dht_routing_bench"
+path = "benches/dht_routing_bench.rs"
+
 [dependencies]
 tokio = { version = "1.38", features = ["full"] }
 serde = { version = "1.0", features = ["derive"] }
@@ -37,6 +41,10 @@ harness = false
 
 [[bench]]
 name = "rmi_train_bench"
+harness = false
+
+[[bench]]
+name = "telemetry_bench"
 harness = false
 
 [build-dependencies]
