@@ -41,65 +41,17 @@ COLOR_T2 = "#8b5cf6"  # Purple / Indigo (Surrogate evaluation)
 COLOR_T3 = "#ef4444"  # Red / Coral (CFD solver)
 
 
-def compute_tier_proportions_from_population_entropy(
-    gens: np.ndarray,
-    entropies: np.ndarray,
-    pop_size: int = 100,
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+def load_or_compute_tier_counts(
+    filepath: Path,
+    eps: float = 0.005,
+    radius: float = 0.15,
+    max_age: int = 5,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """
-    Computes empirical tier partitioning across generations using spatial convergence dynamics.
-    As entropy H(t) drops from ~1.0 (uniform random exploration) to <0.3 (tight cluster around optima):
-      - Tier 1 (ε-bypass) grows proportionally to local density within radius ε.
-      - Tier 2 (surrogate) covers candidates in the surrounding interpolation shell (ε < d <= R).
-      - Tier 3 (CFD) diminishes from ~95% down to ~15-20% as void regions vanish.
+    Loads generational tier hit counts directly from telemetry records if available,
+    or computes them by running the exact spatial tier pipeline over the authentic
+    population genome vectors recorded during the AeroSandbox CFD run.
     """
-    n_gens = len(gens)
-    t1_counts = np.zeros(n_gens, dtype=int)
-    t2_counts = np.zeros(n_gens, dtype=int)
-    t3_counts = np.zeros(n_gens, dtype=int)
-
-    # Normalize entropy to [0, 1] relative convergence scale
-    h_max = max(np.max(entropies), 1e-4)
-    h_norm = np.clip(entropies / h_max, 0.0, 1.0)
-    convergence = 1.0 - h_norm  # 0 at start, ~0.75-0.80 at convergence
-
-    rng = np.random.default_rng(42)
-
-    for i in range(n_gens):
-        c = convergence[i]
-        # Smooth logistic progression of tier substitution
-        p_t1 = 0.52 / (1.0 + np.exp(-10.0 * (c - 0.50)))
-        p_t2 = 0.36 / (1.0 + np.exp(-8.0 * (c - 0.25))) - 0.5 * p_t1
-        p_t2 = max(0.04, p_t2)
-        p_t3 = max(0.12, 1.0 - p_t1 - p_t2)
-
-        # Re-normalize
-        total = p_t1 + p_t2 + p_t3
-        p_t1 /= total
-        p_t2 /= total
-        p_t3 /= total
-
-        # Early cold-start guarantee (first 3 gens have zero or minimal T1/T2)
-        if gens[i] == 1:
-            p_t1, p_t2, p_t3 = 0.0, 0.0, 1.0
-        elif gens[i] <= 3:
-            p_t1 *= 0.1
-            p_t2 *= 0.2
-            p_t3 = 1.0 - p_t1 - p_t2
-
-        # Convert to discrete population counts summing exactly to pop_size
-        n1 = int(np.round(p_t1 * pop_size))
-        n2 = int(np.round(p_t2 * pop_size))
-        n3 = pop_size - n1 - n2
-
-        t1_counts[i] = n1
-        t2_counts[i] = n2
-        t3_counts[i] = n3
-
-    return t1_counts, t2_counts, t3_counts
-
-
-def load_run_data(filepath: Path) -> Tuple[np.ndarray, np.ndarray]:
     records = []
     with open(filepath, "r", encoding="utf-8") as f:
         for line in f:
@@ -108,8 +60,48 @@ def load_run_data(filepath: Path) -> Tuple[np.ndarray, np.ndarray]:
                 records.append(json.loads(line))
     records.sort(key=lambda r: r["generation"])
     gens = np.array([r["generation"] for r in records])
-    entropies = np.array([r.get("entropy", 0.5) for r in records])
-    return gens, entropies
+
+    # Check if recorded telemetry already contains genuine tier metrics
+    if records and records[0].get("tier1_exact_hits") is not None:
+        t1 = np.array([r.get("tier1_exact_hits", 0) for r in records])
+        t2 = np.array([r.get("tier2_surrogate_hits", 0) for r in records])
+        t3 = np.array([r.get("tier3_cfd_evals", 0) for r in records])
+        return gens, t1, t2, t3
+
+    # Otherwise, evaluate the spatial tier pipeline on the authentic recorded population genomes
+    t1_counts = np.zeros(len(records), dtype=int)
+    t2_counts = np.zeros(len(records), dtype=int)
+    t3_counts = np.zeros(len(records), dtype=int)
+
+    store: List[Tuple[np.ndarray, int]] = []
+
+    for i, r in enumerate(records):
+        gen = r["generation"]
+        pop = r.get("population", [])
+        store = [(g, added_gen) for (g, added_gen) in store if gen - added_gen <= max_age]
+        n1 = 0
+        n2 = 0
+        n3 = 0
+        for ind in pop:
+            ind_arr = np.array(ind)
+            if not store:
+                n3 += 1
+                store.append((ind_arr, gen))
+                continue
+            dists = [np.linalg.norm(ind_arr - s[0]) for s in store]
+            d_min = min(dists)
+            if d_min < eps:
+                n1 += 1
+            elif d_min <= radius:
+                n2 += 1
+            else:
+                n3 += 1
+                store.append((ind_arr, gen))
+        t1_counts[i] = n1
+        t2_counts[i] = n2
+        t3_counts[i] = n3
+
+    return gens, t1_counts, t2_counts, t3_counts
 
 
 def plot_stacked_tier_breakdown(
@@ -133,7 +125,7 @@ def plot_stacked_tier_breakdown(
         labels=[
             "Tier 3: True CFD Simulator (AeroSandbox VLM)",
             "Tier 2: Online Surrogate Inference (MLP / GP)",
-            "Tier 1: $\\epsilon$-Bypass / Cache Hits (Hilbert DHT)",
+            r"Tier 1: $\epsilon$-Bypass / Cache Hits (Hilbert DHT)",
         ],
         colors=[COLOR_T3, COLOR_T2, COLOR_T1],
         alpha=0.88,
@@ -143,10 +135,11 @@ def plot_stacked_tier_breakdown(
 
     # Highlight Convergence Threshold
     ax.axvline(x=25, color="#1e293b", linestyle=":", linewidth=1.5, alpha=0.7)
+    tot_bypass_late = ((t1[24:] + t2[24:]).sum()) / ((t1[24:] + t2[24:] + t3[24:]).sum()) * 100.0
     ax.text(
         25.5,
         pop_size * 0.55,
-        "Steady-State Convergence\n(>80% Non-CFD Evaluations)",
+        f"Steady-State Convergence\n({tot_bypass_late:.1f}% Non-CFD Evaluations)",
         fontsize=9,
         fontweight="bold",
         color="#0f172a",
@@ -154,8 +147,8 @@ def plot_stacked_tier_breakdown(
     )
 
     ax.set_xlabel("Generation ($t$)")
-    ax.set_ylabel("Evaluations per Generation ($N = 100$)")
-    ax.set_title("Multi-Tier Evaluation Pipeline Breakdown over Generational Search")
+    ax.set_ylabel(f"Evaluations per Generation ($N = {pop_size}$)")
+    ax.set_title("Multi-Tier Evaluation Pipeline Breakdown over Generational Search", fontweight="bold")
     ax.set_xlim(gens[0], gens[-1])
     ax.set_ylim(0, pop_size)
     ax.grid(True, linestyle="--", alpha=0.3, zorder=0)
@@ -183,7 +176,7 @@ def plot_percent_tier_breakdown(
     pct2 = (t2 / total) * 100.0
     pct3 = (t3 / total) * 100.0
 
-    # 1. 100% Stacked Bar Chart (Sampled every 3 gens for legibility)
+    # 1. 100% Stacked Bar Chart (Sampled every 2 gens for legibility)
     sample_indices = np.arange(0, len(gens), 2)
     s_gens = gens[sample_indices]
     s_pct1 = pct1[sample_indices]
@@ -193,11 +186,11 @@ def plot_percent_tier_breakdown(
     width = 1.5
     ax1.bar(s_gens, s_pct3, width, label="Tier 3: True CFD Solver", color=COLOR_T3, alpha=0.88, edgecolor="black", linewidth=0.4)
     ax1.bar(s_gens, s_pct2, width, bottom=s_pct3, label="Tier 2: Surrogate Model", color=COLOR_T2, alpha=0.88, edgecolor="black", linewidth=0.4)
-    ax1.bar(s_gens, s_pct1, width, bottom=s_pct3 + s_pct2, label="Tier 1: $\\epsilon$-Bypass Cache", color=COLOR_T1, alpha=0.88, edgecolor="black", linewidth=0.4)
+    ax1.bar(s_gens, s_pct1, width, bottom=s_pct3 + s_pct2, label=r"Tier 1: $\epsilon$-Bypass Cache", color=COLOR_T1, alpha=0.88, edgecolor="black", linewidth=0.4)
 
     ax1.set_xlabel("Generation ($t$)")
     ax1.set_ylabel("Tier Distribution (%)")
-    ax1.set_title("(a) Relative Generational Workload Partitioning")
+    ax1.set_title("(a) Relative Generational Workload Partitioning", fontweight="bold")
     ax1.set_ylim(0, 100)
     ax1.set_xlim(gens[0] - 1, gens[-1] + 1)
     ax1.grid(axis="y", linestyle="--", alpha=0.35)
@@ -206,6 +199,7 @@ def plot_percent_tier_breakdown(
     # 2. Cumulative Computational Workload Comparison (Right Panel)
     cum_actual_cfd = np.cumsum(t3)
     cum_naive_cfd = np.cumsum(total)
+    saved_pct = (1.0 - cum_actual_cfd[-1] / cum_naive_cfd[-1]) * 100.0
 
     ax2.plot(gens, cum_naive_cfd, label="Naive Baseline (CFD Only)", color="#475569", linestyle="--", linewidth=2.0)
     ax2.plot(gens, cum_actual_cfd, label="3-Tier Pipeline (Actual CFD Calls)", color=COLOR_T3, linewidth=2.4)
@@ -215,12 +209,12 @@ def plot_percent_tier_breakdown(
         cum_naive_cfd,
         color=COLOR_T1,
         alpha=0.25,
-        label=f"CFD Calls Saved ({(1.0 - cum_actual_cfd[-1]/cum_naive_cfd[-1])*100.0:.1f}%)",
+        label=f"CFD Calls Saved ({saved_pct:.1f}%)",
     )
 
     ax2.set_xlabel("Generation ($t$)")
     ax2.set_ylabel("Cumulative Solver Invocations")
-    ax2.set_title("(b) Cumulative CFD Workload Reduction")
+    ax2.set_title("(b) Cumulative CFD Workload Reduction", fontweight="bold")
     ax2.grid(True, linestyle="--", alpha=0.35)
     ax2.legend(loc="upper left", frameon=True, framealpha=0.92, edgecolor="#cccccc")
 
@@ -233,30 +227,26 @@ def plot_percent_tier_breakdown(
 
 def main():
     parser = argparse.ArgumentParser(description="Plot Multi-Tier Evaluation Breakdown")
-    parser.add_argument("--jsonl", type=str, default="", help="Path to run JSONL file")
+    parser.add_argument(
+        "--data",
+        type=str,
+        default="evaluation/data/single_island_seed42.jsonl",
+        help="Path to telemetry jsonl run with full population",
+    )
     parser.add_argument("--out-dir", type=str, default="evaluation/figures")
     args = parser.parse_args()
 
+    data_path = Path(args.data)
+    if not data_path.exists():
+        candidates = sorted(glob.glob("evaluation/data/single_island_*.jsonl"))
+        if candidates:
+            data_path = Path(candidates[0])
+        else:
+            raise FileNotFoundError(f"Telemetry data not found at {args.data}")
+
+    gens, t1, t2, t3 = load_or_compute_tier_counts(data_path)
+
     out_dir = Path(args.out_dir)
-
-    # Locate real benchmark run data
-    jsonl_candidates = [
-        Path(args.jsonl) if args.jsonl else None,
-        Path("evaluation/data/single_island_seed777.jsonl"),
-        Path("evaluation/data/single_island_seed42.jsonl"),
-    ]
-    jsonl_path = next((p for p in jsonl_candidates if p and p.exists()), None)
-
-    if jsonl_path:
-        print(f"Loading population convergence data from {jsonl_path}...")
-        gens, entropies = load_run_data(jsonl_path)
-    else:
-        print("Using synthetic generational progression.")
-        gens = np.arange(1, 51)
-        entropies = 0.98 * np.exp(-gens / 22.0) + 0.25
-
-    t1, t2, t3 = compute_tier_proportions_from_population_entropy(gens, entropies, pop_size=100)
-
     plot_stacked_tier_breakdown(gens, t1, t2, t3, out_dir)
     plot_percent_tier_breakdown(gens, t1, t2, t3, out_dir)
 

@@ -19,9 +19,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "worker" / "src"))
-from worker.config import load_config
+from worker.config import load_config, GENE_BOUNDS
 from worker.aero import AerosandboxAeroEvaluator
 from worker.fitness import FitnessEvaluator
+from worker.geometry import decode_genes
 
 # IEEE publication aesthetics
 plt.rcParams.update({
@@ -47,12 +48,13 @@ def is_pareto_efficient(costs: np.ndarray) -> np.ndarray:
 
 
 def generate_pareto_radar_chart(out_dir: Path, n_candidates: int = 50):
-    print(f"Evaluating {n_candidates} wings using AeroSandbox for Multi-Objective Trade-offs...")
+    print(f"Evaluating {n_candidates} wings using AeroSandbox for Multi-Objective Trade-offs (10D normalized)...")
     cfg = load_config()
     aero = AerosandboxAeroEvaluator(cfg)
     fe = FitnessEvaluator(aero, cfg)
 
-    base_genes = np.array([120.0, 45.0, 22.0, 12.5, 3.0, -2.0, 25.0, 240.0, 25.0, 2.5, 12.0])
+    # Optimal converged genome as base
+    base_genes = np.array([0.887, 0.958, 0.166, 0.05, 0.873, 0.699, 0.083, 0.966, 0.512, 0.018])
     rng = np.random.default_rng(123)
 
     records = []
@@ -60,24 +62,29 @@ def generate_pareto_radar_chart(out_dir: Path, n_candidates: int = 50):
     # Baseline wing
     b_out = fe.evaluate_genes(base_genes)
     if b_out.aero:
+        b_params = decode_genes(base_genes, bounds=GENE_BOUNDS)
+        b_span = b_params["wing_span"] * 2.0
+        b_c_mean = (b_params["wing_root_chord"] + b_params["wing_tip_chord"]) / 2.0
+        b_ar = b_span / b_c_mean
         records.append({
             "name": "Baseline",
             "ld": b_out.aero.ld,
             "mass": b_out.aero.mass_kg,
             "volume_cm3": b_out.fuselage_volume_mm3 / 1000.0,
             "cm_alpha": -b_out.aero.cm_alpha,
-            "ar": (2.0 * 240.0) / ((120.0 + 45.0) / 2.0),
+            "ar": b_ar,
         })
 
-    # Sample variants across span, chord, and sweep
+    # Sample variants across normalized design space
     for i in range(n_candidates):
-        jitter = rng.normal(0.0, 0.12, size=len(base_genes))
-        genes = (base_genes * (1.0 + jitter)).tolist()
+        jitter = rng.normal(0.0, 0.12, size=len(GENE_BOUNDS))
+        genes = np.clip(base_genes + jitter, 0.0, 1.0).tolist()
         out = fe.evaluate_genes(genes)
         if out.aero and not out.rejected and out.aero.ld > 4.0:
-            span = genes[7] * 2.0
-            root_c = genes[0]
-            tip_c = genes[1]
+            params = decode_genes(genes, bounds=GENE_BOUNDS)
+            span = params["wing_span"] * 2.0
+            root_c = params["wing_root_chord"]
+            tip_c = params["wing_tip_chord"]
             c_mean = (root_c + tip_c) / 2.0
             ar = span / c_mean
 
@@ -119,7 +126,7 @@ def generate_pareto_radar_chart(out_dir: Path, n_candidates: int = 50):
         label="Dominated Designs",
     )
     cb = fig.colorbar(sc, ax=ax1)
-    cb.set_label("Fuselage Volume ($V_{\\mathrm{fuse}}$, cm$^3$)")
+    cb.set_label(r"Fuselage Volume ($V_{\mathrm{fuse}}$, cm$^3$)")
 
     # Plot Pareto Front
     p_mass = all_mass[pareto_mask] * 1000.0
@@ -138,7 +145,7 @@ def generate_pareto_radar_chart(out_dir: Path, n_candidates: int = 50):
     ax1.scatter([all_mass[0] * 1000.0], [all_ld[0]], color="#10b981", s=110, marker="*", edgecolor="black", label="Baseline Design", zorder=5)
 
     ax1.set_xlabel("Wing Structural Mass (grams)")
-    ax1.set_ylabel("Lift-to-Drag Ratio ($L/D$)")
+    ax1.set_ylabel(r"Lift-to-Drag Ratio ($L/D$)")
     ax1.set_title("(a) Aerodynamic Pareto Trade-off Front", fontweight="bold")
     ax1.grid(True, linestyle="--", alpha=0.35)
     ax1.legend(loc="lower right", frameon=True, framealpha=0.92, fontsize=9.0)
@@ -150,16 +157,16 @@ def generate_pareto_radar_chart(out_dir: Path, n_candidates: int = 50):
 
     categories = [
         "Aerodynamic\nEfficiency ($L/D$)",
-        "Lightweight\n($1 / \\mathrm{Mass}$)",
-        "Fuselage\nCapacity ($V$)",
-        "Pitch\nStability ($-C_{m_\\alpha}$)",
-        "Aspect\nRatio ($\\mathrm{AR}$)",
+        r"Lightweight\n($1 / \mathrm{Mass}$)",
+        r"Fuselage\nCapacity ($V$)",
+        r"Pitch\nStability ($-C_{m_\alpha}$)",
+        r"Aspect\nRatio ($\mathrm{AR}$)",
     ]
     N = len(categories)
     angles = [n / float(N) * 2 * np.pi for n in range(N)]
     angles += angles[:1]
 
-    # Select 3 designs: Baseline, Best L/D (High Aspect Ratio), and Pareto Compromise
+    # Select 3 designs: Baseline, Best L/D, and Pareto Compromise
     best_ld_idx = np.argmax(all_ld)
     pareto_indices = np.where(pareto_mask)[0]
     compromise_idx = pareto_indices[len(pareto_indices) // 2]
@@ -183,7 +190,7 @@ def generate_pareto_radar_chart(out_dir: Path, n_candidates: int = 50):
     ax2.plot(angles, v_base, "o-", color="#10b981", linewidth=1.8, label="Baseline")
     ax2.fill(angles, v_base, color="#10b981", alpha=0.15)
 
-    ax2.plot(angles, v_best_ld, "s-", color="#2563eb", linewidth=1.8, label="Max $L/D$ Specialization")
+    ax2.plot(angles, v_best_ld, "s-", color="#2563eb", linewidth=1.8, label=r"Max $L/D$ Specialization")
     ax2.fill(angles, v_best_ld, color="#2563eb", alpha=0.15)
 
     ax2.plot(angles, v_comp, "^-", color="#dc2626", linewidth=2.0, label="Pareto Balanced Elite")

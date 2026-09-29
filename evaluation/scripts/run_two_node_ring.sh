@@ -7,10 +7,12 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ORC_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-DATA_DIR="${ORC_DIR}/data"
-FIG_DIR="${ORC_DIR}/figures"
-ORC_BIN="${ORC_DIR}/target/benchmark/orchestrator"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+EVAL_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+ORC_DIR="${REPO_ROOT}/orchestrator"
+DATA_DIR="${EVAL_DIR}/data"
+FIG_DIR="${EVAL_DIR}/figures"
+ORC_BIN="${ORC_DIR}/target/release/orchestrator"
 
 mkdir -p "${DATA_DIR}" "${FIG_DIR}"
 
@@ -23,8 +25,13 @@ EVAL_EP="127.0.0.1:50051"
 # Check if worker is up
 if ! nc -z 127.0.0.1 50051 2>/dev/null; then
   echo "Error: Worker is not running on 127.0.0.1:50051!"
-  echo "Start the worker first: cd ../worker && uv run python src/worker/main.py"
+  echo "Start the worker first: cd ../../worker && uv run python src/worker/main.py"
   exit 1
+fi
+
+if [ ! -f "${ORC_BIN}" ]; then
+  echo "Building orchestrator in release mode..."
+  cargo build --release --manifest-path "${ORC_DIR}/Cargo.toml"
 fi
 
 echo "=========================================================="

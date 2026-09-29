@@ -169,6 +169,7 @@ impl<'a> GaRunner<'a> {
             self.cfg.min_improvement,
             self.cfg.min_generations,
         );
+        let mut prev_tier_snapshot: Option<crate::evaluator::tier_metrics::TierMetricsSnapshot> = None;
 
         for gen in 1..=self.cfg.max_generations {
             info!("Evaluating generation {gen}/{}...", self.cfg.max_generations);
@@ -179,6 +180,7 @@ impl<'a> GaRunner<'a> {
 
             self.store.evict_expired(gen).await;
 
+            let curr_tier_snapshot = self.evaluator.tier_metrics();
             self.record_generation_stats(
                 gen,
                 start.elapsed().as_secs_f64(),
@@ -186,8 +188,11 @@ impl<'a> GaRunner<'a> {
                 &fitnesses,
                 &mut best_ever,
                 &mut best_genome,
+                curr_tier_snapshot,
+                prev_tier_snapshot,
             )
             .await;
+            prev_tier_snapshot = curr_tier_snapshot;
 
 
             self.handle_emigration(gen, &population, &fitnesses).await;
@@ -263,6 +268,8 @@ impl<'a> GaRunner<'a> {
         fitnesses: &[f64],
         best_ever: &mut f64,
         best_genome: &mut Vec<f64>,
+        curr_snap: Option<crate::evaluator::tier_metrics::TierMetricsSnapshot>,
+        prev_snap: Option<crate::evaluator::tier_metrics::TierMetricsSnapshot>,
     ) {
         let candidate = find_best_candidate(population, fitnesses);
         let (gen_best, avg, worst, std_dev) = compute_fitness_stats(fitnesses);
@@ -292,6 +299,24 @@ impl<'a> GaRunner<'a> {
                 None
             };
 
+            let (tier1_exact_hits, tier2_surrogate_hits, tier3_cfd_evals, tier_bypass_ratio) = match curr_snap {
+                Some(curr) => {
+                    let prev = prev_snap.unwrap_or(crate::evaluator::tier_metrics::TierMetricsSnapshot {
+                        tier1_exact_hits: 0,
+                        tier2_surrogate_hits: 0,
+                        tier3_simulator_evals: 0,
+                        total_evaluations: 0,
+                    });
+                    let t1 = curr.tier1_exact_hits.saturating_sub(prev.tier1_exact_hits) as u64;
+                    let t2 = curr.tier2_surrogate_hits.saturating_sub(prev.tier2_surrogate_hits) as u64;
+                    let t3 = curr.tier3_simulator_evals.saturating_sub(prev.tier3_simulator_evals) as u64;
+                    let total = t1 + t2 + t3;
+                    let bypass = if total > 0 { (t1 + t2) as f64 / total as f64 } else { 0.0 };
+                    (Some(t1), Some(t2), Some(t3), Some(bypass))
+                }
+                None => (None, None, None, None),
+            };
+
             let record = GenerationRecord {
                 generation: gen,
                 elapsed_sec,
@@ -303,6 +328,10 @@ impl<'a> GaRunner<'a> {
                 gene_variance,
                 entropy,
                 population: pop_snapshot,
+                tier1_exact_hits,
+                tier2_surrogate_hits,
+                tier3_cfd_evals,
+                tier_bypass_ratio,
             };
             sink.record(record).await;
         }

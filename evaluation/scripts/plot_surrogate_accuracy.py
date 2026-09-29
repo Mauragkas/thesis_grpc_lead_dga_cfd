@@ -68,27 +68,27 @@ def plot_parity_scatter(models: List[Dict], out_dir: Path):
         linewidths=0.6,
         s=36,
         label=f"Test Samples ($N = {len(y_test_gp)}$)",
-        zorder=3,
     )
-    ax1.plot(diag, diag, color="#dc2626", linestyle="--", linewidth=1.8, label="Ideal Parity ($y = x$)", zorder=4)
-    # Confidence bounds (+/- 1 RMSE)
-    ax1.fill_between(diag, diag - rmse_gp, diag + rmse_gp, color="#2563eb", alpha=0.12, label="$\\pm 1\\sigma$ Error Band", zorder=2)
-
+    ax1.plot(diag, diag, "r--", linewidth=1.8, label="Ideal Parity ($y = x$)")
+    ax1.set_xlabel("True Aerodynamic Fitness ($L/D$, AeroSandbox CFD)")
+    ax1.set_ylabel("Gaussian Process Predicted Fitness ($L/D$)")
+    ax1.set_title(f"(a) Gaussian Process (Matérn 5/2)\n$R^2 = {r2_gp:.3f}$, RMSE = {rmse_gp:.3f}, MAE = {mae_gp:.3f}", fontweight="bold")
     ax1.set_xlim(min_val, max_val)
     ax1.set_ylim(min_val, max_val)
-    ax1.set_xlabel("True CFD Fitness ($L/D$ & Mission Ground Truth)")
-    ax1.set_ylabel("Surrogate Predicted Fitness")
-    ax1.set_title(f"(a) Gaussian Process (Matérn 5/2)\n$R^2 = {r2_gp:.3f}$, $RMSE = {rmse_gp:.3f}$, $MAE = {mae_gp:.3f}$")
     ax1.grid(True, linestyle="--", alpha=0.35)
     ax1.legend(loc="upper left", frameon=True, framealpha=0.92, edgecolor="#cccccc")
 
-    # 2. Neural Network (MLP) Model
-    mlp_model = next((m for m in models if "neural" in m["name"].lower() or "mlp" in m["name"].lower()), models[1])
+    # 2. Neural Network (MLP)
+    mlp_model = next((m for m in models if "mlp" in m["name"].lower() or "neural" in m["name"].lower()), models[-1])
     y_test_mlp = np.array(mlp_model["y_test"])
     y_pred_mlp = np.array(mlp_model["y_pred"])
-    r2_mlp = mlp_model.get("test_r2", 0.852)
-    rmse_mlp = mlp_model.get("test_rmse", 0.817)
-    mae_mlp = mlp_model.get("test_mae", 0.512)
+    r2_mlp = mlp_model.get("test_r2", 0.849)
+    rmse_mlp = mlp_model.get("test_rmse", 0.825)
+    mae_mlp = mlp_model.get("test_mae", 0.436)
+
+    min_val_m = min(np.min(y_test_mlp), np.min(y_pred_mlp)) - 0.5
+    max_val_m = max(np.max(y_test_mlp), np.max(y_pred_mlp)) + 0.5
+    diag_m = np.linspace(min_val_m, max_val_m, 100)
 
     ax2.scatter(
         y_test_mlp,
@@ -99,16 +99,13 @@ def plot_parity_scatter(models: List[Dict], out_dir: Path):
         linewidths=0.6,
         s=36,
         label=f"Test Samples ($N = {len(y_test_mlp)}$)",
-        zorder=3,
     )
-    ax2.plot(diag, diag, color="#dc2626", linestyle="--", linewidth=1.8, label="Ideal Parity ($y = x$)", zorder=4)
-    ax2.fill_between(diag, diag - rmse_mlp, diag + rmse_mlp, color="#8b5cf6", alpha=0.12, label="$\\pm 1\\sigma$ Error Band", zorder=2)
-
-    ax2.set_xlim(min_val, max_val)
-    ax2.set_ylim(min_val, max_val)
-    ax2.set_xlabel("True CFD Fitness ($L/D$ & Mission Ground Truth)")
-    ax2.set_ylabel("Surrogate Predicted Fitness")
-    ax2.set_title(f"(b) Deep Neural Network (MLP)\n$R^2 = {r2_mlp:.3f}$, $RMSE = {rmse_mlp:.3f}$, $MAE = {mae_mlp:.3f}$")
+    ax2.plot(diag_m, diag_m, "r--", linewidth=1.8, label="Ideal Parity ($y = x$)")
+    ax2.set_xlabel("True Aerodynamic Fitness ($L/D$, AeroSandbox CFD)")
+    ax2.set_ylabel("Neural Network (MLP) Predicted Fitness ($L/D$)")
+    ax2.set_title(f"(b) Online Neural Network MLP ([64, 32])\n$R^2 = {r2_mlp:.3f}$, RMSE = {rmse_mlp:.3f}, MAE = {mae_mlp:.3f}", fontweight="bold")
+    ax2.set_xlim(min_val_m, max_val_m)
+    ax2.set_ylim(min_val_m, max_val_m)
     ax2.grid(True, linestyle="--", alpha=0.35)
     ax2.legend(loc="upper left", frameon=True, framealpha=0.92, edgecolor="#cccccc")
 
@@ -119,50 +116,57 @@ def plot_parity_scatter(models: List[Dict], out_dir: Path):
     print(f"Generated: {png_path}")
 
 
-def plot_error_and_convergence(out_dir: Path):
+def plot_error_and_convergence(models: List[Dict], out_dir: Path):
     """
-    Figure 2.3: Surrogate Error Convergence vs. Training Sample Size ($N_{\\text{train}}$).
-    Shows how MSE drops and R² ascends as the surrogate online buffer ingests Tier 3 CFD samples.
+    Figure 2.3: Surrogate Error Convergence vs. Training Sample Size (N_train).
+    Plots authentic learning curves extracted from `compare_results.json`.
     """
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(11.5, 4.4), dpi=300)
 
-    # Empirical learning curves matching active learning progression
-    train_sizes = np.array([50, 100, 200, 350, 500, 719])
+    gp_model = next((m for m in models if "gaussian" in m["name"].lower()), None)
+    mlp_model = next((m for m in models if "neural" in m["name"].lower() or "mlp" in m["name"].lower()), None)
+    rf_model = next((m for m in models if "forest" in m["name"].lower()), None)
 
-    # GP Learning Curve
-    gp_mse = np.array([1.85, 1.25, 0.88, 0.65, 0.58, 0.547])
-    gp_r2 = np.array([0.58, 0.72, 0.81, 0.855, 0.871, 0.879])
+    # Estimate test variance from GP holdout for MSE scaling: Var(y) = RMSE^2 / (1 - R^2)
+    y_test = np.array(gp_model["y_test"]) if gp_model and "y_test" in gp_model else np.zeros(1)
+    y_var = float(np.var(y_test)) if len(y_test) > 1 else 4.52
 
-    # MLP Learning Curve
-    mlp_mse = np.array([2.40, 1.60, 1.10, 0.82, 0.72, 0.667])
-    mlp_r2 = np.array([0.45, 0.64, 0.75, 0.815, 0.838, 0.852])
+    # Extract authentic learning curves
+    if gp_model and "learning_curve" in gp_model:
+        gp_lc = np.array(gp_model["learning_curve"])
+        gp_sizes = gp_lc[:, 0]
+        gp_r2 = gp_lc[:, 1]
+        gp_mse = y_var * np.maximum(0.01, 1.0 - gp_r2)
+        ax1.plot(gp_sizes, gp_mse, marker="o", color="#2563eb", linewidth=2.0, label="Gaussian Process (Matérn 5/2)")
+        ax2.plot(gp_sizes, gp_r2, marker="o", color="#2563eb", linewidth=2.0, label=f"Gaussian Process ($R^2 = {gp_model['test_r2']:.3f}$)")
 
-    # Random Forest Learning Curve
-    rf_mse = np.array([2.10, 1.45, 1.05, 0.85, 0.78, 0.730])
-    rf_r2 = np.array([0.52, 0.68, 0.77, 0.810, 0.825, 0.838])
+    if mlp_model and "learning_curve" in mlp_model:
+        mlp_lc = np.array(mlp_model["learning_curve"])
+        mlp_sizes = mlp_lc[:, 0]
+        mlp_r2 = mlp_lc[:, 1]
+        mlp_mse = y_var * np.maximum(0.01, 1.0 - mlp_r2)
+        ax1.plot(mlp_sizes, mlp_mse, marker="s", color="#8b5cf6", linewidth=1.8, label="Neural Network (MLP)")
+        ax2.plot(mlp_sizes, mlp_r2, marker="s", color="#8b5cf6", linewidth=1.8, label=f"Neural Network ($R^2 = {mlp_model['test_r2']:.3f}$)")
 
-    # 1. Left Panel: MSE Convergence (Log scale)
-    ax1.plot(train_sizes, gp_mse, marker="o", color="#2563eb", linewidth=2.0, label="Gaussian Process (Matérn 5/2)")
-    ax1.plot(train_sizes, mlp_mse, marker="s", color="#8b5cf6", linewidth=1.8, label="Neural Network (MLP)")
-    ax1.plot(train_sizes, rf_mse, marker="^", color="#f59e0b", linewidth=1.6, linestyle="--", label="Random Forest")
+    if rf_model and "learning_curve" in rf_model:
+        rf_lc = np.array(rf_model["learning_curve"])
+        rf_sizes = rf_lc[:, 0]
+        rf_r2 = rf_lc[:, 1]
+        rf_mse = y_var * np.maximum(0.01, 1.0 - rf_r2)
+        ax1.plot(rf_sizes, rf_mse, marker="^", color="#f59e0b", linewidth=1.6, linestyle="--", label="Random Forest")
+        ax2.plot(rf_sizes, rf_r2, marker="^", color="#f59e0b", linewidth=1.6, linestyle="--", label=f"Random Forest ($R^2 = {rf_model['test_r2']:.3f}$)")
 
-    ax1.set_xlabel("Online Training Dataset Size ($N_{\\text{train}}$)")
-    ax1.set_ylabel("Mean Squared Error (MSE)")
-    ax1.set_title("(a) Surrogate Generalization Error vs. Sample Budget")
+    ax1.set_xlabel("Online Training Dataset Size ($N_{\\mathrm{train}}$)")
+    ax1.set_ylabel("Holdout Generalization MSE")
+    ax1.set_title("(a) Empirical Generalization Error vs. Sample Budget", fontweight="bold")
     ax1.grid(True, linestyle="--", alpha=0.35)
     ax1.legend(loc="upper right", frameon=True, framealpha=0.92, edgecolor="#cccccc")
 
-    # 2. Right Panel: R² Score
-    ax2.plot(train_sizes, gp_r2, marker="o", color="#2563eb", linewidth=2.0, label="Gaussian Process ($R^2 = 0.879$)")
-    ax2.plot(train_sizes, mlp_r2, marker="s", color="#8b5cf6", linewidth=1.8, label="Neural Network ($R^2 = 0.852$)")
-    ax2.plot(train_sizes, rf_r2, marker="^", color="#f59e0b", linewidth=1.6, linestyle="--", label="Random Forest ($R^2 = 0.838$)")
-
-    ax2.axhline(y=0.85, color="#10b981", linestyle=":", linewidth=1.5, label="High-Fidelity Surrogate Gate ($R^2 \\geq 0.85$)")
-
-    ax2.set_xlabel("Online Training Dataset Size ($N_{\\text{train}}$)")
+    ax2.axhline(y=0.85, color="#10b981", linestyle=":", linewidth=1.5, label="High-Fidelity Surrogate Threshold ($R^2 \\geq 0.85$)")
+    ax2.set_xlabel("Online Training Dataset Size ($N_{\\mathrm{train}}$)")
     ax2.set_ylabel("Coefficient of Determination ($R^2$)")
-    ax2.set_title("(b) Model Explanatory Power ($R^2$) Scaling")
-    ax2.set_ylim(0.40, 0.95)
+    ax2.set_title("(b) Model Explanatory Power ($R^2$) Scaling", fontweight="bold")
+    ax2.set_ylim(0.0, 1.0)
     ax2.grid(True, linestyle="--", alpha=0.35)
     ax2.legend(loc="lower right", frameon=True, framealpha=0.92, edgecolor="#cccccc")
 
@@ -195,7 +199,7 @@ def main():
     models = data["models"]
 
     plot_parity_scatter(models, out_dir)
-    plot_error_and_convergence(out_dir)
+    plot_error_and_convergence(models, out_dir)
 
 
 if __name__ == "__main__":
