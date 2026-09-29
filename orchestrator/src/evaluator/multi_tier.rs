@@ -1,5 +1,5 @@
 use crate::config::TierConfig;
-use crate::evaluator::tier_metrics::TierMetricsTracker;
+use crate::evaluator::tier_metrics::{TierMetricsSnapshot, TierMetricsTracker};
 use crate::evaluator::r#trait::Evaluator;
 use crate::gene_store::metric::DistanceMetric;
 use crate::gene_store::metric::EuclideanDistance;
@@ -221,6 +221,10 @@ impl Evaluator for MultiTierEvaluator {
         );
 
         Ok(fitnesses)
+    }
+
+    fn tier_metrics(&self) -> Option<TierMetricsSnapshot> {
+        Some(self.metrics.snapshot())
     }
 }
 

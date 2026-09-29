@@ -4,14 +4,16 @@
 # Executes multiple seeds across:
 #   1. Single-Island (Isolated, no migration)
 #   2. Multi-Island (Ring migration enabled)
-# Dumps telemetry JSONL files into orchestrator/data/ and renders figures into orchestrator/figures/
+# Dumps telemetry JSONL files into evaluation/data/ and renders figures into evaluation/figures/
 #
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ORC_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-DATA_DIR="${ORC_DIR}/data"
-FIG_DIR="${ORC_DIR}/figures"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+EVAL_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+ORC_DIR="${REPO_ROOT}/orchestrator"
+DATA_DIR="${EVAL_DIR}/data"
+FIG_DIR="${EVAL_DIR}/figures"
 
 mkdir -p "${DATA_DIR}" "${FIG_DIR}"
 
@@ -21,17 +23,17 @@ POP_SIZE=100
 
 echo "=========================================================="
 echo " Starting Thesis GA Optimization Experiments Suite"
-echo " Working directory: ${ORC_DIR}"
+echo " Working directory: ${EVAL_DIR}"
+echo " Orchestrator path: ${ORC_DIR}"
 echo "=========================================================="
 
-echo "[1/3] Building Orchestrator with benchmark profile..."
-cargo build --profile benchmark --manifest-path "${ORC_DIR}/Cargo.toml"
-ORC_BIN="${ORC_DIR}/target/benchmark/orchestrator"
+echo "[1/3] Building Orchestrator with release profile..."
+cargo build --release --manifest-path "${ORC_DIR}/Cargo.toml"
+ORC_BIN="${ORC_DIR}/target/release/orchestrator"
 
 if [ ! -f "${ORC_BIN}" ]; then
-  # Fallback to release if benchmark target output directory differs
-  cargo build --release --manifest-path "${ORC_DIR}/Cargo.toml"
-  ORC_BIN="${ORC_DIR}/target/release/orchestrator"
+  echo "Error: Orchestrator binary not found at ${ORC_BIN}"
+  exit 1
 fi
 
 echo "Binary ready: ${ORC_BIN}"
@@ -79,8 +81,8 @@ fi
 
 echo "[3/3] Generating all thesis publication figures and tables..."
 PY_BIN="python3"
-if [ -f "${ORC_DIR}/../worker/.venv/bin/python" ]; then
-  PY_BIN="${ORC_DIR}/../worker/.venv/bin/python"
+if [ -f "${REPO_ROOT}/worker/.venv/bin/python" ]; then
+  PY_BIN="${REPO_ROOT}/worker/.venv/bin/python"
 fi
 
 "${PY_BIN}" "${SCRIPT_DIR}/plot_fitness_evolution.py" --data-pattern "${DATA_DIR}/multi_island_*.jsonl" --out-dir "${FIG_DIR}"
@@ -93,4 +95,3 @@ echo " Experiment Suite Completed Successfully!"
 echo " Output files in ${FIG_DIR}:"
 ls -la "${FIG_DIR}"
 echo "=========================================================="
-

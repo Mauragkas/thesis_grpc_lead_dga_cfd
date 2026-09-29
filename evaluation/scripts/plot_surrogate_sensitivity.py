@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """
 Gaussian Process Surrogate Visualization & Sensitivity Sweep Script.
+Trains and evaluates a Matérn 5/2 Gaussian Process surrogate directly on the
+authentic dataset of 1,200 AeroSandbox CFD evaluations (`tests/configs_and_scores.json`).
 Generates:
   - evaluation/figures/fig2_surrogate_parameter_sensitivity.png
 """
@@ -10,7 +12,7 @@ import json
 from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
-from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+from sklearn.metrics import mean_squared_error, r2_score
 
 # IEEE publication aesthetics
 plt.rcParams.update({
@@ -50,7 +52,7 @@ def matern52_kernel(X1: np.ndarray, X2: np.ndarray, length_scales: np.ndarray, s
 def fit_and_predict(X_train, y_train, X_test, length_scales, signal_var, noise_var):
     N = len(X_train)
     K = matern52_kernel(X_train, X_train, length_scales, signal_var) + noise_var * np.eye(N)
-    L = np.linalg.cholesky(K + 1e-6 * np.eye(N))
+    L = np.linalg.cholesky(K + 1e-5 * np.eye(N))
     alpha = np.linalg.solve(L.T, np.linalg.solve(L, y_train))
     K_star = matern52_kernel(X_test, X_train, length_scales, signal_var)
     mu = K_star @ alpha
@@ -60,80 +62,73 @@ def fit_and_predict(X_train, y_train, X_test, length_scales, signal_var, noise_v
     return mu, np.sqrt(var)
 
 
-def generate_synthetic_flight_dataset(n_samples: int = 400, seed: int = 42):
-    rng = np.random.default_rng(seed)
-    # Scaled parameters
-    wing_span = rng.uniform(80.0, 220.0, n_samples)
-    root_chord = rng.uniform(35.0, 75.0, n_samples)
-    tip_chord = rng.uniform(15.0, 45.0, n_samples)
-    sweep = rng.uniform(0.0, 25.0, n_samples)
-    dihedral = rng.uniform(0.0, 10.0, n_samples)
-    twist = rng.uniform(-5.0, 2.0, n_samples)
-    x_pos = rng.uniform(10.0, 60.0, n_samples)
-    fuse_len = rng.uniform(180.0, 320.0, n_samples)
-    fuse_diam = rng.uniform(15.0, 35.0, n_samples)
-    naca_m = rng.uniform(0.0, 6.0, n_samples)
-    naca_t = rng.uniform(8.0, 16.0, n_samples)
+def load_real_dataset(data_path: Path):
+    with open(data_path, "r", encoding="utf-8") as f:
+        data = json.load(f)
 
-    X = np.column_stack([wing_span, root_chord, tip_chord, sweep, dihedral, twist, x_pos, fuse_len, fuse_diam, naca_m, naca_t])
-
-    # Aerodynamic response surface
-    ar = (2.0 * wing_span) / (0.5 * (root_chord + tip_chord))
-    ld = 3.5 + 1.25 * np.sqrt(ar) - 0.00015 * (sweep ** 2) + 0.12 * naca_m - 0.003 * fuse_diam
-    noise = rng.normal(0, 0.25, n_samples)
-    y = ld + noise
+    X = np.array([[d["config"][k] for k in FEATURE_NAMES] for d in data])
+    y = np.array([d["fitness"] for d in data])
     return X, y
 
 
-def plot_sensitivity_panel(out_dir: Path):
-    X, y = generate_synthetic_flight_dataset(500, seed=42)
-    n_train = 350
-    X_train, y_train = X[:n_train], y[:n_train]
-    X_test, y_test = X[n_train:], y[n_train:]
+def plot_sensitivity_panel(dataset_path: Path, out_dir: Path):
+    X, y = load_real_dataset(dataset_path)
+
+    rng = np.random.default_rng(42)
+    indices = np.arange(len(X))
+    rng.shuffle(indices)
+
+    n_train = 800
+    train_idx, test_idx = indices[:n_train], indices[n_train:]
+    X_train, y_train = X[train_idx], y[train_idx]
+    X_test, y_test = X[test_idx], y[test_idx]
 
     ls = np.std(X_train, axis=0) * 1.5 + 1e-3
-    sig_var = np.var(y_train)
-    noise_var = 0.08
+    sig_var = float(np.var(y_train))
+    noise_var = 0.05
 
     y_pred, std_pred = fit_and_predict(X_train, y_train, X_test, ls, sig_var, noise_var)
 
     fig = plt.figure(figsize=(18, 9.5), dpi=300, constrained_layout=True)
     gs = fig.add_gridspec(2, 3)
 
-    # 1. Parity
+    # 1. Parity Plot
     ax1 = fig.add_subplot(gs[0, 0])
-    ax1.scatter(y_test, y_pred, alpha=0.6, color="#2563eb", s=30, label="Holdout Predictions")
-    lo, hi = min(np.min(y_test), np.min(y_pred)), max(np.max(y_test), np.max(y_pred))
+    ax1.scatter(y_test, y_pred, alpha=0.6, color="#2563eb", s=30, label=f"Holdout Samples ($N={len(y_test)}$)")
+    lo = min(np.min(y_test), np.min(y_pred)) - 0.5
+    hi = max(np.max(y_test), np.max(y_pred)) + 0.5
     ax1.plot([lo, hi], [lo, hi], "r--", lw=1.8, label="Ideal 1:1 Parity")
     r2 = r2_score(y_test, y_pred)
     rmse = np.sqrt(mean_squared_error(y_test, y_pred))
-    ax1.set_xlabel("True Aerodynamic Fitness ($L/D$)")
+    ax1.set_xlabel("True Aerodynamic Fitness ($L/D$, AeroSandbox CFD)")
     ax1.set_ylabel("GP Surrogate Prediction")
-    ax1.set_title(f"(a) Parity Plot ($R^2={r2:.3f}$, $RMSE={rmse:.3f}$)", fontweight="bold")
+    ax1.set_title(f"(a) Parity Plot ($R^2={r2:.3f}$, $\\mathrm{{RMSE}}={rmse:.3f}$)", fontweight="bold")
     ax1.grid(True, linestyle=":", alpha=0.6)
     ax1.legend(loc="upper left")
 
     # 2. Residual Distribution
     ax2 = fig.add_subplot(gs[0, 1])
     res = y_test - y_pred
-    ax2.hist(res, bins=20, color="#10b981", edgecolor="#047857", alpha=0.7, density=True)
-    ax2.axvline(0.0, color="red", linestyle="--", lw=1.2)
+    ax2.hist(res, bins=25, color="#10b981", edgecolor="#047857", alpha=0.7, density=True)
+    ax2.axvline(0.0, color="red", linestyle="--", lw=1.2, label=f"Mean Error ({np.mean(res):+.3f})")
     ax2.set_xlabel("Residual (True − Predicted)")
     ax2.set_ylabel("Probability Density")
     ax2.set_title("(b) Unbiased Zero-Centered Residuals", fontweight="bold")
     ax2.grid(True, linestyle=":", alpha=0.6)
+    ax2.legend(loc="upper right")
 
     # 3. Learning Curve
     ax3 = fig.add_subplot(gs[0, 2])
-    sub_sizes = [50, 100, 150, 200, 250, 300, n_train]
+    sub_sizes = [50, 100, 200, 350, 500, 650, n_train]
     r2_list = []
     for sz in sub_sizes:
         yp_sub, _ = fit_and_predict(X_train[:sz], y_train[:sz], X_test, ls, sig_var, noise_var)
         r2_list.append(r2_score(y_test, yp_sub))
     ax3.plot(sub_sizes, r2_list, "o-", color="#8b5cf6", lw=2, label="$R^2$ Scaling")
+    ax3.axhline(0.70, color="#10b981", linestyle=":", lw=1.5, label="Practical Threshold ($R^2 \\geq 0.70$)")
     ax3.set_xlabel("Training Samples ($N$)")
     ax3.set_ylabel("Holdout $R^2$ Score")
-    ax3.set_title("(c) GP Sample Efficiency", fontweight="bold")
+    ax3.set_title("(c) GP Sample Efficiency on Real CFD Dataset", fontweight="bold")
     ax3.grid(True, linestyle=":", alpha=0.6)
     ax3.legend(loc="lower right")
 
@@ -145,9 +140,9 @@ def plot_sensitivity_panel(out_dir: Path):
     ]
     baseline_x = np.median(X_train, axis=0)
 
-    for idx, (pname, f_idx, (lo, hi), unit) in enumerate(sweep_params):
+    for idx, (pname, f_idx, (lo_val, hi_val), unit) in enumerate(sweep_params):
         ax_sw = fig.add_subplot(gs[1, idx])
-        grid_vals = np.linspace(lo, hi, 60)
+        grid_vals = np.linspace(lo_val, hi_val, 60)
         X_sweep = np.tile(baseline_x, (len(grid_vals), 1))
         X_sweep[:, f_idx] = grid_vals
         mu_sw, std_sw = fit_and_predict(X_train, y_train, X_sweep, ls, sig_var, noise_var)
@@ -170,10 +165,11 @@ def plot_sensitivity_panel(out_dir: Path):
 
 def main():
     parser = argparse.ArgumentParser(description="Plot Surrogate Sensitivity Panel")
+    parser.add_argument("--dataset", type=str, default="tests/configs_and_scores.json")
     parser.add_argument("--out-dir", type=str, default="evaluation/figures")
     args = parser.parse_args()
 
-    plot_sensitivity_panel(Path(args.out_dir))
+    plot_sensitivity_panel(Path(args.dataset), Path(args.out_dir))
 
 
 if __name__ == "__main__":

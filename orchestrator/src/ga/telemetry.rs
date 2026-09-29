@@ -23,6 +23,18 @@ pub struct GenerationRecord {
     /// Optional full population snapshot (only when full population logging is enabled).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub population: Option<Vec<Vec<f64>>>,
+    /// Generational Tier 1 exact cache hits.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tier1_exact_hits: Option<u64>,
+    /// Generational Tier 2 surrogate model evaluation hits.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tier2_surrogate_hits: Option<u64>,
+    /// Generational Tier 3 expensive simulator/CFD evaluations.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tier3_cfd_evals: Option<u64>,
+    /// Generational simulation bypass ratio: (Tier 1 + Tier 2) / Total evaluations.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tier_bypass_ratio: Option<f64>,
 }
 
 /// Computes per-gene variance across the population.
@@ -248,6 +260,10 @@ mod tests {
             gene_variance: vec![0.01, 0.02],
             entropy: 0.75,
             population: None,
+            tier1_exact_hits: Some(15),
+            tier2_surrogate_hits: Some(45),
+            tier3_cfd_evals: Some(40),
+            tier_bypass_ratio: Some(0.60),
         };
 
         sink.record(record.clone()).await;
