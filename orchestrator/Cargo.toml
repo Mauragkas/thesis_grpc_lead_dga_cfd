@@ -15,6 +15,10 @@ path = "src/main.rs"
 name = "island_migration_bench"
 path = "benches/island_migration_bench.rs"
 
+[[bin]]
+name = "multiseed_fitness_bench"
+path = "benches/multiseed_fitness_bench.rs"
+
 [dependencies]
 tonic = "0.11"
 prost = "0.12"
