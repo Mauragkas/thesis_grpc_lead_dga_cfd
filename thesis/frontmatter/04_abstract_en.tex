@@ -1,0 +1,20 @@
+% ==============================================================================
+% Αγγλική Περίληψη (English Abstract)
+% ==============================================================================
+
+\chapter*{Abstract}
+\addcontentsline{toc}{chapter}{Abstract}
+
+\begin{otherlanguage}{english}
+This diploma thesis investigates the design, implementation, and experimental evaluation of a distributed genetic algorithm (DGA) system for the aerodynamic shape optimization of 3D-printable unmanned aerial vehicles (UAVs). High-fidelity aerodynamic evaluation represents the principal computational bottleneck in evolutionary optimization workflows, as classical genetic algorithms require thousands of expensive simulations.
+
+To achieve substantial computational acceleration without compromising global convergence, we propose a multi-tier $\epsilon$-bypass evaluation pipeline. In Tier 1, candidates identical or near-identical to previously explored geometries are immediately retrieved from a distributed memory store at zero computational overhead. In Tier 2, candidates within an exploratory neighborhood are evaluated via an active surrogate modeling microservice employing multi-layer perceptrons (MLP) and Gaussian Processes with dynamic online retraining. Only genuinely unexplored designs are dispatched to Tier 3 for full 3D Vortex Lattice Method (VLM) aerodynamic simulation on scalable Python worker instances.
+
+Spatial indexing and efficient neighborhood lookups within the 10-dimensional design parameter space are powered by the LEAD DHT (Learned Exact And Approximate DHT). The framework projects multi-dimensional geometric representations onto a one-dimensional ring using multi-probe Hilbert space-filling curves and employs learned recursive model indexes (RMI) dynamically stabilized via online PID controllers. The entire core infrastructure is implemented in Rust utilizing Tokio and Tonic gRPC, coupled with Envoy proxy load balancing and Kafka-driven real-time observability. Experimental benchmarks demonstrate substantial speedups over naive genetic algorithms while converging to aerodynamically superior and stable UAV configurations.
+
+\vspace{1.2cm}
+
+\noindent \textbf{Keywords:} Genetic Algorithms, Island Model, Distributed Systems, LEAD DHT, Learned Indexing, Surrogate Modeling, Aerodynamic Optimization, AeroSandbox, Rust, gRPC.
+\end{otherlanguage}
+
+\clearemptydoublepage

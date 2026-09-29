@@ -1,0 +1,48 @@
+\section{Ανάλυση Bypass Ratio και Επιτάχυνση Ιεραρχίας}
+\label{sec:eval_bypass}
+
+\subsection{Μηχανισμός Παράκαμψης και Κατανομή Επιπέδων Αξιολόγησης}
+Ο ιεραρχικός μηχανισμός πολλαπλών επιπέδων (Multi-Tier Evaluation Hierarchy) σχεδιάστηκε με κύριο στόχο τη δραστική μείωση του υπολογιστικού φόρτου, παρακάμπτοντας την εκτέλεση της χρονοβόρας επίλυσης VLM (Tier 3) μέσω χωρικής μνήμης και μοντέλων υποκατάστασης. Ο ρυθμός παράκαμψης (Bypass Ratio, $BR$) ορίζεται ως:
+\begin{equation}
+    BR = \frac{N_{\text{Tier 1}} + N_{\text{Tier 2}}}{N_{\text{total}}} = 1 - \frac{N_{\text{CFD}}}{N_{\text{total}}}
+\end{equation}
+όπου $N_{\text{Tier 1}}$ είναι ο αριθμός των ακριβών ανακτήσεων από τη μνήμη γονιδίων (Gene Store / LEAD DHT), $N_{\text{Tier 2}}$ ο αριθμός επιτυχών προβλέψεων μέσω του μοντέλου surrogate, και $N_{\text{total}}$ το σύνολο των αξιολογήσεων της εξελικτικής πορείας.
+
+Στο Σχήμα~\ref{fig:tier_breakdown_stacked} παρουσιάζεται ο απόλυτος αριθμός κλήσεων ανά επίπεδο αξιολόγησης σε κάθε γενιά, ενώ στο Σχήμα~\ref{fig:tier_breakdown_percent} απεικονίζεται το αντίστοιχο ποσοστό συμμετοχής.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.88\textwidth]{figures/fig2_tier_breakdown_stacked.png}
+    \caption{Απόλυτη κατανομή αξιολογήσεων ανά γενιά στα τρία επίπεδα της ιεραρχίας: Tier 1 (Ανάκτηση Μνήμης Gene Store), Tier 2 (Εκτίμηση Μοντέλου Surrogate) και Tier 3 (Πλήρης Επίλυση AeroSandbox VLM).}
+    \label{fig:tier_breakdown_stacked}
+\end{figure}
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.95\textwidth]{figures/fig2_tier_breakdown_percent.png}
+    \caption{Ποσοστιαία κατανομή επιπέδων αξιολόγησης: Διακρίνεται σαφώς η αρχική μεταβατική φάση προθέρμανσης (warmup phase, $t \le 5$) όπου κυριαρχεί το Tier 3 για τη συλλογή δειγμάτων εκπαίδευσης, και η μόνιμη κατάσταση ($t \ge 15$) όπου το συνολικό Bypass Ratio σταθεροποιείται άνω του $70\%$.}
+    \label{fig:tier_breakdown_percent}
+\end{figure}
+
+Όπως καταγράφεται στα Σχήματα~\ref{fig:tier_breakdown_stacked} και~\ref{fig:tier_breakdown_percent}, στις πρώτες γενιές ($t=1\dots 5$) ο ρυθμός παράκαμψης είναι χαμηλός ($<15\%$), καθώς το μοντέλο υποκατάστασης δεν διαθέτει επαρκή δεδομένα εκπαίδευσης και το φίλτρο αβεβαιότητας $\sigma(\mathbf{x}) > \theta$ προωθεί τα περισσότερα άτομα στο Tier 3. Καθώς το buffer εκπαίδευσης εμπλουτίζεται με έγκυρα αεροδυναμικά δείγματα, το Tier 2 αναλαμβάνει σταδιακά έως και το $50\%$ των αξιολογήσεων. Ταυτόχρονα, καθώς ο πληθυσμός συγκλίνει σε υψηλής καταλληλότητας θύλακες, οι επανειλημμένες επισκέψεις γειτονικών γεωμετριών αυξάνουν τις ανακτήσεις Tier 1 σε πάνω από $15\%$, οδηγώντας σε συνολικό ποσοστό παράκαμψης που υπερβαίνει το $75\%$ στις όψιμες γενιές.
+
+\subsection{Συνολική Επιτάχυνση Πραγματικού Χρόνου (Wall-Clock Speedup)}
+Για την αποτίμηση της υπολογιστικής αποδοτικότητας του ολοκληρωμένου pipeline, εκτελέστηκαν συγκριτικά πειράματα υπό τρεις διαμορφώσεις αρχιτεκτονικής:
+\begin{enumerate}
+    \item \textbf{1-Tier (CFD Only):} Βασική διαμόρφωση αναφοράς χωρίς ενδιάμεσες μνήμες ή surrogates. Κάθε άτομο αξιολογείται υποχρεωτικά μέσω VLM.
+    \item \textbf{2-Tier (Cache + CFD):} Ενεργοποίηση της χωρικής μνήμης γονιδίων Gene Store και LEAD DHT ($\epsilon$-cache) χωρίς ενεργό surrogate.
+    \item \textbf{3-Tier (Full Pipeline):} Πλήρης ιεραρχία με ενεργοποιημένα και τα τρία επίπεδα (Cache $\to$ Surrogate $\to$ Workers CFD).
+\end{enumerate}
+
+Στο Σχήμα~\ref{fig:pipeline_speedup} συγκρίνονται οι συνολικοί χρόνοι εκτέλεσης (Wall-Clock Time) και οι συντελεστές επιτάχυνσης, ενώ στον Πίνακα~\ref{tab:evaluation_pipeline_speedup} αναγράφονται αναλυτικά οι μετρήσεις και η βέλτιστη τελική καταλληλότητα.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.92\textwidth]{figures/fig2_pipeline_speedup_barchart.png}
+    \caption{Σύγκριση χρόνου εκτέλεσης και επιτάχυνσης: 1-Tier (Μόνο CFD), 2-Tier (Μνήμη + CFD) και 3-Tier (Πλήρες Ιεραρχικό Pipeline).}
+    \label{fig:pipeline_speedup}
+\end{figure}
+
+\input{figures/table2_tier_speedup_breakdown.tex}
+
+Από τον Πίνακα~\ref{tab:evaluation_pipeline_speedup} προκύπτει ότι το πλήρες 3-Tier pipeline μειώνει τις απαιτούμενες κλήσεις CFD από 4.500 σε μόλις 1.972 (μείωση κατά $56.2\%$), επιτυγχάνοντας πραγματική επιτάχυνση $2.28\times$ (χρόνος εκτέλεσης 6.0 λεπτά έναντι 13.8 λεπτών). Είναι κρίσιμο να τονιστεί ότι η επιτάχυνση αυτή επιτυγχάνεται χωρίς καμία απολύτως υποβάθμιση στην ποιότητα της βέλτιστης λύσης, καθώς και οι τρεις διαμορφώσεις συγκλίνουν στην ίδια βέλτιστη αεροδυναμική απόδοση ($F = 12.27$).

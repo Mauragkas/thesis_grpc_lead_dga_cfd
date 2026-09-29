@@ -1,0 +1,165 @@
+% ==============================================================================
+% Προοίμιο LaTeX (LaTeX Preamble)
+% Πακέτα, Γραμματοσειρές και Ρυθμίσεις Μορφοποίησης
+% ==============================================================================
+
+% --- Γλώσσα και Γραμματοσειρές (XeLaTeX) ---
+\usepackage{fontspec}
+\usepackage{polyglossia}
+
+\setmainlanguage{greek}
+\setotherlanguage{english}
+
+% Επιλογή γραμματοσειρών με πλήρη υποστήριξη Ελληνικών & Μαθηματικών
+\setmainfont{Linux Libertine O}[
+    Ligatures=TeX,
+    Numbers=OldStyle
+]
+\setsansfont{Linux Biolinum O}[
+    Ligatures=TeX
+]
+\setmonofont{DejaVu Sans Mono}[
+    Scale=MatchLowercase
+]
+
+% --- Γεωμετρία Σελίδας ---
+\usepackage[
+    a4paper,
+    top=2.8cm,
+    bottom=2.8cm,
+    left=3.0cm,
+    right=2.5cm,
+    headheight=15pt,
+    footskip=1.2cm
+]{geometry}
+
+% Διάστιχο
+\usepackage{setspace}
+\setstretch{1.18}
+
+% Ρύθμιση παραγράφων (παραδοσιακό πανεπιστημιακό στυλ)
+\setlength{\parindent}{0.6cm}
+\setlength{\parskip}{0.2em}
+
+% Μείωση υπερχειλίσεων γραμμής (Overfull hbox) στο κύριο κείμενο
+\tolerance=1500
+\emergencystretch=1.5em
+\hfuzz=2pt
+
+% --- Μαθηματικά Πακέτα ---
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{amsfonts}
+\usepackage{mathtools}
+\usepackage{bm}
+
+% --- Πίνακες & Σχήματα ---
+\usepackage{graphicx}
+\graphicspath{{figures/}{../evaluation/figures/}{../compose/}}
+\usepackage{float}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{multirow}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{adjustbox}  % για κλιμάκωση πλατιών πινάκων
+
+\captionsetup{
+    font=small,
+    labelfont=bf,
+    labelsep=colon,
+    figurename=Σχήμα,
+    tablename=Πίνακας
+}
+
+% --- Χρώματα ---
+\usepackage{xcolor}
+\definecolor{ceidblue}{RGB}{0, 51, 102}
+\definecolor{linkblue}{RGB}{20, 60, 160}
+\definecolor{codebg}{RGB}{248, 248, 248}
+\definecolor{codeframe}{RGB}{220, 220, 220}
+\definecolor{commentgreen}{RGB}{40, 140, 50}
+\definecolor{keywordblue}{RGB}{10, 40, 180}
+\definecolor{stringred}{RGB}{180, 40, 30}
+
+% --- Υπερσύνδεσμοι (Hyperref) ---
+\usepackage{hyperref}
+\hypersetup{
+    colorlinks=true,
+    linkcolor=linkblue,
+    citecolor=linkblue,
+    urlcolor=linkblue,
+    pdftitle={\thesistitleel},
+    pdfauthor={\thesisauthor},
+    pdfsubject={\thesistype},
+    bookmarksnumbered=true,
+    bookmarksopen=true
+}
+
+% --- Κεφαλίδες & Υποσέλιδα (Fancyhdr) ---
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[LE,RO]{\thepage}
+\fancyhead[RE]{\nouppercase{\leftmark}}
+\fancyhead[LO]{\nouppercase{\rightmark}}
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\footrulewidth}{0pt}
+
+% Στυλ για κενές σελίδες στην αρχή κεφαλαίων
+\fancypagestyle{plain}{
+    \fancyhf{}
+    \fancyfoot[C]{\thepage}
+    \renewcommand{\headrulewidth}{0pt}
+}
+
+% Καθαρή λευκή σελίδα χωρίς κεφαλίδες όταν χρειάζεται
+\newcommand{\clearemptydoublepage}{%
+    \clearpage{\pagestyle{empty}\cleardoublepage}%
+}
+
+% --- Περιβάλλον Αλγορίθμων (Ruled Style όπως στο reference PDF) ---
+\floatstyle{ruled}
+\newfloat{algorithm}{tbp}{loa}[chapter]
+\floatname{algorithm}{Αλγόριθμος}
+
+% Βοηθητικές εντολές μορφοποίησης ψευδοκώδικα
+\newcommand{\AlgoInput}[1]{\textbf{Input:} #1 \\}
+\newcommand{\AlgoOutput}[1]{\textbf{Output:} #1 \\[0.15cm]}
+\newcommand{\AlgoComment}[1]{\textit{/* #1 */} \\}
+\newcommand{\AlgoLine}[2]{\textbf{#1} \quad #2 \\}
+\newcommand{\AlgoLineIndent}[2]{\textbf{#1} \quad \quad #2 \\}
+\newcommand{\AlgoLineIndentTwo}[2]{\textbf{#1} \quad \quad \quad #2 \\}
+
+% --- Μορφοποίηση Πηγαίου Κώδικα (Listings) ---
+\usepackage{listings}
+\lstset{
+    backgroundcolor=\color{codebg},
+    basicstyle=\ttfamily\footnotesize,
+    breaklines=true,
+    captionpos=b,
+    commentstyle=\color{commentgreen}\textit,
+    frame=single,
+    rulecolor=\color{codeframe},
+    keywordstyle=\color{keywordblue}\textbf,
+    stringstyle=\color{stringred},
+    numbers=left,
+    numberstyle=\tiny\color{gray},
+    numbersep=8pt,
+    tabsize=4,
+    showstringspaces=false,
+    keepspaces=true
+}
+
+% --- Βιβλιογραφία ---
+\usepackage{cite}
+
+% Προσαρμογή ελληνικών τίτλων
+\addto\captionsgreek{
+    \renewcommand{\contentsname}{Περιεχόμενα}
+    \renewcommand{\listfigurename}{Κατάλογος Σχημάτων}
+    \renewcommand{\listtablename}{Κατάλογος Πινάκων}
+    \renewcommand{\bibname}{Βιβλιογραφία}
+    \renewcommand{\chaptername}{Κεφάλαιο}
+    \renewcommand{\appendixname}{Παράρτημα}
+}

@@ -1,0 +1,23 @@
+\section{Παράμετροι Περιβάλλοντος και Υλικού}
+\label{sec:hardware_specs}
+
+Στον Πίνακα~\ref{tab:env_params} παρατίθενται οι βασικές μεταβλητές περιβάλλοντος και οι υπερπαράμετροι διαμόρφωσης του συστήματος όπως ορίζονται στα επιμέρους αρχεία \texttt{docker-compose.yml}.
+
+\begin{table}[H]
+\centering
+\caption{Βασικές Μεταβλητές Περιβάλλοντος Υποσυστημάτων}
+\label{tab:env_params}
+\begin{tabularx}{\textwidth}{llX}
+\toprule
+\textbf{Υποσύστημα} & \textbf{Μεταβλητή} & \textbf{Περιγραφή / Προεπιλογή} \\
+\midrule
+Orchestrator & \texttt{TIER\_EPSILON\_EXACT} & Κατώφλι άμεσου hit Tier 1 ($0.02$) \\
+Orchestrator & \texttt{TIER\_RADIUS\_R}      & Ακτίνα εμπιστοσύνης Tier 2 ($0.15$) \\
+Orchestrator & \texttt{MIGRATION\_INTERVAL}  & Συχνότητα μετανάστευσης σε γενιές ($10$) \\
+Surrogate    & \texttt{WINDOW\_SIZE}         & Μέγεθος ταμιευτήρα δειγμάτων ($1000$) \\
+Surrogate    & \texttt{RETRAIN\_INTERVAL}    & Ρυθμός επανεκπαίδευσης ανά νέα δείγματα ($25$) \\
+LEAD DHT     & \texttt{VIRTUAL\_NODE\_COUNT} & Πλήθος vnodes ανά φυσικό κόμβο ($20$) \\
+Worker       & \texttt{V\_MIN\_FUSE\_MM3}    & Ελάχιστος επιτρεπτός όγκος ατράκτου ($20000$) \\
+\bottomrule
+\end{tabularx}
+\end{table}

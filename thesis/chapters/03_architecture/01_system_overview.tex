@@ -1,0 +1,20 @@
+\section{Συνολική Αρχιτεκτονική και Ροή Δεδομένων}
+\label{sec:arch_overview}
+
+Το σύστημα αποτελείται από πέντε αυτόνομα υποσυστήματα που επικοινωνούν μέσω αυστηρά καθορισμένων διεπαφών gRPC (Protocol Buffers) και ασύγχρονων ροών μηνυμάτων:
+\begin{enumerate}
+    \item \textbf{Orchestrators (Rust):} Οδηγοί του εξελικτικού αλγορίθμου, ένας ανά νήσο, που υλοποιούν τον κύκλο $\mu + \lambda$, τη μνήμη γονιδίων και τη διαχείριση του pipeline αξιολόγησης.
+    \item \textbf{LEAD DHT Cluster (Rust):} Τριμελής κατανεμημένος δακτύλιος αποθήκευσης και χωρικής ευρετηρίασης γεωμετριών με 60 vnodes.
+    \item \textbf{Surrogate Node (Rust + C++):} Υπηρεσία ταχείας πρόβλεψης με ενεργό μοντέλο MLP/GP και ουρά επιγραμμικής επανεκπαίδευσης.
+    \item \textbf{Worker Simulator Farm (Python + AeroSandbox):} Συστοιχία υπολογιστικών εργατών που εκτελούν την πλήρη επίλυση 3D VLM.
+    \item \textbf{Envoy Load Balancer:} Διαμεσολαβητής αντίστροφης δρομολόγησης gRPC αιτημάτων προς τους εργάτες με αυτόματη δυναμική ανακάλυψη υπηρεσιών.
+\end{enumerate}
+
+Η συνολική αρχιτεκτονική διάταξη του κατανεμημένου συστήματος, οι διασυνδέσεις των υποσυστημάτων και η ροή δεδομένων κατά την εκτέλεση του γενετικού αλγορίθμου απεικονίζονται διαγραμματικά στο Σχήμα~\ref{fig:system_architecture}.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.95\textwidth]{figures/fig5_system_architecture.png}
+    \caption{Συνολική αρχιτεκτονική τοπολογία του κατανεμημένου συστήματος: Δακτύλιος νήσων Orchestrator (Chord Ring), δακτύλιος LEAD DHT με χωρική ευρετηρίαση Hilbert, επιταχυντής υποκατάστασης Surrogate Node, ισοσταθμιστής φορτίου Envoy και συστοιχία υπολογιστικών εργατών AeroSandbox CFD.}
+    \label{fig:system_architecture}
+\end{figure}

@@ -1,0 +1,129 @@
+% ==============================================================================
+% Κεντρικό Αρχείο Διπλωματικής Εργασίας (Master Thesis Document)
+% Τμήμα Μηχανικών Η/Υ & Πληροφορικής (CEID), Πανεπιστήμιο Πατρών
+% ==============================================================================
+
+\documentclass[11pt,a4paper,twoside,openany]{report}
+
+% Φόρτωση Μεταδεδομένων & Προοιμίου
+\input{metadata.tex}
+\input{preamble.tex}
+
+\begin{document}
+
+% ------------------------------------------------------------------------------
+% ΠΡΟΚΑΤΑΡΚΤΙΚΕΣ ΣΕΛΙΔΕΣ (Frontmatter)
+% ------------------------------------------------------------------------------
+\pagenumbering{roman}
+
+% 1. Εξώφυλλο / Σελίδα Τίτλου (Χωρίς αρίθμηση)
+\input{frontmatter/01_title.tex}
+\clearpage
+
+% 2. Υπεύθυνη Δήλωση & Πνευματικά Δικαιώματα (στην πίσω όψη του εξωφύλλου)
+\input{frontmatter/02_declaration.tex}
+\clearpage
+
+% 3. Ελληνική Περίληψη (Ξεκινά από ii όπως στο πρότυπο)
+\setcounter{page}{2}
+\input{frontmatter/03_abstract_el.tex}
+\clearpage
+
+% 4. Αγγλική Περίληψη (Abstract - σελίδα iii)
+\input{frontmatter/04_abstract_en.tex}
+\clearpage
+
+% 5. Ευχαριστίες
+\input{frontmatter/05_acknowledgements.tex}
+\clearpage
+
+% 6. Πίνακας Περιεχομένων & Κατάλογοι
+\tableofcontents
+\clearemptydoublepage
+
+\listoffigures
+\addcontentsline{toc}{chapter}{\listfigurename}
+\clearemptydoublepage
+
+\listoftables
+\addcontentsline{toc}{chapter}{\listtablename}
+\clearemptydoublepage
+
+% ------------------------------------------------------------------------------
+% ΚΥΡΙΩΣ ΣΩΜΑ ΕΡΓΑΣΙΑΣ (Mainmatter - Αραβική Αρίθμηση)
+% ------------------------------------------------------------------------------
+\clearemptydoublepage
+\pagenumbering{arabic}
+\setcounter{page}{1}
+
+% Τα κεφάλαια φορτώνονται δυναμικά από το build.sh με βάση το ευρετήριο,
+% ή από την προκαθορισμένη λίστα εάν δεν έχει παραχθεί το _all_chapters.tex.
+\IfFileExists{_all_chapters.tex}{%
+    \input{_all_chapters.tex}
+}{%
+    % Κεφάλαιο 1
+    \input{chapters/01_introduction/00_chapter.tex}
+    \input{chapters/01_introduction/01_motivation.tex}
+    \input{chapters/01_introduction/02_problem_statement.tex}
+    \input{chapters/01_introduction/03_contributions.tex}
+    \input{chapters/01_introduction/04_structure.tex}
+
+    % Κεφάλαιο 2
+    \input{chapters/02_background/00_chapter.tex}
+    \input{chapters/02_background/01_genetic_algorithms.tex}
+    \input{chapters/02_background/02_distributed_dht.tex}
+    \input{chapters/02_background/03_surrogate_modeling.tex}
+    \input{chapters/02_background/04_hilbert_curves.tex}
+
+    % Κεφάλαιο 3
+    \input{chapters/03_architecture/00_chapter.tex}
+    \input{chapters/03_architecture/01_system_overview.tex}
+    \input{chapters/03_architecture/02_multi_tier_pipeline.tex}
+    \input{chapters/03_architecture/03_island_migration.tex}
+
+    % Κεφάλαιο 4
+    \input{chapters/04_implementation/00_chapter.tex}
+    \input{chapters/04_implementation/01_lead_node.tex}
+    \input{chapters/04_implementation/02_surrogate_node.tex}
+    \input{chapters/04_implementation/03_orchestrator.tex}
+    \input{chapters/04_implementation/04_worker_simulator.tex}
+
+    % Κεφάλαιο 5
+    \input{chapters/05_evaluation/00_chapter.tex}
+    \input{chapters/05_evaluation/01_experimental_setup.tex}
+    \input{chapters/05_evaluation/02_fitness_and_convergence.tex}
+    \input{chapters/05_evaluation/03_bypass_and_speedup.tex}
+    \input{chapters/05_evaluation/04_surrogate_evaluation.tex}
+    \input{chapters/05_evaluation/05_lead_dht_evaluation.tex}
+    \input{chapters/05_evaluation/06_scalability_and_tradeoffs.tex}
+    \input{chapters/05_evaluation/07_microbenchmarks.tex}
+
+    % Κεφάλαιο 6
+    \input{chapters/06_conclusion/00_chapter.tex}
+    \input{chapters/06_conclusion/01_conclusions.tex}
+    \input{chapters/06_conclusion/02_future_work.tex}
+}
+
+% ------------------------------------------------------------------------------
+% ΒΙΒΛΙΟΓΡΑΦΙΑ (Bibliography)
+% ------------------------------------------------------------------------------
+\clearemptydoublepage
+\bibliographystyle{ieeetr}
+\addcontentsline{toc}{chapter}{\bibname}
+\bibliography{bibliography/references}
+
+% ------------------------------------------------------------------------------
+% ΠΑΡΑΡΤΗΜΑΤΑ (Appendices)
+% ------------------------------------------------------------------------------
+\clearemptydoublepage
+\appendix
+
+\IfFileExists{_all_appendices.tex}{%
+    \input{_all_appendices.tex}
+}{%
+    \input{appendices/00_appendix.tex}
+    \input{appendices/01_algo_pipeline.tex}
+    \input{appendices/02_hardware_specs.tex}
+}
+
+\end{document}

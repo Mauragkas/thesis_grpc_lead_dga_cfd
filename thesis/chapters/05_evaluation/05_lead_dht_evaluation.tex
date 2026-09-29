@@ -1,0 +1,82 @@
+\section{Επίδοση Κατανεμημένου DHT LEAD και Ευρετηρίασης RMI}
+\label{sec:eval_dht}
+
+\subsection{Δρομολόγηση Δακτυλίου Chord και Χωρική Ανάκληση}
+Ο κατανεμημένος πίνακας κατακερματισμού LEAD DHT συνδυάζει την τοπολογία δακτυλίου Chord με καμπύλες πλήρωσης χώρου Hilbert (Space-Filling Curves), προκειμένου να αποθηκεύει και να ανακτά γονιδιώματα 10 διαστάσεων διατηρώντας τη γεωμετρική γειτνίαση.
+
+Στο Σχήμα~\ref{fig:dht_routing_cdf} παρουσιάζεται η Αθροιστική Συνάρτηση Κατανομής (CDF) των αλμάτων δρομολόγησης (routing hops) για την επίλυση αιτημάτων αναζήτησης, συγκρινόμενη με τη θεωρητική αναμενόμενη τιμή $\frac{1}{2}\log_2 N$. Στον Πίνακα~\ref{tab:dht_routing_and_recall} παρατίθενται οι αντίστοιχες μετρήσεις για διάφορα μεγέθη δακτυλίου $N$.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.92\textwidth]{figures/fig3_dht_routing_cdf.png}
+    \caption{Αξιολόγηση δρομολόγησης LEAD DHT: (α) CDF αλμάτων δρομολόγησης Chord σε σύγκριση με το θεωρητικό όριο $\frac{1}{2}\log_2 N$, και (β) ποσοστό χωρικής ανάκλησης πλησιέστερων γειτόνων (spatial recall) μέσω του μηχανισμού multi-probe Hilbert.}
+    \label{fig:dht_routing_cdf}
+\end{figure}
+
+\input{figures/table6_lead_dht_routing_and_recall.tex}
+
+Η εμπειρική συμπεριφορά επιβεβαιώνει την υπο-γραμμική κλιμάκωση $O(\log N)$ της δρομολόγησης Chord, διασφαλίζοντας ότι ακόμα και σε εκτεταμένους δακτυλίους $N=128$ κόμβων, το 95\% των αναζητήσεων ολοκληρώνεται σε λιγότερα από 25 άλματα χωρίς συμφόρηση μεμονωμένων vnodes.
+
+\subsection{Διατήρηση Χωρικής Γειτνίασης μέσω Καμπυλών Hilbert}
+Η χαρτογράφηση του 10D συνεχούς χώρου $\mathbf{x} \in [0, 1]^{10}$ σε 64-bit ακέραια κλειδιά δακτυλίου Chord επιτυγχάνεται μέσω καμπύλης Hilbert τάξης $p=6$. Για την αντιμετώπιση του φαινομένου της ψευδούς ασυνέχειας στα όρια των τεταρτημορίων, υιοθετήθηκε η μέθοδος multi-probe με περιστροφή αξόνων ($C=3$ παράλληλες καμπύλες).
+
+Στο Σχήμα~\ref{fig:hilbert_spatial_heatmap} αποτυπώνεται ο χάρτης θερμότητας (heatmap) της 10D ευκλείδειας απόστασης $\|\Delta \mathbf{x}\|$ σε σύγκριση με την απόσταση θέσης επί του δακτυλίου Chord. Στον Πίνακα~\ref{tab:hilbert_spatial_preservation} συγκρίνονται οι μετρικές διατήρησης γειτνίασης.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.92\textwidth]{figures/fig5_hilbert_spatial_heatmap.png}
+    \caption{Χάρτης θερμότητας χωρικής γειτνίασης Hilbert (10D-to-1D Locality Heatmap): Συσχέτιση 10-διάστατης ευκλείδειας απόστασης γενετικών διανυσμάτων και 1-διάστατης απόστασης κλειδιών στον δακτύλιο Chord.}
+    \label{fig:hilbert_spatial_heatmap}
+\end{figure}
+
+\input{figures/table_fig5_hilbert_spatial_clustering.tex}
+
+Όπως αποδεικνύει ο Πίνακας~\ref{tab:hilbert_spatial_preservation}, η υιοθέτηση multi-probe ($C=3$) διπλασιάζει τη συνολική συσχέτιση αποστάσεων (από $r=0.172$ σε $r=0.333$) και περιορίζει κατά $6.5\times$ τη στρέβλωση του 90ού εκατοστημορίου ($P_{90}$ από $0.0886$ σε $0.0135$), εγγυώμενη ότι γεωμετρικά παρόμοια αεροσκάφη αποθηκεύονται στον ίδιο ή σε γειτονικούς κόμβους DHT.
+
+\subsection{Σύγκριση Ευρετηρίασης: Learned Index (RMI) έναντι Παραδοσιακού B-Tree}
+Σε επίπεδο μεμονωμένου κόμβου LEAD, η ταχεία εντοπιότητα των κλειδιών Hilbert υποστηρίζεται από έναν αναδρομικό ευρετήριο μοντέλων (Recursive Model Index - RMI) δύο επιπέδων: ένα γραμμικό ριζικό μοντέλο εκπαιδεύει την κατανομή CDF και κατευθύνει την αναζήτηση σε έναν από τους 256 γραμμικούς φυλλο-προβλεπτές (leaf models), ακολουθούμενο από τοπική δυαδική αναζήτηση εντός φράγματος σφάλματος $[-\epsilon, +\epsilon]$.
+
+Στο Σχήμα~\ref{fig:rmi_vs_btree} συγκρίνεται η καθυστέρηση ανάκτησης του RMI έναντι του πρότυπου δέντρου \texttt{std::collections::BTreeMap} της Rust. Στον Πίνακα~\ref{tab:rmi_vs_btree} καταγράφονται οι μετρήσεις καθυστέρησης και απαιτήσεων μνήμης.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.88\textwidth]{figures/fig3_rmi_vs_btree_benchmark.png}
+    \caption{Σύγκριση απόδοσης ευρετηρίασης: Καθυστέρηση ανάκτησης κλειδιού RMI (Learned Index) έναντι πρότυπου B-Tree σε συνάρτηση με το πλήθος κλειδιών $N$.}
+    \label{fig:rmi_vs_btree}
+\end{figure}
+
+\input{figures/table8_rmi_lookup_vs_btree.tex}
+
+Το RMI διατηρεί σχεδόν σταθερό χρόνο ανάκτησης $\approx 41.0\text{ ns}$ ανεξαρτήτως πλήθους κλειδιών, επιτυγχάνοντας επιτάχυνση $1.81\times$ στο μέγεθος $N=50.000$ κλειδιών. Ταυτόχρονα, απαιτεί $3\times$ λιγότερη μνήμη RAM ($785.2\text{ KB}$ έναντι $2.343\text{ KB}$), καθώς αντικαθιστά τους ενδιάμεσους δείκτες διακλάδωσης του δέντρου με συμπαγείς συντελεστές κλίσης και μετατόπισης ($w, b$).
+
+\subsection{Εξισορρόπηση Φορτίου Envoy gRPC και Καθυστέρηση Εργατών}
+Η δρομολόγηση των βαρέων αιτημάτων VLM (Tier 3) προς τη συστοιχία εργατών διαχειρίζεται από τον Envoy Reverse Proxy. Συγκρίθηκε η στατική πολιτική Round-Robin έναντι της δυναμικής Least-Request (Power-of-Two-Choices, P2C).
+
+Στο Σχήμα~\ref{fig:envoy_load_balancing} απεικονίζονται οι κατανομές καθυστέρησης και το ποσοστό κατανομής αιτημάτων ανά εργάτη. Στον Πίνακα~\ref{tab:envoy_balancing_eval} καταγράφονται τα αντίστοιχα στατιστικά εκατοστημόρια.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.92\textwidth]{figures/fig3_envoy_load_balancing.png}
+    \caption{Αξιολόγηση εξισορρόπησης φορτίου Envoy gRPC: (α) Κατανομή χρόνου απόκρισης εργατών (CDF) και (β) δικαιοσύνη ανάθεσης αιτημάτων μεταξύ των εργατών για πολιτικές Round-Robin και Least-Request (P2C).}
+    \label{fig:envoy_load_balancing}
+\end{figure}
+
+\input{figures/table_fig3_envoy_load_balancing.tex}
+
+Η πολιτική Least-Request μειώνει τη διάμεση καθυστέρηση ($P_{50}$) κατά $21.7\text{ ms}$ (από $227.4\text{ ms}$ σε $205.7\text{ ms}$) και περιορίζει την ουρά καθυστέρησης ($P_{99}$) κατά $12.6\text{ ms}$, εξομαλύνοντας τις διακυμάνσεις επίλυσης VLM χωρίς να θυσιάζει τη δικαιοσύνη κατανομής (Δείκτης Jain $J = 0.9929$).
+
+\subsection{Υπερεπιβάρυνση Πρωτοκόλλου Τηλεμετρίας: Protobuf έναντι JSON Lines}
+Η αποστολή μετρήσεων και γεωμετριών προς τον δίαυλο τηλεμετρίας αξιολογήθηκε συγκρίνοντας τη δυαδική σειριοποίηση Protocol Buffers (Protobuf) έναντι της μορφής κειμένου JSON Lines.
+
+Στο Σχήμα~\ref{fig:telemetry_protocol_overhead} και στον Πίνακα~\ref{tab:telemetry_serialization} παρουσιάζονται τα αποτελέσματα μικρο-μετρήσεων Criterion.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.90\textwidth]{figures/fig3_telemetry_protocol_overhead.png}
+    \caption{Σύγκριση πρωτοκόλλων τηλεμετρίας: (α) Χρόνος σειριοποίησης ανά παρτίδα μηνυμάτων και (β) μέγεθος δεδομένων στο δίκτυο (Wire Size) για Binary Protobuf και JSON Lines.}
+    \label{fig:telemetry_protocol_overhead}
+\end{figure}
+
+\input{figures/table7_telemetry_protocol_overhead.tex}
+
+Το Protobuf επιτυγχάνει επιτάχυνση σειριοποίησης $12.6\times$ ($1.92\ \mu\text{s}$ έναντι $24.13\ \mu\text{s}$ για παρτίδα 100 δειγμάτων) και παράγει $3.9\times$ μικρότερο όγκο δεδομένων στο δίκτυο ($9.8\text{ KB}$ έναντι $38.5\text{ KB}$), εκμηδενίζοντας την επιβάρυνση δικτύου κατά την καταγραφή τηλεμετρίας.
