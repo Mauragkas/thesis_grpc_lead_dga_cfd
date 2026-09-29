@@ -11,6 +11,7 @@ Reads real empirical benchmark data from `surrogate_node/scripts/compare_results
 Generates:
   - figures/fig2_surrogate_pred_vs_true.png
   - figures/fig2_surrogate_error_convergence.png
+  - figures/table_fig2_surrogate_error_convergence.tex
 """
 
 import argparse
@@ -127,15 +128,16 @@ def plot_error_and_convergence(models: List[Dict], out_dir: Path):
     mlp_model = next((m for m in models if "neural" in m["name"].lower() or "mlp" in m["name"].lower()), None)
     rf_model = next((m for m in models if "forest" in m["name"].lower()), None)
 
-    # Estimate test variance from GP holdout for MSE scaling: Var(y) = RMSE^2 / (1 - R^2)
     y_test = np.array(gp_model["y_test"]) if gp_model and "y_test" in gp_model else np.zeros(1)
     y_var = float(np.var(y_test)) if len(y_test) > 1 else 4.52
 
-    # Extract authentic learning curves
+    gp_sizes, gp_r2_vals, mlp_r2_vals, rf_r2_vals = [], [], [], []
+
     if gp_model and "learning_curve" in gp_model:
         gp_lc = np.array(gp_model["learning_curve"])
         gp_sizes = gp_lc[:, 0]
         gp_r2 = gp_lc[:, 1]
+        gp_r2_vals = gp_r2
         gp_mse = y_var * np.maximum(0.01, 1.0 - gp_r2)
         ax1.plot(gp_sizes, gp_mse, marker="o", color="#2563eb", linewidth=2.0, label="Gaussian Process (Matérn 5/2)")
         ax2.plot(gp_sizes, gp_r2, marker="o", color="#2563eb", linewidth=2.0, label=f"Gaussian Process ($R^2 = {gp_model['test_r2']:.3f}$)")
@@ -144,6 +146,7 @@ def plot_error_and_convergence(models: List[Dict], out_dir: Path):
         mlp_lc = np.array(mlp_model["learning_curve"])
         mlp_sizes = mlp_lc[:, 0]
         mlp_r2 = mlp_lc[:, 1]
+        mlp_r2_vals = mlp_r2
         mlp_mse = y_var * np.maximum(0.01, 1.0 - mlp_r2)
         ax1.plot(mlp_sizes, mlp_mse, marker="s", color="#8b5cf6", linewidth=1.8, label="Neural Network (MLP)")
         ax2.plot(mlp_sizes, mlp_r2, marker="s", color="#8b5cf6", linewidth=1.8, label=f"Neural Network ($R^2 = {mlp_model['test_r2']:.3f}$)")
@@ -152,6 +155,7 @@ def plot_error_and_convergence(models: List[Dict], out_dir: Path):
         rf_lc = np.array(rf_model["learning_curve"])
         rf_sizes = rf_lc[:, 0]
         rf_r2 = rf_lc[:, 1]
+        rf_r2_vals = rf_r2
         rf_mse = y_var * np.maximum(0.01, 1.0 - rf_r2)
         ax1.plot(rf_sizes, rf_mse, marker="^", color="#f59e0b", linewidth=1.6, linestyle="--", label="Random Forest")
         ax2.plot(rf_sizes, rf_r2, marker="^", color="#f59e0b", linewidth=1.6, linestyle="--", label=f"Random Forest ($R^2 = {rf_model['test_r2']:.3f}$)")
@@ -175,6 +179,31 @@ def plot_error_and_convergence(models: List[Dict], out_dir: Path):
     fig.savefig(png_path, format="png", bbox_inches="tight")
     plt.close(fig)
     print(f"Generated: {png_path}")
+
+    # Export LaTeX table for learning curve progression
+    tex_path = out_dir / "table_fig2_surrogate_error_convergence.tex"
+    with open(tex_path, "w", encoding="utf-8") as f_tex:
+        f_tex.write(r"""\begin{table}[t]
+\centering
+\caption{Surrogate Generalization Accuracy Scaling with Training Sample Budget}
+\label{tab:surrogate_learning_curve}
+\begin{tabular}{ccccc}
+\hline
+\textbf{Training Size ($N_{\text{train}}$)} & \textbf{GP $R^2$} & \textbf{MLP $R^2$} & \textbf{RF $R^2$} & \textbf{GP Generalization MSE} \\
+\hline
+""")
+        for idx in range(len(gp_sizes)):
+            n_val = int(gp_sizes[idx])
+            gp_val = gp_r2_vals[idx] if idx < len(gp_r2_vals) else 0.0
+            mlp_val = mlp_r2_vals[idx] if idx < len(mlp_r2_vals) else 0.0
+            rf_val = rf_r2_vals[idx] if idx < len(rf_r2_vals) else 0.0
+            mse_val = y_var * max(0.01, 1.0 - gp_val)
+            f_tex.write(f"$N = {n_val}$ & {gp_val:.3f} & {mlp_val:.3f} & {rf_val:.3f} & {mse_val:.3f} \\\\\n")
+        f_tex.write(r"""\hline
+\end{tabular}
+\end{table}
+""")
+    print(f"Generated: {tex_path}")
 
 
 def main():

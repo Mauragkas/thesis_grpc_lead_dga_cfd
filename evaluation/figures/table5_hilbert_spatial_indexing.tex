@@ -1,0 +1,17 @@
+\begin{table}[t]
+\centering
+\caption{Multi-Probe Hilbert Space-Filling Curve Encoding Microbenchmarks}
+\label{tab:hilbert_encoding_bench}
+\begin{tabular}{llr}
+\hline
+\textbf{Primitive Operation} & \textbf{Configuration} & \textbf{Measured Mean Latency} \\
+\hline
+Raw Hilbert Coordinate Transformation & 10D Unit Hypercube $\to$ Hex String & 505.2~$\text{ns}$ \\
+Composite Key Parsing \& Deserialization & 10D Key Split \& Gene Vector Decode & 176.5~$\text{ns}$ \\
+\hline
+Multi-Probe Rotated Curve Key Generation & 3 Curves, $d=5$ Dimensional Space & 1.17~$\mu\text{s}$ \\
+Multi-Probe Rotated Curve Key Generation & 3 Curves, $d=10$ Dimensional Space & 2.18~$\mu\text{s}$ \\
+Multi-Probe Rotated Curve Key Generation & 3 Curves, $d=15$ Dimensional Space & 3.10~$\mu\text{s}$ \\
+\hline
+\end{tabular}
+\end{table}

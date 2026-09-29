@@ -22,11 +22,7 @@ use rand_distr::Normal;
 
 /// 1. Benchmark random population generation.
 ///
-/// WHAT TO DO:
-/// - Measure `random_population(&mut rng, &cfg)` across population sizes (e.g. 50, 200, 1000).
-///
-/// WHY:
-/// - Evaluates uniform float RNG generation and nested vector allocation speed.
+/// Evaluates uniform float RNG generation and nested vector allocation speed.
 fn bench_random_population_generation(c: &mut Criterion) {
     let mut group = c.benchmark_group("ga_random_population");
 
@@ -41,11 +37,7 @@ fn bench_random_population_generation(c: &mut Criterion) {
         let mut rng = StdRng::seed_from_u64(42);
 
         group.bench_with_input(BenchmarkId::new("pop_size", pop_size), &cfg, |b, c| {
-            // TODO: Replace with actual benchmark iteration:
-            // b.iter(|| {
-            //     random_population(&mut rng, black_box(c))
-            // });
-            todo!("Benchmark random_population() with pop_size={}", pop_size);
+            b.iter(|| random_population(&mut rng, black_box(c)));
         });
     }
 
@@ -54,13 +46,8 @@ fn bench_random_population_generation(c: &mut Criterion) {
 
 /// 2. Benchmark elitist survivor selection.
 ///
-/// WHAT TO DO:
-/// - Generate population and fitness arrays for $P = 100, 500, 2000$.
-/// - Measure `select_survivors(&population, &fitnesses, &cfg)`.
-///
-/// WHY:
-/// - `select_survivors` indexes, sorts by fitness float values, and extracts top `elite_frac`.
-/// - Benchmarking isolates sorting cost and vector cloning overhead.
+/// `select_survivors` indexes, sorts by fitness float values, and extracts top `elite_frac`.
+/// Benchmarking isolates sorting cost and vector cloning overhead.
 fn bench_survivor_selection(c: &mut Criterion) {
     let mut group = c.benchmark_group("ga_select_survivors");
 
@@ -79,11 +66,13 @@ fn bench_survivor_selection(c: &mut Criterion) {
             .collect();
 
         group.bench_with_input(BenchmarkId::new("pop_size", pop_size), &pop_size, |b, _| {
-            // TODO: Replace with actual benchmark iteration:
-            // b.iter(|| {
-            //     select_survivors(black_box(&population), black_box(&fitnesses), black_box(&cfg))
-            // });
-            todo!("Benchmark select_survivors() sorting and cloning with pop_size={}", pop_size);
+            b.iter(|| {
+                select_survivors(
+                    black_box(&population),
+                    black_box(&fitnesses),
+                    black_box(&cfg),
+                )
+            });
         });
     }
 
@@ -92,13 +81,8 @@ fn bench_survivor_selection(c: &mut Criterion) {
 
 /// 3. Benchmark offspring generation with Gaussian mutation and clipping.
 ///
-/// WHAT TO DO:
-/// - Prepare survivor pool and normal distribution (`Normal::new(0.0, sigma)`).
-/// - Measure `next_generation(&survivors, &cfg, &mut rng, &normal)`.
-///
-/// WHY:
-/// - Measures Gaussian distribution sampling (`normal.sample(&mut rng)`), element-wise addition,
-///   and floating-point clamping (`clip`) in the evolutionary loop.
+/// Measures Gaussian distribution sampling (`normal.sample(&mut rng)`), element-wise addition,
+/// and floating-point clamping (`clip`) in the evolutionary loop.
 fn bench_offspring_generation(c: &mut Criterion) {
     let mut group = c.benchmark_group("ga_next_generation");
 
@@ -114,16 +98,14 @@ fn bench_offspring_generation(c: &mut Criterion) {
     let mut rng = StdRng::seed_from_u64(42);
 
     group.bench_function("mutate_and_clip_100_children", |b| {
-        // TODO: Replace with actual benchmark iteration:
-        // b.iter(|| {
-        //     next_generation(
-        //         black_box(&survivors),
-        //         black_box(&cfg),
-        //         &mut rng,
-        //         black_box(&normal),
-        //     )
-        // });
-        todo!("Benchmark next_generation() Gaussian mutation and clamping loop");
+        b.iter(|| {
+            next_generation(
+                black_box(&survivors),
+                black_box(&cfg),
+                &mut rng,
+                black_box(&normal),
+            )
+        });
     });
 
     group.finish();

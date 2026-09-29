@@ -1,0 +1,17 @@
+\begin{table}[t]
+\centering
+\caption{Envoy gRPC Least-Request vs. Static Round-Robin Load Balancing Performance}
+\label{tab:envoy_balancing_eval}
+\begin{tabular}{lcc}
+\hline
+\textbf{Performance Metric} & \textbf{Static Round-Robin} & \textbf{Envoy Least-Request (P2C)} \\
+\hline
+Median Latency ($P_{50}$) & 227.4~ms & 205.7~ms \\
+90th Percentile Latency ($P_{90}$) & 303.1~ms & 285.5~ms \\
+Tail Latency ($P_{99}$) & 332.2~ms & 319.6~ms \\
+Tail Reduction ($\Delta P_{99}$) & --- & -12.6~ms \\
+Jain's Fairness Index ($J$) & 1.0000 & 0.9929 \\
+Worker Assigned Range (Min / Max) & 25 / 25 & 23 / 28 \\
+\hline
+\end{tabular}
+\end{table}

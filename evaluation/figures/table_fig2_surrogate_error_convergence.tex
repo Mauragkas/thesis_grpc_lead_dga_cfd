@@ -1,0 +1,18 @@
+\begin{table}[t]
+\centering
+\caption{Surrogate Generalization Accuracy Scaling with Training Sample Budget}
+\label{tab:surrogate_learning_curve}
+\begin{tabular}{ccccc}
+\hline
+\textbf{Training Size ($N_{\text{train}}$)} & \textbf{GP $R^2$} & \textbf{MLP $R^2$} & \textbf{RF $R^2$} & \textbf{GP Generalization MSE} \\
+\hline
+$N = 30$ & 0.754 & 0.096 & 0.098 & 1.111 \\
+$N = 60$ & 0.778 & 0.474 & 0.236 & 1.005 \\
+$N = 100$ & 0.877 & 0.782 & 0.360 & 0.556 \\
+$N = 150$ & 0.903 & 0.816 & 0.414 & 0.438 \\
+$N = 200$ & 0.914 & 0.876 & 0.416 & 0.388 \\
+$N = 250$ & 0.869 & 0.832 & 0.456 & 0.593 \\
+$N = 300$ & 0.886 & 0.868 & 0.475 & 0.514 \\
+\hline
+\end{tabular}
+\end{table}

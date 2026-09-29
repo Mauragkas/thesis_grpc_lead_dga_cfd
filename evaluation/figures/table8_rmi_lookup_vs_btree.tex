@@ -1,0 +1,14 @@
+\begin{table}[t]
+\centering
+\caption{Learned Index Lookup Latency and Memory Scaling: RMI vs. Standard B-Tree}
+\label{tab:rmi_vs_btree}
+\begin{tabular}{cccccc}
+\hline
+\textbf{Key Count ($N$)} & \textbf{RMI Lookup} & \textbf{B-Tree Lookup} & \textbf{Speedup} & \textbf{RMI Memory} & \textbf{B-Tree Memory} \\
+\hline
+$N = 1,000$ & 43.8~ns & 39.6~ns & 0.90$\times$ & 19.6~KB & 46.9~KB \\
+$N = 10,000$ & 44.2~ns & 66.3~ns & 1.50$\times$ & 160.2~KB & 468.8~KB \\
+$N = 50,000$ & 41.0~ns & 74.0~ns & 1.81$\times$ & 785.2~KB & 2343.8~KB \\
+\hline
+\end{tabular}
+\end{table}

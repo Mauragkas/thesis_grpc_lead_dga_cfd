@@ -8,6 +8,7 @@ Directly uses `worker.hilbert.probe_keys` (or `hilbert_rs` Rust extension) to ev
 
 Generates:
   - evaluation/figures/fig5_hilbert_spatial_heatmap.png
+  - evaluation/figures/table_fig5_hilbert_spatial_clustering.tex
 """
 
 import argparse
@@ -91,9 +92,9 @@ def generate_spatial_locality_heatmap(out_dir: Path, n_samples: int = 250):
 
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(13.5, 4.8), dpi=300)
 
-    # ─────────────────────────────────────────────────────────────────
+    # ─────────────────────────────────────────────────────────────
     # Panel 1: Single-Curve 10D Hilbert 2D Density Heatmap
-    # ─────────────────────────────────────────────────────────────────
+    # ─────────────────────────────────────────────────────────────
     h1 = ax1.hexbin(
         eucl_dists,
         single_ring_dists,
@@ -103,18 +104,18 @@ def generate_spatial_locality_heatmap(out_dir: Path, n_samples: int = 250):
         bins="log",
     )
     cb1 = fig.colorbar(h1, ax=ax1)
-    cb1.set_label("Pair Density ($\log_{10} N$)")
+    cb1.set_label(r"Pair Density ($\log_{10} N$)")
 
-    ax1.set_xlabel("10D Euclidean Distance ($\|\mathbf{x}_i - \mathbf{x}_j\|_2$)")
-    ax1.set_ylabel("Normalized 1D Key Distance ($\Delta k / 2^{64}$)")
+    ax1.set_xlabel(r"10D Euclidean Distance ($\|\mathbf{x}_i - \mathbf{x}_j\|_2$)")
+    ax1.set_ylabel(r"Normalized 1D Key Distance ($\Delta k / 2^{64}$)")
     ax1.set_title("(a) Single-Curve Hilbert Mapping ($C=1$)", fontweight="bold")
     ax1.set_xlim(0, 1.8)
     ax1.set_ylim(0, 1.0)
     ax1.grid(True, linestyle="--", alpha=0.25)
 
-    # ─────────────────────────────────────────────────────────────────
+    # ─────────────────────────────────────────────────────────────
     # Panel 2: 3-Curve Multi-Probe Locality Preservation Heatmap
-    # ─────────────────────────────────────────────────────────────────
+    # ─────────────────────────────────────────────────────────────
     h2 = ax2.hexbin(
         eucl_dists,
         multi_ring_dists,
@@ -124,10 +125,10 @@ def generate_spatial_locality_heatmap(out_dir: Path, n_samples: int = 250):
         bins="log",
     )
     cb2 = fig.colorbar(h2, ax=ax2)
-    cb2.set_label("Pair Density ($\log_{10} N$)")
+    cb2.set_label(r"Pair Density ($\log_{10} N$)")
 
-    ax2.set_xlabel("10D Euclidean Distance ($\|\mathbf{x}_i - \mathbf{x}_j\|_2$)")
-    ax2.set_ylabel("Multi-Probe Minimum Ring Distance ($\min_c \Delta k_c$)")
+    ax2.set_xlabel(r"10D Euclidean Distance ($\|\mathbf{x}_i - \mathbf{x}_j\|_2$)")
+    ax2.set_ylabel(r"Multi-Probe Minimum Ring Distance ($\min_c \Delta k_c$)")
     ax2.set_title("(b) Multi-Probe Rotated Curves ($C=3$)", fontweight="bold")
     ax2.set_xlim(0, 1.8)
     ax2.set_ylim(0, 1.0)
@@ -135,7 +136,7 @@ def generate_spatial_locality_heatmap(out_dir: Path, n_samples: int = 250):
 
     # Callout highlighting cluster preservation near origin
     ax2.annotate(
-        "Spatial Neighbors Clustered\nNear Ring Origin ($\min \Delta k \to 0$)",
+        "Spatial Neighbors Clustered\nNear Ring Origin ($\\min \\Delta k \\to 0$)",
         xy=(0.25, 0.08),
         xytext=(0.45, 0.45),
         arrowprops=dict(arrowstyle="->", color="#f8fafc", lw=1.5),
@@ -150,6 +151,37 @@ def generate_spatial_locality_heatmap(out_dir: Path, n_samples: int = 250):
     fig.savefig(out_path, format="png", bbox_inches="tight")
     plt.close(fig)
     print(f"Generated: {out_path}")
+
+    # Export LaTeX table comparing single-curve vs multi-probe locality metrics
+    tex_path = out_dir / "table_fig5_hilbert_spatial_clustering.tex"
+    near_mask = eucl_dists < 0.40
+    med_single_near = np.median(single_ring_dists[near_mask])
+    med_multi_near = np.median(multi_ring_dists[near_mask])
+    p90_single_near = np.percentile(single_ring_dists[near_mask], 90)
+    p90_multi_near = np.percentile(multi_ring_dists[near_mask], 90)
+
+    # Overall correlation
+    corr_single = np.corrcoef(eucl_dists, single_ring_dists)[0, 1]
+    corr_multi = np.corrcoef(eucl_dists, multi_ring_dists)[0, 1]
+
+    with open(tex_path, "w", encoding="utf-8") as f_tex:
+        f_tex.write(r"""\begin{table}[t]
+\centering
+\caption{10D-to-1D Hilbert Spatial Locality Preservation Metrics}
+\label{tab:hilbert_spatial_preservation}
+\begin{tabular}{lcc}
+\hline
+\textbf{Locality Preservation Metric} & \textbf{Single Curve ($C=1$)} & \textbf{Multi-Probe Rotated ($C=3$)} \\
+\hline
+Overall Distance Correlation ($r$) & """ + f"{corr_single:.3f}" + r""" & """ + f"{corr_multi:.3f}" + r""" \\
+Median Ring Gap for Near Neighbors ($\|\Delta \mathbf{x}\| < 0.4$) & """ + f"{med_single_near:.4f}" + r""" & """ + f"{med_multi_near:.4f}" + r""" \\
+90th Percentile Ring Distortion ($P_{90}$) & """ + f"{p90_single_near:.4f}" + r""" & """ + f"{p90_multi_near:.4f}" + r""" \\
+Cluster Locality Improvement Factor & Baseline (1.0$\times$) & """ + f"{med_single_near / max(1e-5, med_multi_near):.2f}" + r"""$\times$ tighter \\
+\hline
+\end{tabular}
+\end{table}
+""")
+    print(f"Generated: {tex_path}")
 
 
 def main():

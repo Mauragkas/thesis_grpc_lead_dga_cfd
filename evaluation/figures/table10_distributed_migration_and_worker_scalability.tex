@@ -1,0 +1,15 @@
+\begin{table}[t]
+\centering
+\caption{Distributed Multi-Island Migration Parameter Sensitivity Analysis}
+\label{tab:migration_tradeoffs}
+\begin{tabular}{cccccc}
+\hline
+\textbf{Interval ($\tau$)} & \textbf{Count ($M_c$)} & \textbf{Gens to Converge} & \textbf{Final Best $L/D$} & \textbf{Final Entropy} & \textbf{Convergence Behavior} \\
+\hline
+$\tau = 2$ & $M_c = 3$ & 7 gens & 14.23 & 0.495 & Rapid consensus; premature drift \\
+$\tau = 5$ & $M_c = 3$ & 5 gens & 14.64 & 0.503 & Optimal Pareto trade-off \\
+$\tau = 15$ & $M_c = 3$ & 8 gens & 14.48 & 0.519 & Delayed cross-pollination \\
+$\tau = 5$ & $M_c = 1$ & 7 gens & 14.46 & 0.498 & Insufficient genetic mixing \\
+\hline
+\end{tabular}
+\end{table}

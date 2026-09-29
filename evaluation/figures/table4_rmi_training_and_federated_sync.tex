@@ -1,0 +1,21 @@
+\begin{table}[t]
+\centering
+\caption{LEAD DHT Learned Index Retraining and Federated Synchronization Benchmarks}
+\label{tab:rmi_training_sync}
+\begin{tabular}{llr}
+\hline
+\textbf{Subsystem} & \textbf{Algorithm / Routine} & \textbf{Mean Execution Time} \\
+\hline
+\textbf{RMI Retraining} & Linear Leaf Fitting ($K=500$ keys) & 53.5~$\mu\text{s}$ \\
+& Linear Leaf Fitting ($K=2{,}000$ keys) & 289.2~$\mu\text{s}$ \\
+& Linear Leaf Fitting ($K=10{,}000$ keys) & 1.69~$\text{ms}$ \\
+& Mountain-Climbing Auto-Tune ($K=1{,}000$ keys) & 580.4~$\mu\text{s}$ \\
+& Mountain-Climbing Auto-Tune ($K=5{,}000$ keys) & 2.63~$\text{ms}$ \\
+\hline
+\textbf{Federated Sync} & Federated Averaging ($M=3$ DHT peers) & 210.4~$\text{ns}$ \\
+& Federated Averaging ($M=8$ DHT peers) & 501.2~$\text{ns}$ \\
+& Federated Averaging ($M=16$ DHT peers) & 1.00~$\mu\text{s}$ \\
+& 2-bit Online PID Anchor Adjustment & 5.52~$\text{ns}$ \\
+\hline
+\end{tabular}
+\end{table}

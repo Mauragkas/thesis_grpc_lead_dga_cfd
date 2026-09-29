@@ -1,0 +1,14 @@
+\begin{table}[t]
+\centering
+\caption{Criterion Serialization Benchmark: Binary Protobuf vs. JSON Lines}
+\label{tab:telemetry_serialization}
+\begin{tabular}{cccccc}
+\hline
+\textbf{Batch ($N$)} & \textbf{Protobuf Latency} & \textbf{JSON Latency} & \textbf{Speedup} & \textbf{Protobuf Wire} & \textbf{JSON Wire} \\
+\hline
+$N = 10$ & 0.20~$\mu$s & 2.99~$\mu$s & 14.7$\times$ & 980~B & 3850~B \\
+$N = 50$ & 1.03~$\mu$s & 12.48~$\mu$s & 12.1$\times$ & 4900~B & 19250~B \\
+$N = 100$ & 1.92~$\mu$s & 24.13~$\mu$s & 12.6$\times$ & 9800~B & 38500~B \\
+\hline
+\end{tabular}
+\end{table}

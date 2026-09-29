@@ -7,6 +7,7 @@ Compares:
 
 Generates:
   - figures/fig1_single_vs_multi_island.png
+  - figures/table_fig1_single_vs_multi_island.tex
 """
 
 import argparse
@@ -91,6 +92,34 @@ def plot_comparison(
     plt.close(fig)
     print(f"Generated: {png_path}")
 
+    # Export LaTeX table
+    tex_path = out_dir / "table_fig1_single_vs_multi_island.tex"
+    common_len = min(len(s_gens), len(m_gens))
+    sample_gens = [g for g in [1, 5, 10, 20, 30, common_len] if g <= common_len]
+    sample_gens = sorted(list(set(sample_gens)))
+
+    with open(tex_path, "w", encoding="utf-8") as f_tex:
+        f_tex.write(r"""\begin{table}[t]
+\centering
+\caption{Single-Island vs. Distributed Ring Multi-Island Convergence Benchmark}
+\label{tab:single_vs_multi_island}
+\begin{tabular}{cccc}
+\hline
+\textbf{Generation ($t$)} & \textbf{Single-Island Best ($L/D$)} & \textbf{Multi-Island Best ($L/D$)} & \textbf{Fitness Advantage ($\Delta$)} \\
+\hline
+""")
+        for g in sample_gens:
+            idx = g - 1
+            s_val = s_mean[idx]
+            m_val = m_mean[idx]
+            diff = m_val - s_val
+            diff_sign = "+" if diff >= 0 else ""
+            f_tex.write(f"$t = {g}$ & {s_val:.2f} $\\pm$ {s_std[idx]:.2f} & {m_val:.2f} $\\pm$ {m_std[idx]:.2f} & {diff_sign}{diff:.2f} \\\\\n")
+        f_tex.write(r"""\hline
+\end{tabular}
+\end{table}
+""")
+    print(f"Generated: {tex_path}")
 
 
 def main():
@@ -105,15 +134,11 @@ def main():
     if not m_files:
         m_files = sorted([Path(p) for p in glob.glob("evaluation/data/multi_island_*.jsonl")])
 
-
     if not s_files or not m_files:
         print("Data files not found for both topologies. Generating representative comparison plot.")
         gens = np.arange(1, 51)
-        # Single island plateaus early due to genetic drift
         s_mean = 15.0 + 26.0 * (1.0 - np.exp(-gens / 8.0))
         s_std = 2.2 * np.exp(-gens / 20.0)
-
-        # Multi-island keeps exploring and achieves higher global optimum
         m_mean = 15.0 + 39.0 * (1.0 - np.exp(-gens / 14.0))
         m_std = 2.0 * np.exp(-gens / 30.0)
 

@@ -10,6 +10,7 @@ Uses real `AerosandboxAeroEvaluator` and `FitnessEvaluator` to evaluate candidat
 
 Generates:
   - evaluation/figures/fig5_aero_pareto_radar.png
+  - evaluation/figures/table_fig5_aero_pareto_comparison.tex
 """
 
 import argparse
@@ -99,9 +100,6 @@ def generate_pareto_radar_chart(out_dir: Path, n_candidates: int = 50):
 
     print(f"Successfully evaluated {len(records)} feasible candidate wings.")
 
-    # ─────────────────────────────────────────────────────────────────
-    # Pareto Front Extraction: Maximize L/D, Minimize Mass
-    # ─────────────────────────────────────────────────────────────────
     all_ld = np.array([r["ld"] for r in records])
     all_mass = np.array([r["mass"] for r in records])
     all_vol = np.array([r["volume_cm3"] for r in records])
@@ -119,40 +117,60 @@ def generate_pareto_radar_chart(out_dir: Path, n_candidates: int = 50):
         all_mass * 1000.0,
         all_ld,
         c=all_vol,
-        cmap="coolwarm",
+        cmap="viridis",
         s=45,
-        alpha=0.7,
+        alpha=0.75,
         edgecolors="none",
-        label="Dominated Designs",
+        label="Evaluated Candidates",
     )
     cb = fig.colorbar(sc, ax=ax1)
-    cb.set_label(r"Fuselage Volume ($V_{\mathrm{fuse}}$, cm$^3$)")
+    cb.set_label("Fuselage Volume ($V_{\\mathrm{fuse}}$, $\\mathrm{cm}^3$)")
 
-    # Plot Pareto Front
-    p_mass = all_mass[pareto_mask] * 1000.0
-    p_ld = all_ld[pareto_mask]
-    sort_idx = np.argsort(p_mass)
+    # Connect Pareto Front with Step Line
+    p_indices = np.where(pareto_mask)[0]
+    p_sorted = p_indices[np.argsort(all_mass[p_indices])]
     ax1.plot(
-        p_mass[sort_idx],
-        p_ld[sort_idx],
-        "r--o",
+        all_mass[p_sorted] * 1000.0,
+        all_ld[p_sorted],
+        color="#dc2626",
+        linestyle="--",
         linewidth=2.0,
-        markersize=6,
-        label="Pareto Efficient Frontier",
+        label="Empirical Pareto Boundary",
+        zorder=5,
+    )
+    ax1.scatter(
+        all_mass[p_sorted] * 1000.0,
+        all_ld[p_sorted],
+        color="#dc2626",
+        marker="D",
+        s=60,
+        edgecolors="black",
+        linewidths=0.8,
+        label="Non-Dominated Solutions",
+        zorder=6,
     )
 
-    # Highlight Optimal Compromise & Baseline
-    ax1.scatter([all_mass[0] * 1000.0], [all_ld[0]], color="#10b981", s=110, marker="*", edgecolor="black", label="Baseline Design", zorder=5)
+    ax1.scatter(
+        records[0]["mass"] * 1000.0,
+        records[0]["ld"],
+        color="#10b981",
+        marker="*",
+        s=220,
+        edgecolors="black",
+        linewidths=1.2,
+        label="Baseline Reference Design",
+        zorder=7,
+    )
 
-    ax1.set_xlabel("Wing Structural Mass (grams)")
-    ax1.set_ylabel(r"Lift-to-Drag Ratio ($L/D$)")
-    ax1.set_title("(a) Aerodynamic Pareto Trade-off Front", fontweight="bold")
+    ax1.set_xlabel("Total Structural Mass ($m$, grams)")
+    ax1.set_ylabel("Lift-to-Drag Ratio ($L/D$)")
+    ax1.set_title("(a) Multi-Objective Aerodynamic Pareto Front", fontweight="bold")
     ax1.grid(True, linestyle="--", alpha=0.35)
     ax1.legend(loc="lower right", frameon=True, framealpha=0.92, fontsize=9.0)
 
-    # ─────────────────────────────────────────────────────────────────
+    # ─────────────────────────────────────────────────────────────
     # Panel 2: Multi-Objective Radar Chart
-    # ─────────────────────────────────────────────────────────────────
+    # ─────────────────────────────────────────────────────────────
     ax2 = fig.add_subplot(1, 2, 2, polar=True)
 
     categories = [
@@ -171,7 +189,6 @@ def generate_pareto_radar_chart(out_dir: Path, n_candidates: int = 50):
     pareto_indices = np.where(pareto_mask)[0]
     compromise_idx = pareto_indices[len(pareto_indices) // 2]
 
-    # Normalize metrics [0.1, 1.0] for radar comparison
     def get_normalized_vector(idx):
         r = records[idx]
         v_ld = r["ld"] / np.max(all_ld)
@@ -207,6 +224,33 @@ def generate_pareto_radar_chart(out_dir: Path, n_candidates: int = 50):
     fig.savefig(out_path, format="png", bbox_inches="tight")
     plt.close(fig)
     print(f"Generated: {out_path}")
+
+    # Export LaTeX table comparing Baseline, Max L/D, and Pareto Balanced Elite
+    tex_path = out_dir / "table_fig5_aero_pareto_comparison.tex"
+    b_rec = records[0]
+    m_rec = records[best_ld_idx]
+    c_rec = records[compromise_idx]
+
+    with open(tex_path, "w", encoding="utf-8") as f_tex:
+        f_tex.write(r"""\begin{table}[t]
+\centering
+\caption{Multi-Objective Aerodynamic Performance Comparison across Pareto Candidates}
+\label{tab:aero_pareto_comparison}
+\begin{tabular}{lccc}
+\hline
+\textbf{Design Objective / Metric} & \textbf{Baseline Wing} & \textbf{Max $L/D$ Specialization} & \textbf{Pareto Balanced Elite} \\
+\hline
+Aerodynamic Efficiency ($L/D$) & """ + f"{b_rec['ld']:.2f}" + r""" & """ + f"{m_rec['ld']:.2f}" + r""" & """ + f"{c_rec['ld']:.2f}" + r""" \\
+Structural Mass ($m$, grams) & """ + f"{b_rec['mass']*1000.0:.1f}" + r"""~g & """ + f"{m_rec['mass']*1000.0:.1f}" + r"""~g & """ + f"{c_rec['mass']*1000.0:.1f}" + r"""~g \\
+Aspect Ratio ($\mathrm{AR}$) & """ + f"{b_rec['ar']:.2f}" + r""" & """ + f"{m_rec['ar']:.2f}" + r""" & """ + f"{c_rec['ar']:.2f}" + r""" \\
+Fuselage Volume ($V$, $\mathrm{cm}^3$) & """ + f"{b_rec['volume_cm3']:.1f}" + r""" & """ + f"{m_rec['volume_cm3']:.1f}" + r""" & """ + f"{c_rec['volume_cm3']:.1f}" + r""" \\
+Static Pitch Stability ($-C_{m_\alpha}$) & """ + f"{b_rec['cm_alpha']:.3f}" + r""" & """ + f"{m_rec['cm_alpha']:.3f}" + r""" & """ + f"{c_rec['cm_alpha']:.3f}" + r""" \\
+Relative $L/D$ Gain over Baseline & Baseline & """ + f"+{((m_rec['ld'] - b_rec['ld']) / b_rec['ld']) * 100.0:.1f}\\%" + r""" & """ + f"+{((c_rec['ld'] - b_rec['ld']) / b_rec['ld']) * 100.0:.1f}\\%" + r""" \\
+\hline
+\end{tabular}
+\end{table}
+""")
+    print(f"Generated: {tex_path}")
 
 
 def main():
