@@ -1,0 +1,16 @@
+\section{Ιεραρχικός Αξιολογητής 3 Επιπέδων ($\epsilon$-Bypass)}
+\label{sec:arch_multi_tier}
+
+Ο πυρήνας της επιτάχυνσης βασίζεται στον αγωγό αξιολόγησης τριών επιπέδων (Multi-Tier $\epsilon$-Bypass Evaluator). Για κάθε υποψήφιο άτομο $\bm{x}^*$ του πληθυσμού, υπολογίζεται η Ευκλείδεια απόσταση $d_{\min} = \min_{\bm{x}_i \in \mathcal{D}} \|\bm{x}^* - \bm{x}_i\|$ προς το σύνολο των ήδη γνωστών σχεδίων:
+
+\begin{equation}
+\label{eq:tier_logic}
+\text{Evaluation Tier}(\bm{x}^*) = 
+\begin{cases}
+\text{\textbf{Tier 1 (Hit):}} & \text{εάν } d_{\min} < \epsilon_{\text{exact}} \implies \text{Επιστροφή } y_{\text{NN}} \\
+\text{\textbf{Tier 2 (Surrogate):}} & \text{εάν } \epsilon_{\text{exact}} \le d_{\min} \le R \implies \text{Πρόβλεψη } \hat{y}_{\text{MLP}}(\bm{x}^*) \\
+\text{\textbf{Tier 3 (Simulation):}} & \text{εάν } d_{\min} > R \implies \text{Εκτέλεση VLM σε Worker}
+\end{cases}
+\end{equation}
+
+Τα αποτελέσματα του Tier 3 διοχετεύονται αυτόματα στο LEAD DHT και τροφοδοτούν το κυλιόμενο παράθυρο (sliding window buffer) της υπηρεσίας Surrogate, ενεργοποιώντας online retraining στο παρασκήνιο.

@@ -1,0 +1,11 @@
+\section{Συνεισφορά της Εργασίας}
+\label{sec:intro_contributions}
+
+Οι βασικές επιστημονικές και τεχνολογικές συνεισφορές της παρούσας εργασίας συνοψίζονται ως εξής:
+\begin{enumerate}
+    \item \textbf{Ιεραρχικός Αξιολογητής 3 Επιπέδων (Multi-Tier $\epsilon$-Bypass):} Σχεδιασμός μίας πρωτότυπης ροής αξιολόγησης (Tier 1: άμεση ανάκτηση γειτονικών λύσεων $\epsilon_{\text{exact}}$, Tier 2: ταχεία πρόβλεψη μέσω surrogate model ακτίνας $R$, Tier 3: πλήρης προσομοίωση).
+    \item \textbf{Κατανεμημένο Ευρετήριο Μάθησης (LEAD DHT):} Υλοποίηση ενός αποκεντρωμένου δακτυλίου τύπου Chord~\cite{stoica2001chord} με 60 εικονικούς κόμβους (vnodes), πολυδιάστατη κωδικοποίηση Hilbert~\cite{sagan1994space}, μοντέλα RMI~\cite{kraska2018case} και προσαρμοστικό ρυθμιστή PID.
+    \item \textbf{Αυτόνομη Μικροϋπηρεσία Surrogate σε Rust/C++:} Ανάπτυξη μηχανής εκτίμησης καταλληλότητας που υποστηρίζει Multi-Layer Perceptron (MLP), Gaussian Processes~\cite{rasmussen2006gaussian}, Random Forests και k-NN με επιγραμμική επανακατάρτιση (online retraining).
+    \item \textbf{Αεροδυναμική Προσομοίωση σε Πραγματικό Χρόνο:} Ενσωμάτωση του επιταχυνόμενου μοντέλου AeroSandbox~\cite{sharpe2021aerosandbox} (3D Vortex Lattice Method) σε κατανεμημένους Python workers.
+    \item \textbf{Πλήρης Αρχιτεκτονική Παραγωγής (Production-Grade Stack):} Ολοκλήρωση με gRPC (Tonic), εξισορροπητή Envoy, δίαυλο μηνυμάτων Apache Kafka~\cite{kreps2011kafka} και Web Dashboard παρακολούθησης.
+\end{enumerate}

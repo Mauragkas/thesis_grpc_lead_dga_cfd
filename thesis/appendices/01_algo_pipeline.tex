@@ -1,0 +1,28 @@
+\section{Αλγόριθμος Ιεραρχικής Αξιολόγησης ($\epsilon$-Bypass)}
+\label{sec:algo_pipeline}
+
+Ο Αλγόριθμος~\ref{alg:eval_pipeline} παρουσιάζει τη λογική λήψης αποφάσεων για τη δρομολόγηση ενός υποψηφίου σχεδίου $\bm{x}^*$ στα επιμέρους επίπεδα αξιολόγησης (Tier 1, Tier 2 ή Tier 3).
+
+\begin{algorithm}[H]
+\caption{Ιεραρχικός Αξιολογητής Multi-Tier $\epsilon$-Bypass}
+\label{alg:eval_pipeline}
+\vspace{0.2cm}
+\AlgoInput{Υποψήφιο σχέδιο $\bm{x}^* \in \mathbb{R}^{10}$, Κατώφλια $\epsilon_{\text{exact}}, R$, Κατανεμημένο ευρετήριο $\mathcal{D}$}
+\AlgoOutput{Τιμή καταλληλότητας $\mathcal{F}(\bm{x}^*)$, Επίπεδο εκτέλεσης Tier}
+\AlgoComment{Βήμα 1: Αναζήτηση πλησιέστερου γείτονα μέσω Hilbert LEAD DHT}
+\AlgoLine{1}{$(\bm{x}_{\text{NN}}, y_{\text{NN}}, d_{\min}) \leftarrow \text{LEAD\_Query}(\mathcal{D}, \bm{x}^*)$;}
+\AlgoComment{Βήμα 2: Έλεγχος Tier 1 (Άμεσο Cache Hit)}
+\AlgoLine{2}{\textbf{if} $d_{\min} < \epsilon_{\text{exact}}$ \textbf{then}}
+\AlgoLineIndent{3}{\textbf{return} $(y_{\text{NN}}, \text{Tier 1: Hit})$;}
+\AlgoLine{4}{\textbf{end}}
+\AlgoComment{Βήμα 3: Έλεγχος Tier 2 (Εκτίμηση μέσω Surrogate Microservice)}
+\AlgoLine{5}{\textbf{if} $d_{\min} \le R$ \textbf{and} $\text{SurrogateIsReady}()$ \textbf{then}}
+\AlgoLineIndent{6}{$\hat{y} \leftarrow \text{Surrogate\_Predict}(\bm{x}^*)$;}
+\AlgoLineIndent{7}{\textbf{return} $(\hat{y}, \text{Tier 2: Surrogate})$;}
+\AlgoLine{8}{\textbf{end}}
+\AlgoComment{Βήμα 4: Tier 3 (Πλήρης προσομοίωση VLM σε Worker)}
+\AlgoLine{9}{$y_{\text{sim}} \leftarrow \text{Worker\_EvaluateVLM}(\bm{x}^*)$;}
+\AlgoLine{10}{$\text{LEAD\_Insert}(\mathcal{D}, \bm{x}^*, y_{\text{sim}})$;}
+\AlgoLine{11}{$\text{Surrogate\_PushSample}(\bm{x}^*, y_{\text{sim}})$;}
+\AlgoLine{12}{\textbf{return} $(y_{\text{sim}}, \text{Tier 3: True Simulation})$;}
+\end{algorithm}
