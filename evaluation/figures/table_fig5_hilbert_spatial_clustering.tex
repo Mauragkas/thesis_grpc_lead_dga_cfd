@@ -2,14 +2,18 @@
 \centering
 \caption{10D-to-1D Hilbert Spatial Locality Preservation Metrics}
 \label{tab:hilbert_spatial_preservation}
+\adjustbox{max width=\textwidth}{%
 \begin{tabular}{lcc}
 \hline
-\textbf{Locality Preservation Metric} & \textbf{Single Curve ($C=1$)} & \textbf{Multi-Probe Rotated ($C=3$)} \\
+\textbf{Locality Preservation Metric} &
+\textbf{Single Curve ($C=1$)} &
+\textbf{Multi-Probe Rotated ($C=3$)} \\
 \hline
 Overall Distance Correlation ($r$) & 0.172 & 0.333 \\
-Median Ring Gap for Near Neighbors ($\|\Delta \mathbf{x}\| < 0.4$) & 0.0053 & 0.0053 \\
-90th Percentile Ring Distortion ($P_{90}$) & 0.0886 & 0.0135 \\
+Median Ring Gap ($\|\Delta \mathbf{x}\| < 0.4$) & 0.0053 & 0.0053 \\
+90th Pct.\ Ring Distortion ($P_{90}$) & 0.0886 & 0.0135 \\
 Cluster Locality Improvement Factor & Baseline (1.0$\times$) & 1.00$\times$ tighter \\
 \hline
-\end{tabular}
+\end{tabular}%
+}
 \end{table}

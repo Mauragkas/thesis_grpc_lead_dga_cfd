@@ -2,21 +2,25 @@
 \centering
 \caption{Aerodynamic Surrogate Model Generalization and Hardware Inference Benchmark}
 \label{tab:surrogate_benchmark}
+\adjustbox{max width=\textwidth}{%
 \begin{tabular}{lcccccc}
 \hline
-\textbf{Surrogate Architecture} & \textbf{Hardware Backend} & \textbf{Test $R^2$} & \textbf{RMSE} & \textbf{MAE} & \textbf{Latency / 1k} & \textbf{Throughput} \\
+\textbf{Architecture} & \textbf{Hardware} & \textbf{$R^2$} & \textbf{RMSE} & \textbf{MAE} & \textbf{Latency / 1k} & \textbf{Throughput (eval/s)} \\
 \hline
-Gaussian Process & CUDA GPU & 0.8790 & 0.7396 & 0.4501 & 53.71~ms & 18,619.408819619224~eval/s \\
-k-Nearest Neighbours & CUDA GPU & 0.4484 & 1.5788 & 1.1914 & 8.53~ms & 117,224.91123143598~eval/s \\
-Random Forest & CUDA GPU & 0.6288 & 1.2952 & 0.9890 & 6.02~ms & 166,183.76434477483~eval/s \\
-Neural Network MLP & CUDA GPU & 0.8494 & 0.8248 & 0.4355 & 0.82~ms & 1,217,762.7749403906~eval/s \\
+Gaussian Process      & CUDA GPU & 0.879 & 0.740 & 0.450 & 53.71~ms & $1.86\times10^{4}$ \\
+$k$-Nearest Neighbours & CUDA GPU & 0.448 & 1.579 & 1.191 &  8.53~ms & $1.17\times10^{5}$ \\
+Random Forest         & CUDA GPU & 0.629 & 1.295 & 0.989 &  6.02~ms & $1.66\times10^{5}$ \\
+Neural Network MLP    & CUDA GPU & 0.849 & 0.825 & 0.436 &  0.82~ms & $1.22\times10^{6}$ \\
 \hline
-\textbf{GP Covariance Kernel ($D=11$)} & \textbf{Host CPU OpenMP (12t)} & \multicolumn{2}{c}{\textbf{NVIDIA CUDA GPU}} & \multicolumn{3}{c}{\textbf{GPU Acceleration Factor}} \\
+\textbf{GP Covariance ($D=11$)} & \textbf{Host CPU (12t)} &
+  \multicolumn{2}{c}{\textbf{NVIDIA CUDA GPU}} &
+  \multicolumn{3}{c}{\textbf{GPU Acceleration Factor}} \\
 \hline
-$N=100$ Samples & 0.14~ms & \multicolumn{2}{c}{0.30~ms} & \multicolumn{3}{c}{0.48$\times$ (Kernel launch bound)} \\
-$N=360$ Samples & 0.95~ms & \multicolumn{2}{c}{1.07~ms} & \multicolumn{3}{c}{0.89$\times$} \\
-$N=600$ Samples & 2.04~ms & \multicolumn{2}{c}{2.59~ms} & \multicolumn{3}{c}{0.79$\times$} \\
+$N=100$ Samples  & 0.14~ms & \multicolumn{2}{c}{0.30~ms} & \multicolumn{3}{c}{0.48$\times$ (Kernel launch bound)} \\
+$N=360$ Samples  & 0.95~ms & \multicolumn{2}{c}{1.07~ms} & \multicolumn{3}{c}{0.89$\times$} \\
+$N=600$ Samples  & 2.04~ms & \multicolumn{2}{c}{2.59~ms} & \multicolumn{3}{c}{0.79$\times$} \\
 $N=1{,}000$ Samples & 7.26~ms & \multicolumn{2}{c}{6.43~ms} & \multicolumn{3}{c}{1.13$\times$ (Compute dominant)} \\
 \hline
-\end{tabular}
+\end{tabular}%
+}
 \end{table}

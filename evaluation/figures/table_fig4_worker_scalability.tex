@@ -2,16 +2,22 @@
 \centering
 \caption{Distributed CFD Worker Scalability and Generational Throughput Scaling}
 \label{tab:worker_scalability}
+\small
 \begin{tabular}{ccccc}
 \hline
-\textbf{Workers ($W$)} & \textbf{Wall Time ($T_W$, s)} & \textbf{Measured Speedup} & \textbf{Parallel Efficiency ($\eta$)} & \textbf{Throughput (indiv/s)} \\
+\textbf{Workers ($W$)} &
+\textbf{Wall Time ($T_W$)} &
+\textbf{Speedup} &
+\textbf{Efficiency ($\eta$)} &
+\textbf{Throughput (ind/s)} \\
 \hline
-$W = 1$ & 21.85~s & 1.00$\times$ & 100.4\% & 4.6 \\
-$W = 2$ & 11.25~s & 1.95$\times$ & 97.6\% & 8.9 \\
-$W = 4$ & 5.81~s & 3.78$\times$ & 94.5\% & 17.2 \\
-$W = 8$ & 3.07~s & 7.15$\times$ & 89.4\% & 32.6 \\
-$W = 16$ & 1.71~s & 12.84$\times$ & 80.3\% & 58.5 \\
-$W = 32$ & 1.02~s & 21.54$\times$ & 67.3\% & 98.2 \\
+$W = 1$  & 21.85~s & 1.00$\times$ & 100.4\% &  4.6 \\
+$W = 2$  & 11.25~s & 1.95$\times$ &  97.6\% &  8.9 \\
+$W = 4$  &  5.81~s & 3.78$\times$ &  94.5\% & 17.2 \\
+$W = 8$  &  3.07~s & 7.15$\times$ &  89.4\% & 32.6 \\
+$W = 16$ &  1.71~s & 12.84$\times$ & 80.3\% & 58.5 \\
+$W = 32$ &  1.02~s & 21.54$\times$ & 67.3\% & 98.2 \\
 \hline
 \end{tabular}
+\normalsize
 \end{table}
