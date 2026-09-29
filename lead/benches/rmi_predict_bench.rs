@@ -1,15 +1,11 @@
-//! Benchmark B: Recursive Model Index (RMI) Inference & Feature Extraction
+//! Benchmark B: Recursive Model Index (RMI) Inference, Feature Extraction & B-Tree Comparison
 //!
 //! # Objective
 //! Measure latency and CPU throughput of the learned indexing inference path:
 //! 1. Feature extraction from key strings (`feature(key)`)
 //! 2. 2-stage RMI model prediction with linear leaf models (`model.predict(key)`)
 //! 3. 2-stage RMI model prediction with radix spline leaf models (`model.predict(key)`)
-//!
-//! # Why this matters
-//! - LEAD replaces traditional DHT routing / B-Tree indexing with learned CDF models.
-//! - `predict()` is called on EVERY incoming key access to locate target vnodes and storage bounds.
-//! - The prediction path must execute in sub-microsecond time to remain competitive with hash tables.
+//! 4. Direct head-to-head comparison: RmiModel::predict vs std::collections::BTreeMap::get
 
 #![allow(unused_variables, dead_code, unused_imports, unused_mut)]
 
@@ -17,17 +13,9 @@ use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criteri
 use lead_node::rmi::{
     feature, Anchor, LeafKind, LinearLeaf, RadixSplineLeaf, RmiModel, RADIX_ENTRIES, RP,
 };
+use std::collections::BTreeMap;
 
 /// 1. Benchmark feature extraction for different key formats.
-///
-/// WHAT TO DO:
-/// - Measure `feature(key)` on:
-///   a) Multi-probe Hilbert keys (e.g., `"01a3f5...|[0.1, 0.2]"`).
-///   b) Arbitrary non-Hilbert string keys (fallback SHA-based feature mapping).
-///
-/// WHY:
-/// - Feature extraction converts arbitrary keys into normalized `f64` in `[0.0, 1.0]`.
-/// - String parsing and ASCII hex checking can cause CPU pipeline stalls if unoptimized.
 fn bench_feature_extraction(c: &mut Criterion) {
     let mut group = c.benchmark_group("rmi_feature_extraction");
 
@@ -35,33 +23,17 @@ fn bench_feature_extraction(c: &mut Criterion) {
     let fallback_key = "plain_string_key_without_hex_prefix_1234567890";
 
     group.bench_function("hilbert_prefix_feature", |b| {
-        // TODO: Replace with actual benchmark iteration:
-        // b.iter(|| {
-        //     feature(black_box(hilbert_key))
-        // });
-        todo!("Benchmark hex prefix feature extraction into normalized f64");
+        b.iter(|| feature(black_box(hilbert_key)));
     });
 
     group.bench_function("fallback_hash_feature", |b| {
-        // TODO: Replace with actual benchmark iteration:
-        // b.iter(|| {
-        //     feature(black_box(fallback_key))
-        // });
-        todo!("Benchmark fallback hash-based feature extraction for arbitrary string keys");
+        b.iter(|| feature(black_box(fallback_key)));
     });
 
     group.finish();
 }
 
-/// 2. Benchmark RMI prediction with Linear Leaf models.
-///
-/// WHAT TO DO:
-/// - Construct an `RmiModel` populated with `LeafKind::Linear` across various Stage-0 bin counts (e.g., 8, 16, 64, 256).
-/// - Measure `model.predict(key)` across a set of query keys.
-///
-/// WHY:
-/// - Linear leaves evaluate $y = w \cdot f + b$ after stage-0 bin lookup.
-/// - Measures how stage-0 bin array size and CPU cache lines affect lookup speed.
+/// 2. Benchmark RMI prediction with Linear Leaf models across Stage-0 bin counts.
 fn bench_linear_leaf_predict(c: &mut Criterion) {
     let mut group = c.benchmark_group("rmi_predict_linear");
 
@@ -85,11 +57,7 @@ fn bench_linear_leaf_predict(c: &mut Criterion) {
         };
 
         group.bench_with_input(BenchmarkId::new("bins", bins), &model, |b, m| {
-            // TODO: Replace with actual benchmark iteration:
-            // b.iter(|| {
-            //     m.predict(black_box(key))
-            // });
-            todo!("Benchmark RmiModel::predict() with {} linear leaf bins", bins);
+            b.iter(|| m.predict(black_box(key)));
         });
     }
 
@@ -97,14 +65,6 @@ fn bench_linear_leaf_predict(c: &mut Criterion) {
 }
 
 /// 3. Benchmark RMI prediction with Radix Spline Leaf models.
-///
-/// WHAT TO DO:
-/// - Construct an `RmiModel` with `LeafKind::RadixSpline` leaves (each with a 256-entry lookup table).
-/// - Measure `model.predict(key)` across queries.
-///
-/// WHY:
-/// - Radix splines perform index table lookups + linear spline interpolation between knot points.
-/// - Benchmarking quantifies the latency difference between fast linear leaves vs higher-accuracy spline leaves.
 fn bench_radix_spline_leaf_predict(c: &mut Criterion) {
     let mut group = c.benchmark_group("rmi_predict_radix_spline");
 
@@ -128,12 +88,47 @@ fn bench_radix_spline_leaf_predict(c: &mut Criterion) {
     let key = "01a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4|[0.5,0.5,0.5]";
 
     group.bench_function("radix_spline_16bins", |b| {
-        // TODO: Replace with actual benchmark iteration:
-        // b.iter(|| {
-        //     model.predict(black_box(key))
-        // });
-        todo!("Benchmark RmiModel::predict() with RadixSpline table lookups and interpolation");
+        b.iter(|| model.predict(black_box(key)));
     });
+
+    group.finish();
+}
+
+/// 4. Direct head-to-head comparison: RMI Inference vs std::collections::BTreeMap lookup.
+fn bench_rmi_vs_btree_scaling(c: &mut Criterion) {
+    let mut group = c.benchmark_group("index_lookup_rmi_vs_btree");
+
+    let dataset_sizes = [1_000, 10_000, 50_000];
+
+    for &size in &dataset_sizes {
+        // Generate keys
+        let keys: Vec<String> = (0..size)
+            .map(|i| {
+                let prefix = format!("{:016x}", (i as u64).wrapping_mul(0x9e3779b97f4a7c15));
+                format!("{prefix}|[0.1,0.2,0.3]")
+            })
+            .collect();
+
+        // 1. Train real RmiModel on keys
+        let rmi = RmiModel::train(&keys, 1);
+
+        // 2. Build BTreeMap
+        let mut btree = BTreeMap::new();
+        for (idx, k) in keys.iter().enumerate() {
+            btree.insert(k.clone(), idx as u64);
+        }
+
+        // Test probe key
+        let query_key = &keys[size / 2];
+
+        group.bench_with_input(BenchmarkId::new("RMI_Linear", size), &rmi, |b, model| {
+            b.iter(|| model.predict(black_box(query_key)));
+        });
+
+        group.bench_with_input(BenchmarkId::new("std_BTreeMap", size), &btree, |b, map| {
+            b.iter(|| map.get(black_box(query_key)));
+        });
+    }
 
     group.finish();
 }
@@ -142,6 +137,7 @@ criterion_group!(
     benches,
     bench_feature_extraction,
     bench_linear_leaf_predict,
-    bench_radix_spline_leaf_predict
+    bench_radix_spline_leaf_predict,
+    bench_rmi_vs_btree_scaling
 );
 criterion_main!(benches);
