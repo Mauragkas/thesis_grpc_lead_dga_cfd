@@ -1,0 +1,53 @@
+% ------------------------------------------------------------------------------
+% Slide 6: Ιεραρχικός Αξιολογητής Multi-Tier ε-Bypass
+% ------------------------------------------------------------------------------
+\begin{frame}{Ιεραρχικός Αξιολογητής 3 Επιπέδων (Multi-Tier $\epsilon$-Bypass)}
+  \begin{columns}[c]
+    \begin{column}{0.54\textwidth}
+      \begin{block}{Κριτήρια Διαλογής Ατόμου $\mathbf{x}$}
+        \begin{itemize}
+          \item \textbf{Tier 1: Χωρική Μνήμη ($\epsilon$-Bypass)}
+          \begin{itemize}
+            \item $d_{\min} < \epsilon_{\text{exact}} = 10^{-4} \to$ \textbf{Exact Cache Hit}
+            \item Άμεση ανάκτηση ($0\ \mu\text{s}$ CPU).
+          \end{itemize}
+          \vspace{0.05cm}
+          \item \textbf{Tier 2: Ενεργό Surrogate (GP/MLP)}
+          \begin{itemize}
+            \item $d_{\min} \le R$ \textbf{\&} $\sigma(\mathbf{x}) < \theta_{\text{unc}}$
+            \item Ταχεία πρόβλεψη ($<1\ \mu\text{s}$).
+          \end{itemize}
+          \vspace{0.05cm}
+          \item \textbf{Tier 3: Πλήρης Επιλυτής VLM}
+          \begin{itemize}
+            \item Νέα περιοχή ή υψηλή αβεβαιότητα $\sigma \ge \theta$.
+            \item gRPC μέσω Envoy σε Python Worker.
+            \item Feedback στο LEAD DHT \& Surrogate.
+          \end{itemize}
+        \end{itemize}
+      \end{block}
+    \end{column}
+
+    \begin{column}{0.44\textwidth}
+      \centering
+      \begin{tikzpicture}[node distance=0.65cm, auto,
+        block/.style={rectangle, draw=ceidblue, fill=softgray, text width=2.4cm, text centered, rounded corners, minimum height=0.52cm, font=\scriptsize},
+        decision/.style={diamond, draw=accentblue, fill=accentblue!10, text width=1.8cm, text centered, inner sep=0pt, font=\tiny},
+        line/.style={draw=ceidblue, -stealth', thick}]
+        
+        \node [block, fill=ceidblue!10] (input) {Υποψήφιο $\mathbf{x}$};
+        \node [decision, below=0.35cm of input] (tier1) {$d_{\min} \le \epsilon$;};
+        \node [block, right=0.3cm of tier1, fill=green!20] (t1_res) {Tier 1: Cache ($0$ cost)};
+        \node [decision, below=0.45cm of tier1] (tier2) {$d \le R \land \sigma < \theta$;};
+        \node [block, right=0.3cm of tier2, fill=yellow!25] (t2_res) {Tier 2: Surrogate};
+        \node [block, below=0.45cm of tier2, fill=red!20] (t3_res) {Tier 3: Worker VLM};
+        
+        \path [line] (input) -- (tier1);
+        \path [line] (tier1) -- node [above] {\tiny Ναι} (t1_res);
+        \path [line] (tier1) -- node [right] {\tiny Όχι} (tier2);
+        \path [line] (tier2) -- node [above] {\tiny Ναι} (t2_res);
+        \path [line] (tier2) -- node [right] {\tiny Όχι} (t3_res);
+      \end{tikzpicture}
+    \end{column}
+  \end{columns}
+\end{frame}

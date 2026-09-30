@@ -1,0 +1,28 @@
+% ------------------------------------------------------------------------------
+% Slide 8: Hilbert Space-Filling Curves (10D -> 1D)
+% ------------------------------------------------------------------------------
+\begin{frame}{Χωρική Προβολή Hilbert (10D $\to$ 1D Locality)}
+  \begin{columns}[c]
+    \begin{column}{0.52\textwidth}
+      \textbf{Η Πρόκληση των 10 Διαστάσεων:}
+      \begin{itemize}
+        \item Συμβατικά DHTs (SHA-1): καταστρέφουν τη γειτνίαση.
+        \item Αδύνατη η εκτέλεση $k$-NN σε κλασικά P2P.
+      \end{itemize}
+
+      \vspace{0.1cm}
+      \textbf{Καμπύλη Hilbert ($p=6$):}
+      \begin{itemize}
+        \item Χαρτογράφηση $\mathbb{R}^{10} \to \text{uint64}$ με διατήρηση εγγύτητας.
+        \item \textbf{Multi-Probe ($C=3$ περιστροφές):} Εξάλειψη ασυνεχειών στα όρια κυψελών.
+        \item Διπλασιασμός συσχέτισης ($r = 0.333$) και $6.5\times$ μείωση της στρέβλωσης $P_{90}$.
+      \end{itemize}
+    \end{column}
+
+    \begin{column}{0.46\textwidth}
+      \centering
+      \includegraphics[width=\textwidth,height=0.65\textheight,keepaspectratio]{fig5_hilbert_spatial_heatmap.png}
+      \par\vspace{0.05cm}{\centering\scriptsize 10D vs 1D Hilbert Distance Heatmap.\par}
+    \end{column}
+  \end{columns}
+\end{frame}

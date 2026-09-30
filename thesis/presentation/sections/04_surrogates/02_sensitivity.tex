@@ -1,0 +1,30 @@
+% ------------------------------------------------------------------------------
+% Slide 11: Ανάλυση Ευαισθησίας Παραμέτρων (ARD GP)
+% ------------------------------------------------------------------------------
+\begin{frame}{Ανάλυση Αεροδυναμικής Ευαισθησίας (ARD)}
+  \begin{columns}[c]
+    \begin{column}{0.52\textwidth}
+      \textbf{Automatic Relevance Determination:}
+      \begin{itemize}
+        \item Μήκος κλίμακας $\ell_d$: μικρό $\ell_d \to$ υψηλή ευαισθησία.
+      \end{itemize}
+
+      \vspace{0.1cm}
+      \textbf{Κυρίαρχες Παράμετροι Σχεδίασης:}
+      \begin{enumerate}
+        \item \texttt{naca\_m} (Καμπυλότητα): \textbf{40.3\%} ($\ell = 0.83$).
+        \item \texttt{wing\_twist} (Συστροφή): \textbf{16.2\%} ($\ell = 2.06$).
+        \item \texttt{naca\_t} (Πάχος): \textbf{16.2\%} ($\ell = 2.07$).
+        \item \texttt{fuse\_diam} (Διάμετρος): \textbf{12.9\%} ($\ell = 2.59$).
+      \end{enumerate}
+      \vspace{0.05cm}
+      {\footnotesize $\to$ Πλήρης συμφωνία με την αεροδυναμική θεωρία.}
+    \end{column}
+
+    \begin{column}{0.46\textwidth}
+      \centering
+      \includegraphics[width=\textwidth,height=0.65\textheight,keepaspectratio]{fig2_surrogate_parameter_sensitivity.png}
+      \par\vspace{0.05cm}{\centering\scriptsize Σχετική βαρύτητα και Length Scales παραμέτρων.\par}
+    \end{column}
+  \end{columns}
+\end{frame}

@@ -1,0 +1,35 @@
+% ------------------------------------------------------------------------------
+% Slide 12: Φυσικός Εξομοιωτής VLM Worker (Tier 3)
+% ------------------------------------------------------------------------------
+\begin{frame}{Φυσικός Εξομοιωτής Worker (Tier 3)}
+  \begin{columns}[c]
+    \begin{column}{0.52\textwidth}
+      \textbf{AeroSandbox 3D VLM:}
+      \begin{itemize}
+        \item Επίλυση δυναμικού πεδίου ροής πτέρυγας \& ατράκτου.
+        \item Άντωση $C_L$, οπισθέλκουσα $C_D$, ευστάθεια $C_{m_\alpha} < 0$.
+      \end{itemize}
+
+      \vspace{0.1cm}
+      \begin{block}{Συνάρτηση Καταλληλότητας (Fitness)}
+        \vspace{-0.1cm}
+        {\footnotesize
+        \[
+        F(\mathbf{x}) = \begin{cases}
+          \frac{L}{D} - \sum \mathcal{P}, & \text{εφικτή} \\
+          -10^9, & \text{μη εφικτή}
+        \end{cases}
+        \]
+        }
+        \vspace{-0.25cm}
+        {\scriptsize Ποινές $\mathcal{P}$: αεροδυναμική, όγκος ($V \ge 2.5 \cdot 10^5\text{ mm}^3$), ευστάθεια.}
+      \end{block}
+    \end{column}
+
+    \begin{column}{0.46\textwidth}
+      \centering
+      \includegraphics[width=\textwidth,height=0.65\textheight,keepaspectratio]{fig5_aero_pareto_radar.png}
+      \par\vspace{0.05cm}{\centering\scriptsize Radar Chart: Σύγκριση αεροδυναμικών δεικτών.\par}
+    \end{column}
+  \end{columns}
+\end{frame}

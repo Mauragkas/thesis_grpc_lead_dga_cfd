@@ -1,0 +1,62 @@
+% ==============================================================================
+% Ρυθμίσεις Γλώσσας και Γραμματοσειρών (XeLaTeX)
+% ==============================================================================
+\usepackage{fontspec}
+\usepackage{polyglossia}
+\setmainlanguage{greek}
+\setotherlanguage{english}
+
+% Modern sans-serif font stack (Fira — designed for Metropolis)
+\setsansfont{Fira Sans Light}[
+  BoldFont = {Fira Sans SemiBold},
+  ItalicFont = {Fira Sans Light Italic},
+  BoldItalicFont = {Fira Sans SemiBold Italic},
+]
+\setmonofont{Fira Mono}[Scale=MatchLowercase]
+\newfontfamily\greekfonttt{DejaVu Sans Mono}[Scale=MatchLowercase]
+
+% ==============================================================================
+% Beamer Theme — Metropolis (modern, minimal, light)
+% ==============================================================================
+\usetheme[
+  progressbar=frametitle,   % thin progress bar under frame titles
+  numbering=fraction,       % slide x / N
+  sectionpage=progressbar,  % section divider with progress
+  block=fill,               % filled blocks
+]{metropolis}
+
+% Χρωματική παλέτα — light & airy CEID tones
+\definecolor{ceidblue}{RGB}{0, 71, 133}      % Refined UPatras Blue
+\definecolor{accentblue}{RGB}{24, 116, 205}  % Lighter accent
+\definecolor{softgray}{RGB}{248, 249, 251}   % Near-white background tint
+\definecolor{darktext}{RGB}{35, 35, 45}      % Soft black for text
+\definecolor{mGreen}{RGB}{14, 159, 110}      % Metropolis green
+\definecolor{mYellow}{RGB}{237, 177, 32}     % Metropolis yellow
+
+% Apply palette
+\setbeamercolor{normal text}{fg=darktext, bg=white}
+\setbeamercolor{alerted text}{fg=ceidblue}
+\setbeamercolor{frametitle}{bg=ceidblue, fg=white}
+\setbeamercolor{title separator}{fg=accentblue}
+\setbeamercolor{progress bar}{fg=accentblue, bg=accentblue!20}
+\setbeamercolor{block title}{fg=white, bg=ceidblue}
+\setbeamercolor{block body}{fg=darktext, bg=softgray}
+\setbeamercolor{block title alerted}{fg=white, bg=accentblue!85}
+\setbeamercolor{block body alerted}{fg=darktext, bg=softgray}
+\setbeamercolor{block title example}{fg=white, bg=mGreen!85}
+\setbeamercolor{block body example}{fg=darktext, bg=softgray}
+
+% Lightweight item markers & tighter spacing
+\setbeamertemplate{itemize items}[circle]
+
+% ==============================================================================
+% Πρόσθετα Πακέτα
+% ==============================================================================
+\usepackage{amsmath,amssymb,bm}
+\usepackage{graphicx}
+\graphicspath{{figures/}{../figures/}{../../evaluation/figures/}}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{tikz}
+\usetikzlibrary{shapes,arrows,positioning,calc}
+\usepackage{appendixnumberbeamer}

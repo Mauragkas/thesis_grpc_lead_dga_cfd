@@ -1,0 +1,21 @@
+% ------------------------------------------------------------------------------
+% Slide 4: Στόχος & Επιστημονική Συνεισφορά
+% ------------------------------------------------------------------------------
+\begin{frame}{Στόχος \& Επιστημονική Συνεισφορά}
+  \begin{block}{Κεντρικός Στόχος}
+    Δραστική μείωση υπολογιστικού χρόνου \textbf{χωρίς απώλεια ακρίβειας ή σύγκλισης}.
+  \end{block}
+
+  \vspace{0.1cm}
+  \textbf{Βασικές Επιστημονικές Συνεισφορές:}
+  \begin{enumerate}
+    \item \textbf{Ιεραρχικός Αξιολογητής 3 Επιπέδων (Multi-Tier $\epsilon$-Bypass):}
+    Χωρική μνήμη cache ($\epsilon$-exact), ενεργό surrogate και πλήρης επιλυτής CFD/VLM.
+    \item \textbf{Κατανεμημένο Ευρετήριο Μάθησης (LEAD DHT):}
+    Chord ring 100 vnodes, προβολή Hilbert 10D $\to$ 1D, και Recursive Model Index (RMI).
+    \item \textbf{Αυτόνομη Μικροϋπηρεσία Surrogate σε Rust/C++:}
+    GP και MLP με δυναμική επιγραμμική επανεκπαίδευση (online retraining).
+    \item \textbf{Κατανεμημένη Αρχιτεκτονική Παραγωγής (Production-Grade Stack):}
+    Async Rust (Tokio, Tonic gRPC), Envoy Load Balancing, Kafka Telemetry, 3D Web Monitor.
+  \end{enumerate}
+\end{frame}

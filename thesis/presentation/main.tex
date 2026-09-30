@@ -1,0 +1,64 @@
+% ==============================================================================
+% Κεντρικό Αρχείο Παρουσίασης (Master Beamer Presentation)
+% Τμήμα Μηχανικών Η/Υ & Πληροφορικής (CEID), Πανεπιστήμιο Πατρών
+% ==============================================================================
+
+\documentclass[10pt,aspectratio=169,compress]{beamer}
+
+% Φόρτωση Προοιμίου & Μεταδεδομένων
+\input{preamble.tex}
+\input{metadata.tex}
+
+\begin{document}
+
+% ==============================================================================
+% Ενότητα 1: Εισαγωγή & Κίνητρο
+% ==============================================================================
+\input{sections/01_introduction/01_title_and_toc.tex}
+
+\section{Εισαγωγή \& Κίνητρο}
+\input{sections/01_introduction/02_motivation.tex}
+\input{sections/01_introduction/03_contributions.tex}
+
+% ==============================================================================
+% Ενότητα 2: Αρχιτεκτονική Συστήματος
+% ==============================================================================
+\section{Αρχιτεκτονική Συστήματος}
+\input{sections/02_architecture/01_system_overview.tex}
+\input{sections/02_architecture/02_multi_tier.tex}
+\input{sections/02_architecture/03_island_model.tex}
+
+% ==============================================================================
+% Ενότητα 3: LEAD DHT & Χωρική Ευρετηρίαση
+% ==============================================================================
+\section{LEAD DHT \& Χωρική Ευρετηρίαση}
+\input{sections/03_spatial_indexing/01_hilbert.tex}
+\input{sections/03_spatial_indexing/02_chord_rmi.tex}
+
+% ==============================================================================
+% Ενότητα 4: Μοντέλα Surrogate & Αεροδυναμική VLM
+% ==============================================================================
+\section{Μοντέλα Surrogate \& Αεροδυναμική VLM}
+\input{sections/04_surrogates/01_surrogates.tex}
+\input{sections/04_surrogates/02_sensitivity.tex}
+\input{sections/04_surrogates/03_vlm_worker.tex}
+
+% ==============================================================================
+% Ενότητα 5: Πειραματική Αξιολόγηση
+% ==============================================================================
+\section{Πειραματική Αξιολόγηση}
+\input{sections/05_evaluation/01_convergence.tex}
+\input{sections/05_evaluation/02_bypass_ratio.tex}
+\input{sections/05_evaluation/03_speedup.tex}
+\input{sections/05_evaluation/04_scalability.tex}
+\input{sections/05_evaluation/05_gpu_acceleration.tex}
+
+% ==============================================================================
+% Ενότητα 6: Συμπεράσματα & Μελλοντική Έρευνα
+% ==============================================================================
+\section{Συμπεράσματα}
+\input{sections/06_conclusion/01_conclusions.tex}
+\input{sections/06_conclusion/02_future_work.tex}
+\input{sections/06_conclusion/03_qa.tex}
+
+\end{document}

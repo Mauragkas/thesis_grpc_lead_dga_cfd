@@ -1,0 +1,28 @@
+% ------------------------------------------------------------------------------
+% Slide 9: Δακτύλιος Chord & Learned Index (RMI)
+% ------------------------------------------------------------------------------
+\begin{frame}{Δακτύλιος Chord \& Learned Index (RMI)}
+  \begin{columns}[c]
+    \begin{column}{0.50\textwidth}
+      \textbf{Κατανεμημένος Δακτύλιος LEAD:}
+      \begin{itemize}
+        \item 100 Virtual Nodes (vnodes) ανά κόμβο.
+        \item Δρομολόγηση $O(\log N)$ hops με finger tables.
+      \end{itemize}
+
+      \vspace{0.1cm}
+      \textbf{Ευρετήριο RMI (Recursive Model Index):}
+      \begin{itemize}
+        \item Αντικατάσταση B-Tree με μοντέλο 2 επιπέδων (Root Linear $\to$ 256 Leaf Linear Models).
+        \item \textbf{Αποτέλεσμα:} Χρόνος ανάκτησης $\approx 41\text{ ns}$ ($1.81\times$ ταχύτερο του B-Tree).
+        \item \textbf{$3\times$ χαμηλότερη μνήμη RAM} ($785\text{ KB}$ vs $2.34\text{ MB}$).
+      \end{itemize}
+    \end{column}
+
+    \begin{column}{0.48\textwidth}
+      \centering
+      \includegraphics[width=\textwidth,height=0.65\textheight,keepaspectratio]{fig3_rmi_vs_btree_benchmark.png}
+      \par\vspace{0.05cm}{\centering\scriptsize RMI vs std::BTreeMap Latency.\par}
+    \end{column}
+  \end{columns}
+\end{frame}
