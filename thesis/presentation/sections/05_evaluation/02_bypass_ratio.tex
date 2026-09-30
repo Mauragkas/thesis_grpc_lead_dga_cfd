@@ -1,0 +1,24 @@
+% ------------------------------------------------------------------------------
+% Slide 14: Ανάλυση Bypass Ratio & Επιτάχυνση
+% ------------------------------------------------------------------------------
+\begin{frame}{Ανάλυση Bypass Ratio \& Επιτάχυνση Χρόνου}
+  \begin{columns}[c]
+    \begin{column}{0.50\textwidth}
+      \begin{block}{Ρυθμός Παράκαμψης (Bypass Ratio)}
+        $$BR = \frac{N_{\text{Tier 1}} + N_{\text{Tier 2}}}{N_{\text{total}}} = 1 - \frac{N_{\text{CFD}}}{N_{\text{total}}}$$
+      \end{block}
+      \begin{itemize}
+        \item \textbf{Warmup Phase ($t \le 5$):} $BR < 15\%$ (συλλογή δειγμάτων).
+        \item \textbf{Μόνιμη Κατάσταση ($t \ge 15$):} \textbf{$BR > 75\%$}.
+        \item \textbf{Μείωση κλήσεων VLM:} από 4.500 σε 1.972 ($-56.2\%$).
+        \item \textbf{Wall-Clock Speedup: $2.28\times$} (6.0 min vs 13.8 min).
+      \end{itemize}
+    \end{column}
+
+    \begin{column}{0.48\textwidth}
+      \centering
+      \includegraphics[width=\textwidth,height=0.65\textheight,keepaspectratio]{fig2_tier_breakdown_percent.png}
+      \par\vspace{0.05cm}{\centering\scriptsize Ποσοστό συμμετοχής Tiers ανά γενιά.\par}
+    \end{column}
+  \end{columns}
+\end{frame}

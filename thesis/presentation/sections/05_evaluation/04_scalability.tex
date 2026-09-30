@@ -1,0 +1,28 @@
+% ------------------------------------------------------------------------------
+% Slide 16: Κλιμακωσιμότητα Workers & Εξισορρόπηση Envoy
+% ------------------------------------------------------------------------------
+\begin{frame}{Κλιμακωσιμότητα Workers \& Εξισορρόπηση Envoy}
+  \begin{columns}[c]
+    \begin{column}{0.50\textwidth}
+      \textbf{Οριζόντια Κλιμάκωση:}
+      \begin{itemize}
+        \item Παράλληλο κλάσμα $p \approx 0.96$ (Amdahl / Gustafson).
+        \item Στους 8 workers: επιτάχυνση $7.15\times$ ($\eta = 89.4\%$).
+        \item Στους 32 workers: \textbf{$21.54\times$} ($98.2\ \text{άτομα/s}$).
+      \end{itemize}
+
+      \vspace{0.1cm}
+      \textbf{Envoy Least-Request vs Round-Robin:}
+      \begin{itemize}
+        \item Εξάλειψη head-of-line blocking.
+        \item Μείωση του $P_{99}$ latency κατά $28\%$.
+      \end{itemize}
+    \end{column}
+
+    \begin{column}{0.48\textwidth}
+      \centering
+      \includegraphics[width=\textwidth,height=0.65\textheight,keepaspectratio]{fig4_worker_scalability.png}
+      \par\vspace{0.05cm}{\centering\scriptsize Κλιμακωσιμότητα Workers ($W=1\dots 32$).\par}
+    \end{column}
+  \end{columns}
+\end{frame}

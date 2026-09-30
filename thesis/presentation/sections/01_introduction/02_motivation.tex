@@ -1,0 +1,29 @@
+% ------------------------------------------------------------------------------
+% Slide 3: Κίνητρο & Υπολογιστικό Πρόβλημα
+% ------------------------------------------------------------------------------
+\begin{frame}{Κίνητρο \& Υπολογιστικό Πρόβλημα}
+  \begin{columns}[c]
+    \begin{column}{0.56\textwidth}
+      \textbf{Αεροδυναμική Σχεδίαση 3D-Printable UAVs:}
+      \begin{itemize}
+        \item Μη επανδρωμένα αεροσκάφη: μέγιστος λόγος $L/D$.
+        \item Αυστηροί περιορισμοί: όγκος ατράκτου, ευστάθεια $C_{m_\alpha} < 0$.
+      \end{itemize}
+
+      \vspace{0.1cm}
+      \begin{alertblock}{Το Υπολογιστικό Bottleneck}
+        \begin{itemize}
+          \item Κλασικοί GAs: απαιτούν \textbf{χιλιάδες αξιολογήσεις}.
+          \item Κάθε επίλυση VLM/CFD: από εκατοντάδες ms έως λεπτά.
+          \item \textbf{Συνολικός χρόνος:} Απαγορευτικός χωρίς HPC clusters.
+        \end{itemize}
+      \end{alertblock}
+    \end{column}
+    
+    \begin{column}{0.42\textwidth}
+      \centering
+      \includegraphics[width=\textwidth,height=0.62\textheight,keepaspectratio]{fig1_wing_geometry_3d.png}
+      \par\vspace{0.05cm}{\centering\scriptsize 3D Παραμετρική πτέρυγα και άτρακτος.\par}
+    \end{column}
+  \end{columns}
+\end{frame}

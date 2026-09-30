@@ -1,0 +1,30 @@
+% ------------------------------------------------------------------------------
+% Slide 10: Μοντέλα Υποκατάστασης (Surrogate Node)
+% ------------------------------------------------------------------------------
+\begin{frame}{Μοντέλα Υποκατάστασης (Surrogate Node)}
+  \begin{columns}[c]
+    \begin{column}{0.54\textwidth}
+      \textbf{Απαιτήσεις \& Σχεδιασμός:}
+      \begin{itemize}
+        \item Χαμηλή καθυστέρηση πρόβλεψης ($< 1\text{ ms}$).
+        \item Εκτίμηση αβεβαιότητας $\sigma(\mathbf{x})$ για ασφαλές gate.
+        \item Online επανεκπαίδευση (sliding window 500).
+      \end{itemize}
+
+      \vspace{0.08cm}
+      \textbf{Συγκριτική Αξιολόγηση:}
+      \begin{itemize}
+        \item \textbf{Gaussian Process (Matérn 5/2 ARD):}\\
+        Υψηλή ακρίβεια ($R^2 = 0.879$) \& αβεβαιότητα $\sigma(\mathbf{x})$.
+        \item \textbf{MLP Neural Network ($64 \times 32$):}\\
+        Εξαιρετική ταχύτητα ($>1.2 \times 10^6\text{ evals/s}$).
+      \end{itemize}
+    \end{column}
+
+    \begin{column}{0.44\textwidth}
+      \centering
+      \includegraphics[width=\textwidth,height=0.60\textheight,keepaspectratio]{fig2_surrogate_pred_vs_true.png}
+      \par\vspace{0.05cm}{\centering\scriptsize Parity Plot: Πραγματικό vs Προβλεπόμενο $L/D$.\par}
+    \end{column}
+  \end{columns}
+\end{frame}

@@ -1,0 +1,38 @@
+% ------------------------------------------------------------------------------
+% Slide 17: Επιτάχυνση Υλικού AMD ROCm GPU & Benchmarks
+% ------------------------------------------------------------------------------
+\begin{frame}{Επιτάχυνση Υλικού AMD ROCm GPU (10 Trials)}
+  \vspace{-0.2cm}
+  \begin{columns}[T]
+    \begin{column}{0.32\textwidth}
+      \begin{block}{GP Covariance ($N=10^3$)}
+        \scriptsize
+        \textbf{ROCm:} $\mathbf{0.64 \pm 0.01\text{ ms}}$\\
+        \textbf{CPU (12t):} $1.23 \pm 0.12\text{ ms}$\\
+        $\mathbf{1.91\times}$ speedup ($\sigma \approx 0.01\text{ ms}$)
+      \end{block}
+    \end{column}
+    \begin{column}{0.34\textwidth}
+      \begin{block}{Cholesky ($LL^T = K$)}
+        \scriptsize
+        \textbf{CPU ($N=10^3$):} $\mathbf{103.9 \pm 0.5\text{ ms}}$\\
+        $\mathcal{O}(N^3)$ κυβικό bottleneck\\
+        $\to$ Αιτιολόγηση MLP στο Tier 2
+      \end{block}
+    \end{column}
+    \begin{column}{0.32\textwidth}
+      \begin{block}{MLP Scaling ($M=10^4$)}
+        \scriptsize
+        \textbf{ROCm:} $\mathbf{0.46 \pm 0.01\text{ ms}}$ ($\mathbf{4.12\times}$)\\
+        \textbf{Throughput:} $\mathbf{21.6 \times 10^6\text{ ev/s}}$\\
+        \textit{Hilbert: $4.4\ \mu\text{s}$ | Store: $18\text{ ns}$}
+      \end{block}
+    \end{column}
+  \end{columns}
+
+  \vspace{0.1cm}
+  \begin{center}
+    \includegraphics[width=0.98\textwidth,height=0.46\textheight,keepaspectratio]{fig2_surrogate_cuda_vs_cpu.png}
+    \par\vspace{0.03cm}{\tiny\textcolor{darktext!70}{Host CPU vs AMD ROCm GPU (RX 7600 XT). Σκιώδεις ζώνες: $\pm 1\sigma$ εμπειρική αβεβαιότητα (10 ανεξάρτητες δοκιμές).}\par}
+  \end{center}
+\end{frame}

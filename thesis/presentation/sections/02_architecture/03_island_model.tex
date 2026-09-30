@@ -1,0 +1,28 @@
+% ------------------------------------------------------------------------------
+% Slide 7: Μοντέλο Νήσων & Ασύγχρονη Μετανάστευση
+% ------------------------------------------------------------------------------
+\begin{frame}{Μοντέλο Νήσων \& Ασύγχρονη Μετανάστευση}
+  \begin{columns}[c]
+    \begin{column}{0.50\textwidth}
+      \textbf{Αποκεντρωμένη Εξέλιξη:}
+      \begin{itemize}
+        \item Orchestrators σε \textbf{τοπολογία δακτυλίου (Ring)}.
+        \item $(\mu + \lambda)$ GA ανά νήσο ($P_{\text{local}} = 100$).
+        \item \textbf{Αποφυγή πρόωρης σύγκλισης:} Παράλληλη εξερεύνηση διαφορετικών περιοχών 10D χώρου.
+      \end{itemize}
+
+      \vspace{0.1cm}
+      \textbf{Πρωτόκολλο Μετανάστευσης:}
+      \begin{itemize}
+        \item Ανά διάστημα $\tau = 5$ γενεών: ανταλλαγή των $M_c = 3$ ελίτ ατόμων στον επόμενο γείτονα.
+        \item Ασύγχρονη gRPC κλήση (\texttt{MigrateElites}).
+      \end{itemize}
+    \end{column}
+
+    \begin{column}{0.48\textwidth}
+      \centering
+      \includegraphics[width=\textwidth,height=0.62\textheight,keepaspectratio]{fig1_single_vs_multi_island.png}
+      \par\vspace{0.05cm}{\centering\scriptsize Σύγκριση Μονής Νήσου έναντι Δακτυλίου Νήσων.\par}
+    \end{column}
+  \end{columns}
+\end{frame}

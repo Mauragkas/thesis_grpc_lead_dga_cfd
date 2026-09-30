@@ -1,0 +1,24 @@
+% ------------------------------------------------------------------------------
+% Slide 5: Συνολική Αρχιτεκτονική
+% ------------------------------------------------------------------------------
+\begin{frame}{Συνολική Αρχιτεκτονική Συστήματος}
+  \begin{columns}[c]
+    \begin{column}{0.50\textwidth}
+      \textbf{Αυτόνομα Υποσυστήματα gRPC:}
+      \begin{itemize}
+        \item \textbf{Orchestrators (Rust):} $(\mu+\lambda)$ GA, Gene Store \& pipeline.
+        \item \textbf{LEAD DHT Cluster (Rust):} 3 κόμβοι, 60 vnodes, $k$-NN search.
+        \item \textbf{Surrogate Node (Rust/HIP):} Fast inference (MLP/GP) \& retraining.
+        \item \textbf{Worker Pool (Python):} 3D VLM AeroSandbox.
+        \item \textbf{Envoy Proxy:} L7 Load Balancer (Least-Request).
+        \item \textbf{Kafka + Fluent-Bit:} Τηλεμετρία \& 3D Real-time Monitor.
+      \end{itemize}
+    \end{column}
+
+    \begin{column}{0.48\textwidth}
+      \centering
+      \includegraphics[width=\textwidth,height=0.68\textheight,keepaspectratio]{fig5_system_architecture.png}
+      \par\vspace{0.05cm}{\centering\scriptsize Τοπολογία κατανεμημένου συστήματος.\par}
+    \end{column}
+  \end{columns}
+\end{frame}
