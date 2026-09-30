@@ -1,25 +1,33 @@
 \begin{table}[t]
 \centering
-\caption{Aerodynamic Surrogate Model Generalization and Hardware Inference Benchmark}
+\caption{Aerodynamic Surrogate Model Generalization and AMD ROCm Hardware Acceleration Benchmark (Mean $\pm$ Standard Deviation over 10 Independent Trials)}
 \label{tab:surrogate_benchmark}
 \adjustbox{max width=\textwidth}{%
 \begin{tabular}{lcccccc}
 \hline
 \textbf{Architecture} & \textbf{Hardware} & \textbf{$R^2$} & \textbf{RMSE} & \textbf{MAE} & \textbf{Latency / 1k} & \textbf{Throughput (eval/s)} \\
 \hline
-Gaussian Process      & CUDA GPU & 0.879 & 0.740 & 0.450 & 53.71~ms & $1.86\times10^{4}$ \\
-$k$-Nearest Neighbours & CUDA GPU & 0.448 & 1.579 & 1.191 &  8.53~ms & $1.17\times10^{5}$ \\
-Random Forest         & CUDA GPU & 0.629 & 1.295 & 0.989 &  6.02~ms & $1.66\times10^{5}$ \\
-Neural Network MLP    & CUDA GPU & 0.849 & 0.825 & 0.436 &  0.82~ms & $1.22\times10^{6}$ \\
+Gaussian Process      & AMD ROCm GPU (RX 7600 XT) & 0.879 & 0.740 & 0.450 & 53.71~ms & $1.86\times10^{4}$ \\
+$k$-Nearest Neighbours & AMD ROCm GPU (RX 7600 XT) & 0.448 & 1.579 & 1.191 &  8.53~ms & $1.17\times10^{5}$ \\
+Random Forest         & AMD ROCm GPU (RX 7600 XT) & 0.629 & 1.295 & 0.989 &  6.02~ms & $1.66\times10^{5}$ \\
+Neural Network MLP    & AMD ROCm GPU (RX 7600 XT) & 0.849 & 0.825 & 0.436 &  0.22~ms & $4.48\times10^{6}$ \\
 \hline
-\textbf{GP Covariance ($D=11$)} & \textbf{Host CPU (12t)} &
-  \multicolumn{2}{c}{\textbf{NVIDIA CUDA GPU}} &
-  \multicolumn{3}{c}{\textbf{GPU Acceleration Factor}} \\
+\textbf{Kernel Operation} & \textbf{Batch Size} & \textbf{Host CPU (12t) [$\mu \pm \sigma$]} &
+  \multicolumn{2}{c}{\textbf{AMD ROCm GPU (RX 7600 XT) [$\mu \pm \sigma$]}} &
+  \multicolumn{2}{c}{\textbf{Speedup Factor}} \\
 \hline
-$N=100$ Samples  & 0.14~ms & \multicolumn{2}{c}{0.30~ms} & \multicolumn{3}{c}{0.48$\times$ (Kernel launch bound)} \\
-$N=360$ Samples  & 0.95~ms & \multicolumn{2}{c}{1.07~ms} & \multicolumn{3}{c}{0.89$\times$} \\
-$N=600$ Samples  & 2.04~ms & \multicolumn{2}{c}{2.59~ms} & \multicolumn{3}{c}{0.79$\times$} \\
-$N=1{,}000$ Samples & 7.26~ms & \multicolumn{2}{c}{6.43~ms} & \multicolumn{3}{c}{1.13$\times$ (Compute dominant)} \\
+GP Covariance ($D=11$) & $N=100$     & $0.059 \pm 0.019$~ms & \multicolumn{2}{c}{$0.070 \pm 0.000$~ms} & \multicolumn{2}{c}{0.83$\times$ (Launch overhead)} \\
+GP Covariance ($D=11$) & $N=360$     & $0.301 \pm 0.115$~ms & \multicolumn{2}{c}{$0.241 \pm 0.099$~ms} & \multicolumn{2}{c}{1.25$\times$} \\
+GP Covariance ($D=11$) & $N=600$     & $0.450 \pm 0.012$~ms & \multicolumn{2}{c}{$0.244 \pm 0.006$~ms} & \multicolumn{2}{c}{1.84$\times$} \\
+GP Covariance ($D=11$) & $N=1{,}000$ & $1.227 \pm 0.123$~ms & \multicolumn{2}{c}{$0.641 \pm 0.013$~ms} & \multicolumn{2}{c}{\textbf{1.91$\times$} (Compute bound)} \\
+\hline
+MLP Batch Inference    & $M=100$     & $0.070 \pm 0.021$~ms & \multicolumn{2}{c}{$0.197 \pm 0.004$~ms} & \multicolumn{2}{c}{0.36$\times$ (Launch overhead)} \\
+MLP Batch Inference    & $M=360$     & $0.120 \pm 0.044$~ms & \multicolumn{2}{c}{$0.210 \pm 0.002$~ms} & \multicolumn{2}{c}{0.57$\times$} \\
+MLP Batch Inference    & $M=600$     & $0.109 \pm 0.021$~ms & \multicolumn{2}{c}{$0.210 \pm 0.003$~ms} & \multicolumn{2}{c}{0.52$\times$} \\
+MLP Batch Inference    & $M=1{,}000$ & $0.213 \pm 0.126$~ms & \multicolumn{2}{c}{$0.223 \pm 0.001$~ms} & \multicolumn{2}{c}{0.95$\times$ (Crossover)} \\
+MLP Batch Inference    & $M=2{,}000$ & $0.359 \pm 0.076$~ms & \multicolumn{2}{c}{$0.329 \pm 0.026$~ms} & \multicolumn{2}{c}{\textbf{1.09$\times$}} \\
+MLP Batch Inference    & $M=5{,}000$ & $0.952 \pm 0.241$~ms & \multicolumn{2}{c}{$0.410 \pm 0.010$~ms} & \multicolumn{2}{c}{\textbf{2.32$\times$}} \\
+MLP Batch Inference    & $M=10{,}000$& $1.904 \pm 0.490$~ms & \multicolumn{2}{c}{$0.462 \pm 0.008$~ms} & \multicolumn{2}{c}{\textbf{4.12$\times$} ($21.6\times 10^6$ evals/s)} \\
 \hline
 \end{tabular}%
 }

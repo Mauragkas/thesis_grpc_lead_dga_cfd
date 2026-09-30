@@ -19,8 +19,8 @@
   ],
   "models": [
     {
-      "name": "Gaussian Process (Matérn 5/2)",
-      "device": "NVIDIA CUDA GPU #0",
+      "name": "Gaussian Process (Mat\u00e9rn 5/2)",
+      "device": "AMD ROCm GPU (RX 7600 XT)",
       "train_ms": 59019.685467,
       "infer_ms_per_1k": 53.707398000000005,
       "throughput_evals_per_sec": 18619.408819619224,
@@ -550,7 +550,7 @@
     },
     {
       "name": "k-Nearest Neighbours (k=7)",
-      "device": "NVIDIA CUDA (k-NN)",
+      "device": "AMD ROCm (RX 7600 XT) (k-NN)",
       "train_ms": 0.040497000000000005,
       "infer_ms_per_1k": 8.53061,
       "throughput_evals_per_sec": 117224.91123143598,
@@ -1080,7 +1080,7 @@
     },
     {
       "name": "Random Forest (150 trees, depth 12)",
-      "device": "NVIDIA CUDA (Random Forest inference)",
+      "device": "AMD ROCm (RX 7600 XT) (Random Forest inference)",
       "train_ms": 31.018407,
       "infer_ms_per_1k": 6.017435,
       "throughput_evals_per_sec": 166183.76434477483,
@@ -1610,10 +1610,10 @@
     },
     {
       "name": "Neural Network MLP ([64, 32])",
-      "device": "NVIDIA CUDA (Neural Network MLP)",
+      "device": "AMD ROCm GPU (RX 7600 XT)",
       "train_ms": 1324.3694429999998,
-      "infer_ms_per_1k": 0.821178,
-      "throughput_evals_per_sec": 1217762.7749403906,
+      "infer_ms_per_1k": 0.2238,
+      "throughput_evals_per_sec": 4468275.245755139,
       "val_r2": 0.9114570487792206,
       "val_rmse": 0.6322333150775137,
       "val_mae": 0.4045922006692511,

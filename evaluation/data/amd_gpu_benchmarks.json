@@ -1,0 +1,147 @@
+{
+  "device": "AMD Radeon RX 7600 XT",
+  "arch": "gfx1102",
+  "compute_units": 16,
+  "vram_mb": 16368,
+  "num_trials": 10,
+  "gp_benchmarks": [
+    {
+      "n": 100,
+      "cpu_cov_ms": 0.0586249,
+      "cpu_cov_std": 0.0192133,
+      "cpu_cov_var": 0.000369149,
+      "rocm_cov_ms": 0.0702368,
+      "rocm_cov_std": 0.000366609,
+      "rocm_cov_var": 1.34402e-07,
+      "speedup": 0.834675,
+      "cholesky_ms": 0.0872721,
+      "cholesky_std": 0.000253349,
+      "cholesky_var": 6.41855e-08
+    },
+    {
+      "n": 360,
+      "cpu_cov_ms": 0.300831,
+      "cpu_cov_std": 0.115384,
+      "cpu_cov_var": 0.0133135,
+      "rocm_cov_ms": 0.240906,
+      "rocm_cov_std": 0.0989674,
+      "rocm_cov_var": 0.00979455,
+      "speedup": 1.24875,
+      "cholesky_ms": 4.54001,
+      "cholesky_std": 0.515295,
+      "cholesky_var": 0.265529
+    },
+    {
+      "n": 600,
+      "cpu_cov_ms": 0.449772,
+      "cpu_cov_std": 0.0116335,
+      "cpu_cov_var": 0.000135339,
+      "rocm_cov_ms": 0.244087,
+      "rocm_cov_std": 0.00637231,
+      "rocm_cov_var": 4.06063e-05,
+      "speedup": 1.84267,
+      "cholesky_ms": 22.0094,
+      "cholesky_std": 1.23627,
+      "cholesky_var": 1.52837
+    },
+    {
+      "n": 1000,
+      "cpu_cov_ms": 1.22731,
+      "cpu_cov_std": 0.122835,
+      "cpu_cov_var": 0.0150885,
+      "rocm_cov_ms": 0.640926,
+      "rocm_cov_std": 0.0133725,
+      "rocm_cov_var": 0.000178825,
+      "speedup": 1.91491,
+      "cholesky_ms": 103.894,
+      "cholesky_std": 0.461359,
+      "cholesky_var": 0.212852
+    }
+  ],
+  "mlp_benchmarks": [
+    {
+      "m": 100,
+      "cpu_ms": 0.0702415,
+      "cpu_std": 0.0209628,
+      "cpu_var": 0.000439441,
+      "rocm_ms": 0.197248,
+      "rocm_std": 0.00364175,
+      "rocm_var": 1.32623e-05,
+      "speedup": 0.356107,
+      "cpu_throughput": 1.42366e+06,
+      "rocm_throughput": 506975
+    },
+    {
+      "m": 360,
+      "cpu_ms": 0.119465,
+      "cpu_std": 0.0440011,
+      "cpu_var": 0.0019361,
+      "rocm_ms": 0.210366,
+      "rocm_std": 0.00150762,
+      "rocm_var": 2.2729e-06,
+      "speedup": 0.567894,
+      "cpu_throughput": 3.01342e+06,
+      "rocm_throughput": 1.71131e+06
+    },
+    {
+      "m": 600,
+      "cpu_ms": 0.108812,
+      "cpu_std": 0.0204506,
+      "cpu_var": 0.000418229,
+      "rocm_ms": 0.209702,
+      "rocm_std": 0.00338869,
+      "rocm_var": 1.14832e-05,
+      "speedup": 0.518888,
+      "cpu_throughput": 5.5141e+06,
+      "rocm_throughput": 2.8612e+06
+    },
+    {
+      "m": 1000,
+      "cpu_ms": 0.212456,
+      "cpu_std": 0.125637,
+      "cpu_var": 0.0157847,
+      "rocm_ms": 0.223355,
+      "rocm_std": 0.000793722,
+      "rocm_var": 6.29995e-07,
+      "speedup": 0.951205,
+      "cpu_throughput": 4.70685e+06,
+      "rocm_throughput": 4.47718e+06
+    },
+    {
+      "m": 2000,
+      "cpu_ms": 0.359115,
+      "cpu_std": 0.076342,
+      "cpu_var": 0.0058281,
+      "rocm_ms": 0.329238,
+      "rocm_std": 0.0259176,
+      "rocm_var": 0.000671719,
+      "speedup": 1.09075,
+      "cpu_throughput": 5.56924e+06,
+      "rocm_throughput": 6.07463e+06
+    },
+    {
+      "m": 5000,
+      "cpu_ms": 0.952026,
+      "cpu_std": 0.240731,
+      "cpu_var": 0.0579512,
+      "rocm_ms": 0.410073,
+      "rocm_std": 0.0100411,
+      "rocm_var": 0.000100825,
+      "speedup": 2.3216,
+      "cpu_throughput": 5.25196e+06,
+      "rocm_throughput": 1.21929e+07
+    },
+    {
+      "m": 10000,
+      "cpu_ms": 1.90418,
+      "cpu_std": 0.489596,
+      "cpu_var": 0.239705,
+      "rocm_ms": 0.462343,
+      "rocm_std": 0.00793716,
+      "rocm_var": 6.29985e-05,
+      "speedup": 4.11854,
+      "cpu_throughput": 5.2516e+06,
+      "rocm_throughput": 2.1629e+07
+    }
+  ]
+}

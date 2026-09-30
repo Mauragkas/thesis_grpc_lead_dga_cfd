@@ -6,7 +6,7 @@
 \begin{itemize}
     \item \textbf{Κόμβοι LEAD DHT ($N=3$):} Τρεις ανεξάρτητοι φυσικοί/λογικοί κόμβοι υλοποιημένοι σε Rust, οι οποίοι διαχειρίζονται από κοινού 60 εικονικούς κόμβους (vnodes, 20 vnodes ανά κόμβο) επί δακτυλίου τύπου Chord.
     \item \textbf{Νησιωτικοί Οδηγοί Orchestrator ($M=2\dots 4$):} Αυτόνομοι εξελικτικοί κινητήρες γραμμένοι σε Rust (χρησιμοποιώντας τον ασύγχρονο εκτελεστή \texttt{Tokio} και το πλαίσιο \texttt{Tonic} gRPC), που διαχειρίζονται ανεξάρτητους υπο-πληθυσμούς και επικοινωνούν μέσω δακτυλίου μετανάστευσης.
-    \item \textbf{Μικροϋπηρεσία Υποκατάστασης (Surrogate Node):} Κόμβος ταχείας πρόβλεψης (Rust με C++/CUDA engine), ο οποίος παρέχει suyrogate inference και επιγραμμική επανεκπαίδευση (online retraining) στο παρασκήνιο.
+    \item \textbf{Μικροϋπηρεσία Υποκατάστασης (Surrogate Node):} Κόμβος ταχείας πρόβλεψης (Rust με C++/HIP engine σε AMD ROCm GPU), ο οποίος παρέχει surrogate inference και επιγραμμική επανεκπαίδευση (online retraining) στο παρασκήνιο.
     \item \textbf{Συστοιχία Υπολογιστικών Εργατών (Worker Pool):} Κλιμακούμενος αριθμός εργατών Python/AeroSandbox ($W \in \{1, 2, 4, 8, 16, 32\}$), καθένας εκ των οποίων εκτελεί πλήρη αεροδυναμική προσομοίωση 3D Vortex Lattice Method (VLM).
     \item \textbf{Διαμεσολαβητής Εξισορρόπησης Φορτίου Envoy:} Reverse proxy υψηλής επίδοσης που δρομολογεί τα αιτήματα αξιολόγησης Tier 3 προς τους εργάτες με πολιτικές Round-Robin και Least-Request (P2C).
     \item \textbf{Δίαυλος Τηλεμετρίας και Παρακολούθησης:} Συλλογή δομημένων αρχείων καταγραφής JSON μέσω Fluent-Bit, ροή συμβάντων μέσω Apache Kafka (KRaft mode) και απεικόνιση σε πραγματικό χρόνο μέσω Node.js WebSocket dashboard.
