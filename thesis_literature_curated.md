@@ -107,10 +107,10 @@ This document aggregates the most relevant academic literature (rated **Moderate
 * **Role in Thesis:** Provides the theoretical framework for individual-based evolution control: evaluating only a fraction of candidate solutions with expensive true solvers while bypassing or approximating the rest. Directly justifies your 3-Tier Multi-Tier Evaluator. Cite in **Chapter 3**.
 
 ### 13. Locally Weighted Regression Models for Surrogate-Assisted Design Optimization
-* **Authors:** R. Le Riche et al.
-* **Publication:** *Optimization Online* (2016)
+* **Authors:** Bastien Talgorn, Charles Audet, Sébastien Le Digabel, Michael Kokkolaras
+* **Publication:** *Optimization and Engineering*, 19(1), 213–238 (2018) / *Optimization Online* (2016)
 * **Relevance:** **High**
-* **Link:** [https://optimization-online.org/2016/11/5729/](https://optimization-online.org/2016/11/5729/)
+* **Link:** [https://doi.org/10.1007/s11081-017-9370-1](https://doi.org/10.1007/s11081-017-9370-1) | [Optimization Online](https://optimization-online.org/2016/11/5729/)
 * **Role in Thesis:** Mathematical justification for localized surrogate boundaries ($d_{\min} \le R$), demonstrating that local surrogates in design space outperform global approximators when data is non-uniform. Cite in **Chapter 3**.
 
 ### 14. Surrogates: Gaussian Process Modeling, Design, and Optimization for the Applied Sciences
@@ -166,10 +166,10 @@ This document aggregates the most relevant academic literature (rated **Moderate
 ## Pillar 3: Distributed Genetic Algorithms & Island Models
 
 ### 21. Island Models Meet Rumor Spreading
-* **Authors:** Tobias Friedrich, Markus Wagner, et al.
-* **Publication:** *Proceedings of the Genetic and Evolutionary Computation Conference (GECCO '17)*, pp. 1383–1390 (2017)
+* **Authors:** Benjamin Doerr, Philipp Fischbeck, Clemens Frahnow, Tobias Friedrich, Timo Kötzing, Martin Schirneck
+* **Publication:** *Proceedings of the Genetic and Evolutionary Computation Conference (GECCO '17)*, pp. 1359–1366 (2017) / *Algorithmica*, 81(2), 886–915 (2019)
 * **Relevance:** **Core Foundation (Essential)**
-* **Link:** [https://hpi.de/friedrich/docs/publications/2017/GECCO_c.pdf](https://hpi.de/friedrich/docs/publications/2017/GECCO_c.pdf)
+* **Link:** [https://doi.org/10.1145/3071178.3071329](https://doi.org/10.1145/3071178.3071329) | [PDF](https://hpi.de/friedrich/docs/publications/2017/GECCO_c.pdf)
 * **Role in Thesis:** Mathematical proof analyzing the information dissemination rate across ring topologies in Island Models. Directly justifies the ring-based peer-to-peer migration between orchestrator islands. Cite in **Chapter 3**.
 
 ### 22. Efficient and Accurate Parallel Genetic Algorithms
@@ -181,9 +181,9 @@ This document aggregates the most relevant academic literature (rated **Moderate
 
 ### 23. A Survey of Parallel Genetic Algorithms
 * **Authors:** Enrique Alba, José M. Troya
-* **Publication:** *Artificial Intelligence Review*, 13(4), 255–297 (1999)
+* **Publication:** *Complexity*, 4(4), 31–52 (1999)
 * **Relevance:** **High (Survey Foundation)**
-* **Link:** [https://doi.org/10.1023/A:1006521501070](https://doi.org/10.1023/A:1006521501070)
+* **Link:** [https://doi.org/10.1002/(SICI)1099-0526(199903/04)4:4<31::AID-CPLX5>3.0.CO;2-4](https://doi.org/10.1002/(SICI)1099-0526(199903/04)4:4<31::AID-CPLX5>3.0.CO;2-4)
 * **Role in Thesis:** Canonical taxonomy classifying coarse-grained (island) vs. fine-grained (cellular) GAs. Cite in **Chapter 2**.
 
 ---
@@ -197,23 +197,23 @@ This document aggregates the most relevant academic literature (rated **Moderate
 * **Link:** [https://dspace.mit.edu/handle/1721.1/139369](https://dspace.mit.edu/handle/1721.1/139369)
 * **Role in Thesis:** Primary reference for the aerodynamic solver engine used in `worker/`. Explains the 3D Vortex Lattice Method (VLM) formulation and stability derivatives. Cite in **Chapter 3 & 4**.
 
-### 25. AeroSandbox: A Framework for Aircraft Design Optimization through Automatic Differentiation
-* **Authors:** Peter D. Sharpe, Andrew Ning, Mark Drela
-* **Publication:** *AIAA AVIATION 2022 Forum*, Paper AIAA 2022-3860 (2022)
+### 25. Core Components of an Optimization Framework for Engineering Systems based on Automatic Differentiation
+* **Authors:** Peter Sharpe, R. John Hansman
+* **Publication:** *AIAA AVIATION 2022 Forum*, Paper AIAA 2022-3937 (2022)
 * **Relevance:** **Core Foundation (Essential)**
-* **Link:** [https://doi.org/10.2514/6.2022-3860](https://doi.org/10.2514/6.2022-3860)
+* **Link:** [https://doi.org/10.2514/6.2022-3937](https://doi.org/10.2514/6.2022-3937)
 * **Role in Thesis:** Peer-reviewed AIAA publication on AeroSandbox. Explains whole-aircraft aerodynamic buildup, vortex lattice solving, and cruise trim conditions. Cite in **Chapter 3 & 4**.
 
 ### 26. Integration of the Athena Vortex Lattice (AVL) into Multivariate Design Synthesis of a Blended Wing Body Aircraft
-* **Authors:** Journal of Aerospace Technology and Management / PMC
-* **Publication:** *J. Aerosp. Technol. Manag.*, 15, e1323 (2023)
+* **Authors:** Paulinus Okonkwo, Paul Jemitola
+* **Publication:** *Heliyon*, 9(3), e14702 (2023)
 * **Relevance:** **High**
-* **Link:** [https://pmc.ncbi.nlm.nih.gov/articles/PMC10068120/](https://pmc.ncbi.nlm.nih.gov/articles/PMC10068120/)
+* **Link:** [https://doi.org/10.1016/j.heliyon.2023.e14702](https://doi.org/10.1016/j.heliyon.2023.e14702) | [PMC10068120](https://pmc.ncbi.nlm.nih.gov/articles/PMC10068120/)
 * **Role in Thesis:** Validates using VLM as a fast, robust solver inside multidisciplinary optimization loops for aircraft configurations with pitch trim ($C_L = C_{L,\text{req}}$) and static margin constraints. Cite in **Chapter 2**.
 
 ### 27. OptiWing3D: A Diverse Dataset of Optimized Wing Designs
 * **Authors:** Cashen Diniz, Mark Fuge
-* **Publication:** *AIAA SciTech Forum* / arXiv:2512.12867 (2025)
+* **Publication:** *AIAA SCITECH 2026 Forum* (Paper AIAA 2026-0368) / arXiv:2512.12867 (2025/2026)
 * **Relevance:** **High**
 * **Link:** [https://arxiv.org/abs/2512.12867](https://arxiv.org/abs/2512.12867)
 * **Role in Thesis:** 3D aerodynamic wing design dataset highlighting 3D flow effects (tip vortex, induced drag, spanwise lift distribution) vs. 2D airfoil limitations. Validates moving beyond 2D airfoils to full 3D parametric aircraft. Cite in **Chapter 1 & 2**.
