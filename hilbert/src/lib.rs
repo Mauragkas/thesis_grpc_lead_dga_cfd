@@ -40,11 +40,15 @@ pub struct HilbertEncoder {
 
 impl HilbertEncoder {
     pub fn new(ndims: usize, bits: usize) -> Self {
+        Self::with_curves(ndims, bits, NUM_CURVES)
+    }
+
+    pub fn with_curves(ndims: usize, bits: usize, num_curves: usize) -> Self {
         Self {
             ndims,
             bits,
             max_val: (1u64 << bits) - 1,
-            perms: permutations(ndims),
+            perms: permutations_for(ndims, num_curves.max(1)),
         }
     }
 
@@ -68,7 +72,13 @@ impl HilbertEncoder {
     /// Hilbert index for the given probe curve.
     pub fn encode_hex(&self, point: &[f64], curve: usize, hex_width: usize) -> String {
         debug_assert_eq!(point.len(), self.ndims);
-        let perm = &self.perms[curve % self.perms.len()];
+        let fallback_perms;
+        let perm = if curve < self.perms.len() {
+            &self.perms[curve]
+        } else {
+            fallback_perms = permutations_for(self.ndims, curve + 1);
+            &fallback_perms[curve % fallback_perms.len()]
+        };
         let mut scaled = vec![0u64; self.ndims];
         for (out_idx, &dim) in perm.iter().enumerate() {
             let t = point[dim].clamp(0.0, 1.0);
@@ -178,26 +188,42 @@ pub fn py_round(x: f64) -> u64 {
     }
 }
 
-/// Deterministic coordinate permutations, one per probe curve.
-pub fn permutations(ndims: usize) -> Vec<Vec<usize>> {
+fn max_unique_permutations(ndims: usize) -> usize {
+    (1..=ndims).fold(1usize, |acc, x| acc.saturating_mul(x))
+}
+
+/// Deterministic coordinate permutations for an arbitrary number of probe curves.
+/// Prefix-consistent: the first `k` permutations for `num_curves = m >= k`
+/// are identical to `permutations_for(ndims, k)`.
+pub fn permutations_for(ndims: usize, num_curves: usize) -> Vec<Vec<usize>> {
+    let target = num_curves.min(max_unique_permutations(ndims));
     static CACHE: OnceLock<Mutex<HashMap<usize, Vec<Vec<usize>>>>> = OnceLock::new();
     let cache = CACHE.get_or_init(|| Mutex::new(HashMap::new()));
     let mut guard = cache.lock().unwrap();
     if let Some(perms) = guard.get(&ndims) {
-        return perms.clone();
+        if perms.len() >= target {
+            return perms[..target].to_vec();
+        }
     }
+    let generate_len = target.max(NUM_CURVES).min(max_unique_permutations(ndims));
     let mut rng = StdRng::seed_from_u64(PERM_SEED);
-    let mut perms: Vec<Vec<usize>> = Vec::new();
+    let mut perms: Vec<Vec<usize>> = Vec::with_capacity(generate_len);
     let mut seen: HashSet<Vec<usize>> = HashSet::new();
-    while perms.len() < NUM_CURVES {
+    while perms.len() < generate_len {
         let mut perm: Vec<usize> = (0..ndims).collect();
         perm.shuffle(&mut rng);
         if seen.insert(perm.clone()) {
             perms.push(perm);
         }
     }
-    guard.insert(ndims, perms.clone());
-    perms
+    let result = perms[..target].to_vec();
+    guard.insert(ndims, perms);
+    result
+}
+
+/// Deterministic coordinate permutations, one per default probe curve (`NUM_CURVES`).
+pub fn permutations(ndims: usize) -> Vec<Vec<usize>> {
+    permutations_for(ndims, NUM_CURVES)
 }
 
 // ---------------------------------------------------------------------------
@@ -208,31 +234,41 @@ pub trait GeneKeyGenerator: Send + Sync {
     fn parse_key(&self, key: &str) -> Option<Vec<f64>>;
 }
 
-/// Hilbert multi-probe key generator. Produces `NUM_CURVES` keys per gene,
+/// Hilbert multi-probe key generator. Produces `num_curves` keys per gene,
 /// one per rotated coordinate axis.
 #[derive(Clone, Debug)]
 pub struct HilbertKeyGenerator {
     encoder: HilbertEncoder,
     hex_width: usize,
+    num_curves: usize,
 }
 
 impl HilbertKeyGenerator {
     pub fn new(ndims: usize) -> Self {
+        Self::with_curves(ndims, NUM_CURVES)
+    }
+
+    pub fn with_curves(ndims: usize, num_curves: usize) -> Self {
         Self {
-            encoder: HilbertEncoder::new(ndims, BITS),
+            encoder: HilbertEncoder::with_curves(ndims, BITS, num_curves),
             hex_width: (ndims * BITS).div_ceil(4),
+            num_curves,
         }
     }
 
     pub fn hex_width(&self) -> usize {
         self.hex_width
     }
+
+    pub fn num_curves(&self) -> usize {
+        self.num_curves
+    }
 }
 
 impl GeneKeyGenerator for HilbertKeyGenerator {
     fn keys_for(&self, genes: &[f64]) -> Vec<String> {
         let json = serde_json::to_string(genes).unwrap_or_default();
-        (0..NUM_CURVES)
+        (0..self.num_curves)
             .map(|c| {
                 let h = self.encoder.encode_hex(genes, c, self.hex_width);
                 format!("{c:x}{h}|{json}")
@@ -297,7 +333,7 @@ mod python_bindings {
         if ndims == 0 {
             return Err(PyValueError::new_err("dims cannot be empty"));
         }
-        let perms = permutations(ndims);
+        let perms = permutations_for(ndims, (curve + 1).max(NUM_CURVES));
         let perm = &perms[curve % perms.len()];
         let max_val = (1u64 << bits) - 1;
 
@@ -325,12 +361,13 @@ mod python_bindings {
     ///
     /// Format: ``{curve_hex_digit}{hex_hilbert_index}|{canonical_json}``
     #[pyfunction]
-    #[pyo3(signature = (cfg, dims, bits=BITS))]
+    #[pyo3(signature = (cfg, dims, bits=BITS, num_curves=NUM_CURVES))]
     fn probe_keys<'py>(
         py: Python<'py>,
         cfg: &Bound<'py, PyDict>,
         dims: Vec<(String, f64, f64)>,
         bits: usize,
+        num_curves: usize,
     ) -> PyResult<Vec<String>> {
         let ndims = dims.len();
         if ndims == 0 {
@@ -347,11 +384,11 @@ mod python_bindings {
             .call_method("dumps", (cfg,), Some(&kwargs))?
             .extract()?;
 
-        let perms = permutations(ndims);
+        let perms = permutations_for(ndims, num_curves.max(1));
         let max_val = (1u64 << bits) - 1;
 
-        let mut keys = Vec::with_capacity(NUM_CURVES);
-        for c in 0..NUM_CURVES {
+        let mut keys = Vec::with_capacity(num_curves);
+        for c in 0..num_curves {
             let perm = &perms[c % perms.len()];
             let mut point = Vec::with_capacity(ndims);
             for &idx in perm {
@@ -394,9 +431,10 @@ mod python_bindings {
     #[pymethods]
     impl PyHilbertKeyGenerator {
         #[new]
-        fn new(ndims: usize) -> Self {
+        #[pyo3(signature = (ndims, num_curves=NUM_CURVES))]
+        fn new(ndims: usize, num_curves: usize) -> Self {
             Self {
-                inner: HilbertKeyGenerator::new(ndims),
+                inner: HilbertKeyGenerator::with_curves(ndims, num_curves),
             }
         }
 

@@ -84,13 +84,14 @@ def hilbert_encode(point: list[int], bits: int, ndims: int) -> int:
     return h
 
 
-def _permutations(ndims: int) -> list[list[int]]:
+def _permutations(ndims: int, num_curves: int = NUM_CURVES) -> list[list[int]]:
     """Deterministic coordinate permutations, one per probe curve."""
-    if ndims not in _PERM_CACHE:
+    target = max(num_curves, NUM_CURVES)
+    if ndims not in _PERM_CACHE or len(_PERM_CACHE[ndims]) < target:
         rng = random.Random(20240807)
         perms: list[list[int]] = []
         seen: set[tuple[int, ...]] = set()
-        while len(perms) < NUM_CURVES:
+        while len(perms) < target:
             perm = list(range(ndims))
             rng.shuffle(perm)
             key = tuple(perm)
@@ -98,7 +99,7 @@ def _permutations(ndims: int) -> list[list[int]]:
                 seen.add(key)
                 perms.append(perm)
         _PERM_CACHE[ndims] = perms
-    return _PERM_CACHE[ndims]
+    return _PERM_CACHE[ndims][:num_curves]
 
 
 def config_hilbert(
@@ -111,7 +112,7 @@ def config_hilbert(
     if _HAS_RUST_EXTENSION:
         return hilbert_rs.config_hilbert(cfg, dims, bits=bits, curve=curve)
 
-    perm = _permutations(len(dims))[curve]
+    perm = _permutations(len(dims), max(curve + 1, NUM_CURVES))[curve]
     ndims = len(dims)
     max_val = (1 << bits) - 1
     point: list[int] = []
@@ -127,19 +128,20 @@ def probe_keys(
     cfg: dict[str, Any],
     dims: list[tuple[str, float, float]],
     bits: int = BITS,
+    num_curves: int = NUM_CURVES,
 ) -> list[str]:
     """Generate one order-preserving key per probe curve.
 
     Format: ``{curve_hex_digit}{hex_hilbert_index}|{canonical_json}``
     """
     if _HAS_RUST_EXTENSION:
-        return hilbert_rs.probe_keys(cfg, dims, bits=bits)
+        return hilbert_rs.probe_keys(cfg, dims, bits=bits, num_curves=num_curves)
 
     ndims = len(dims)
     hex_width = (ndims * bits + 3) // 4
     json_str = json.dumps(cfg, sort_keys=True, separators=(",", ":"))
     keys: list[str] = []
-    for c in range(NUM_CURVES):
+    for c in range(num_curves):
         h = config_hilbert(cfg, dims, bits, curve=c)
         keys.append(f"{c:x}{h:0{hex_width}x}|{json_str}")
     return keys

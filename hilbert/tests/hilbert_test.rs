@@ -77,3 +77,40 @@ fn multi_probe_recovers_near_neighbor() {
         "multi-probe failed to recover near neighbor"
     );
 }
+
+#[test]
+fn permutations_for_returns_distinct_rotations_and_preserves_prefix() {
+    let base_perms = hilbert_rs::permutations(10);
+    let extended_perms = hilbert_rs::permutations_for(10, 10);
+    assert_eq!(extended_perms.len(), 10);
+    assert_eq!(&extended_perms[..NUM_CURVES], &base_perms[..]);
+
+    let unique: std::collections::HashSet<Vec<usize>> = extended_perms.into_iter().collect();
+    assert_eq!(unique.len(), 10);
+}
+
+#[test]
+fn arbitrary_curve_counts_produce_unique_hilbert_indices_and_prefix_consistency() {
+    let genes = vec![0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.25];
+    let kg_3 = HilbertKeyGenerator::with_curves(10, 3);
+    let kg_8 = HilbertKeyGenerator::with_curves(10, 8);
+
+    let keys_3 = kg_3.keys_for(&genes);
+    let keys_8 = kg_8.keys_for(&genes);
+
+    assert_eq!(keys_3.len(), 3);
+    assert_eq!(keys_8.len(), 8);
+    assert_eq!(&keys_8[..3], &keys_3[..]);
+
+    // Extract the 40-char Hilbert hex (without curve id prefix and JSON suffix)
+    // and verify all 8 curves produce distinct Hilbert encodings (no modulo-3 wraparound).
+    let hilbert_parts: std::collections::HashSet<&str> = keys_8
+        .iter()
+        .map(|k| {
+            let prefix = k.split('|').next().unwrap();
+            &prefix[1..]
+        })
+        .collect();
+    assert_eq!(hilbert_parts.len(), 8);
+}
+

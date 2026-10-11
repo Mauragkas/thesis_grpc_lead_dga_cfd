@@ -84,3 +84,18 @@ def test_spatial_proximity_preserved():
     )
 
     assert min_near_dist < min_far_dist
+
+
+def test_arbitrary_num_curves_probe_keys_and_config_hilbert():
+    dims = [(b.name, b.low, b.high) for b in GENE_BOUNDS]
+    keys_3 = hilbert.probe_keys(BASELINE, dims, num_curves=3)
+    keys_8 = hilbert.probe_keys(BASELINE, dims, num_curves=8)
+
+    assert len(keys_3) == 3
+    assert len(keys_8) == 8
+    assert keys_8[:3] == keys_3
+
+    # Ensure curves 0..7 all yield distinct Hilbert indices (no modulo-3 wraparound)
+    indices = [hilbert.config_hilbert(BASELINE, dims, curve=c) for c in range(8)]
+    assert len(set(indices)) == 8
+
